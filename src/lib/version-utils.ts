@@ -2,7 +2,12 @@
  * Compare two semantic versions (e.g., "1.2.3" vs "1.3.0")
  * @returns positive if v1 > v2, negative if v1 < v2, 0 if equal
  */
-export function compareVersions(v1: string, v2: string): number {
+export function compareVersions(v1: string | undefined, v2: string | undefined): number {
+  // Handle undefined/null cases
+  if (!v1 && !v2) return 0
+  if (!v1) return -1
+  if (!v2) return 1
+  
   const parts1 = v1.split('.').map(Number)
   const parts2 = v2.split('.').map(Number)
   
@@ -22,13 +27,13 @@ export function compareVersions(v1: string, v2: string): number {
 /**
  * Check if version v1 is greater than v2
  */
-export function isVersionGreater(v1: string, v2: string): boolean {
+export function isVersionGreater(v1: string | undefined, v2: string | undefined): boolean {
   return compareVersions(v1, v2) > 0
 }
 
 /**
  * Check if version v1 is less than v2
  */
-export function isVersionLess(v1: string, v2: string): boolean {
+export function isVersionLess(v1: string | undefined, v2: string | undefined): boolean {
   return compareVersions(v1, v2) < 0
 }
