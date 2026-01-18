@@ -1,0 +1,26 @@
+export const MOD_CATEGORIES = [
+  "Audio",
+  "Cheats",
+  "Client-side",
+  "Communication",
+  "Content",
+  "Cosmetic",
+  "Frameworks",
+  "Gameplay",
+  "Graphics",
+  "Items",
+  "Libraries",
+  "Misc",
+  "Modpacks",
+  "Multiplayer",
+  "Networking",
+  "Performance",
+  "QoL",
+  "Server-side",
+  "Tools",
+  "UI",
+  "Visual",
+  "Weapons",
+] as const
+
+export type ModCategory = typeof MOD_CATEGORIES[number]
