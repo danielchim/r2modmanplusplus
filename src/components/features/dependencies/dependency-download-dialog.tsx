@@ -1,5 +1,5 @@
 import { useState, useMemo, memo, useEffect } from "react"
-import { CheckCircle2, AlertCircle, AlertTriangle, XCircle, Download } from "lucide-react"
+import { CheckCircle2, AlertCircle, AlertTriangle, XCircle, Download, RefreshCw, ExternalLink } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -19,9 +19,11 @@ import { useSettingsStore } from "@/store/settings-store"
 import { useDownloadStore } from "@/store/download-store"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
+import { DependencyModDialog } from "./dependency-mod-dialog"
 
 type DependencyDownloadDialogProps = {
   mod: Mod | null
+  requestedVersion: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -65,7 +67,7 @@ function getStatusVariant(status: DependencyStatus): "default" | "secondary" | "
   }
 }
 
-export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({ mod, open, onOpenChange }: DependencyDownloadDialogProps) {
+export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({ mod, requestedVersion, open, onOpenChange }: DependencyDownloadDialogProps) {
   const installedVersionsByGame = useModManagementStore((s) => s.installedModVersionsByGame)
   const installedModsByGame = useModManagementStore((s) => s.installedModsByGame)
   const setDependencyWarnings = useModManagementStore((s) => s.setDependencyWarnings)
@@ -73,6 +75,9 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const startDownload = useDownloadStore((s) => s.startDownload)
   
   const [selectedDepIds, setSelectedDepIds] = useState<Set<string>>(new Set())
+  const [forceRefresh, setForceRefresh] = useState(0)
+  const [viewingMod, setViewingMod] = useState<Mod | null>(null)
+  const [showModDialog, setShowModDialog] = useState(false)
   
   // Analyze dependencies when dialog opens
   const depInfos = useMemo(() => {
@@ -85,21 +90,24 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsByGame, enforceDependencyVersions])
+  }, [mod, installedVersionsByGame, enforceDependencyVersions, forceRefresh])
   
-  // Initialize selected deps when dialog opens (select all that need downloading by default)
-  useEffect(() => {
-    if (!mod || !open) return
-    
-    const needsDownload = depInfos
+  // Get all selectable dependency IDs (not_installed or installed_wrong)
+  const selectableDeps = useMemo(() => {
+    return depInfos
       .filter(dep => 
         dep.resolvedMod && 
         (dep.status === "not_installed" || dep.status === "installed_wrong")
       )
       .map(dep => dep.resolvedMod!.id)
+  }, [depInfos])
+  
+  // Initialize selected deps when dialog opens (select all that need downloading by default)
+  useEffect(() => {
+    if (!mod || !open) return
     
-    setSelectedDepIds(new Set(needsDownload))
-  }, [mod, open, depInfos])
+    setSelectedDepIds(new Set(selectableDeps))
+  }, [mod, open, selectableDeps])
   
   if (!mod) {
     return null
@@ -115,13 +123,33 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     setSelectedDepIds(newSet)
   }
   
+  const handleSelectAll = () => {
+    setSelectedDepIds(new Set(selectableDeps))
+  }
+  
+  const handleDeselectAll = () => {
+    setSelectedDepIds(new Set())
+  }
+  
+  const handleRefresh = () => {
+    setForceRefresh(prev => prev + 1)
+  }
+  
+  const handleViewMod = (depMod: Mod) => {
+    setViewingMod(depMod)
+    setShowModDialog(true)
+  }
+  
+  const isAllSelected = selectableDeps.length > 0 && selectedDepIds.size === selectableDeps.length
+  const isSomeSelected = selectedDepIds.size > 0 && selectedDepIds.size < selectableDeps.length
+  
   const handleDownloadModOnly = () => {
     // Only download the target mod
     const installed = installedModsByGame[mod.gameId]
     const isTargetInstalled = installed ? installed.has(mod.id) : false
     
     if (!isTargetInstalled) {
-      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
+      startDownload(mod.id, mod.gameId, mod.name, requestedVersion, mod.author, mod.iconUrl)
     }
     
     // Store unresolved dependency warnings
@@ -142,7 +170,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     
     // Download target mod if not already installed
     if (!isTargetInstalled) {
-      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
+      startDownload(mod.id, mod.gameId, mod.name, requestedVersion, mod.author, mod.iconUrl)
     }
     
     // Download selected dependencies
@@ -173,13 +201,19 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const targetInstalled = installedModsByGame[mod.gameId]?.has(mod.id) || false
   
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle>Download Dependencies</DialogTitle>
-          <DialogDescription>
-            {mod.name} requires the following dependencies. Select which ones to download.
-          </DialogDescription>
+    <>
+      <DependencyModDialog 
+        mod={viewingMod} 
+        open={showModDialog} 
+        onOpenChange={setShowModDialog}
+      />
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4">
+            <DialogTitle>Download Dependencies</DialogTitle>
+            <DialogDescription>
+              {mod.name} requires the following dependencies. Select which ones to download.
+            </DialogDescription>
         </DialogHeader>
         
         <ScrollArea className="flex-1 overflow-y-auto px-6" style={{ maxHeight: "calc(85vh - 180px)" }}>
@@ -205,7 +239,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      v{mod.version} by {mod.author}
+                      v{requestedVersion} by {mod.author}
                     </p>
                     {targetInstalled && (
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -221,9 +255,40 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
             
             {/* Dependencies */}
             <div>
-              <h3 className="mb-2 text-sm font-semibold">
-                Dependencies ({depInfos.length})
-              </h3>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">
+                  Dependencies ({depInfos.length})
+                </h3>
+                <div className="flex items-center gap-2">
+                  {selectableDeps.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={isAllSelected}
+                        indeterminate={isSomeSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            handleSelectAll()
+                          } else {
+                            handleDeselectAll()
+                          }
+                        }}
+                        id="select-all"
+                      />
+                      <label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer select-none">
+                        Select All
+                      </label>
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRefresh}
+                    className="h-7 px-2"
+                  >
+                    <RefreshCw className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
               
               {depInfos.length === 0 ? (
                 <div className="rounded-md border border-border bg-muted/30 p-6 text-center">
@@ -243,14 +308,9 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                         key={idx}
                         className={`rounded-md border p-3 transition-colors ${
                           canSelect 
-                            ? "border-border bg-card hover:bg-muted/50 cursor-pointer" 
+                            ? "border-border bg-card hover:bg-muted/50" 
                             : "border-border bg-muted/30"
                         }`}
-                        onClick={() => {
-                          if (canSelect && depInfo.resolvedMod) {
-                            handleToggleDep(depInfo.resolvedMod.id)
-                          }
-                        }}
                       >
                         <div className="flex items-start gap-3">
                           <Checkbox 
@@ -296,6 +356,16 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                               </p>
                             )}
                           </div>
+                          {depInfo.resolvedMod && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewMod(depInfo.resolvedMod!)}
+                              className="h-7 px-2 shrink-0"
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )
@@ -320,5 +390,6 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   )
 })

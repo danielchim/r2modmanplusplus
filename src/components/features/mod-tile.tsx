@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { analyzeModDependencies } from "@/lib/dependency-utils"
+import { isVersionGreater } from "@/lib/version-utils"
 import { MODS } from "@/mocks/mods"
 
 type ModTileProps = {
@@ -57,17 +58,24 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const isQueued = downloadTask?.status === "queued"
   const isPaused = downloadTask?.status === "paused"
   const hasDownloadTask = isDownloading || isQueued || isPaused
-  
+
+  // Get the actually installed version
+  const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+  const hasUpdate = isInstalled && installedVersion && isVersionGreater(mod.version, installedVersion)
+
+  // Extract primitive dependencies for useMemo (rerender-dependencies)
+  const installedVersionsForGame = installedVersionsByGame[mod.gameId]
+
   // Analyze dependencies
   const depInfos = useMemo(() => {
-    const installedVersions = installedVersionsByGame[mod.gameId] || {}
+    const installedVersions = installedVersionsForGame || {}
     return analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsByGame, enforceDependencyVersions])
+  }, [mod, installedVersionsForGame, enforceDependencyVersions])
 
   const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -94,6 +102,7 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
     <>
       <DependencyDownloadDialog 
         mod={mod} 
+        requestedVersion={mod.version}
         open={showDependencyDialog} 
         onOpenChange={setShowDependencyDialog}
       />
@@ -120,14 +129,14 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
         <p className="text-xs text-muted-foreground">by {mod.author}</p>
         
         {/* Download Progress */}
-        {isDownloading && downloadTask && (
+        {isDownloading && downloadTask ? (
           <div className="flex flex-col gap-1 mt-1">
             <Progress value={downloadTask.progress} className="h-1.5" />
             <span className="text-xs text-muted-foreground">
               {downloadTask.progress.toFixed(0)}% • {(downloadTask.speedBps / 1024 / 1024).toFixed(2)} MB/s
             </span>
           </div>
-        )}
+        ) : null}
         
         <div className="mt-auto flex items-center justify-between pt-2">
           <span className="text-xs text-muted-foreground">
@@ -144,15 +153,15 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
         </div>
 
         {/* Enable/Disable Toggle */}
-        {isInstalled && !isUninstalling && (
+        {isInstalled && !isUninstalling ? (
           <div className="mt-2 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
             <span className="text-sm text-muted-foreground">Enabled</span>
-            <Switch 
-              checked={isEnabled} 
+            <Switch
+              checked={isEnabled}
               onCheckedChange={() => toggleMod(selectedGameId, mod.id)}
             />
           </div>
-        )}
+        ) : null}
 
         {/* Download/Uninstall Button */}
         <Button
@@ -192,36 +201,43 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
       </div>
 
       {/* Status Badge */}
-      {isInstalled && isEnabled && !hasWarnings && (
+      {isInstalled && isEnabled && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
           Active
         </div>
-      )}
-      
+      ) : null}
+
+      {/* Update Available Badge */}
+      {hasUpdate && !hasWarnings ? (
+        <div className="absolute right-2 top-2 rounded bg-green-200 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-500">
+          Update available
+        </div>
+      ) : null}
+
       {/* Warning Badge for Missing Dependencies */}
-      {hasWarnings && (
+      {hasWarnings ? (
         <div className="absolute right-2 top-2 rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
           <AlertTriangle className="size-3" />
           Missing deps
         </div>
-      )}
-      
+      ) : null}
+
       {/* Download Status Badges */}
-      {isQueued && !hasWarnings && (
+      {isQueued && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-muted px-2 py-0.5 text-xs font-medium">
           Queued
         </div>
-      )}
-      {isPaused && !hasWarnings && (
+      ) : null}
+      {isPaused && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500">
           Paused
         </div>
-      )}
-      {isDownloading && downloadTask && !hasWarnings && (
+      ) : null}
+      {isDownloading && downloadTask && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-500">
           {downloadTask.progress.toFixed(0)}%
         </div>
-      )}
+      ) : null}
     </div>
     </>
   )

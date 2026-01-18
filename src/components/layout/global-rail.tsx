@@ -193,15 +193,19 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               <span className="text-sm">Online Mods</span>
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2"
-            onClick={() => onNavigate?.()}
-          >
-            <SettingsIcon className="size-4" />
-            <span className="text-sm">Config Editor</span>
-          </Button>
+          <Link to="/config-editor" onClick={() => onNavigate?.()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "w-full justify-start gap-2",
+                pathname === "/config-editor" && "bg-muted"
+              )}
+            >
+              <SettingsIcon className="size-4" />
+              <span className="text-sm">Config Editor</span>
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"

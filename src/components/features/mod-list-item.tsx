@@ -1,6 +1,6 @@
 import type { Mod } from "@/mocks/mods"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, memo } from "react"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -12,13 +12,14 @@ import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { analyzeModDependencies } from "@/lib/dependency-utils"
+import { isVersionGreater } from "@/lib/version-utils"
 import { MODS } from "@/mocks/mods"
 
 type ModListItemProps = {
   mod: Mod
 }
 
-export function ModListItem({ mod }: ModListItemProps) {
+export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) {
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
@@ -57,17 +58,24 @@ export function ModListItem({ mod }: ModListItemProps) {
   const isQueued = downloadTask?.status === "queued"
   const isPaused = downloadTask?.status === "paused"
   const hasDownloadTask = isDownloading || isQueued || isPaused
-  
+
+  // Get the actually installed version
+  const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+  const hasUpdate = isInstalled && installedVersion && isVersionGreater(mod.version, installedVersion)
+
+  // Extract primitive dependencies for useMemo (rerender-dependencies)
+  const installedVersionsForGame = installedVersionsByGame[mod.gameId]
+
   // Analyze dependencies
   const depInfos = useMemo(() => {
-    const installedVersions = installedVersionsByGame[mod.gameId] || {}
+    const installedVersions = installedVersionsForGame || {}
     return analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsByGame, enforceDependencyVersions])
+  }, [mod, installedVersionsForGame, enforceDependencyVersions])
 
   const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -94,6 +102,7 @@ export function ModListItem({ mod }: ModListItemProps) {
     <>
       <DependencyDownloadDialog 
         mod={mod} 
+        requestedVersion={mod.version}
         open={showDependencyDialog} 
         onOpenChange={setShowDependencyDialog}
       />
@@ -118,9 +127,14 @@ export function ModListItem({ mod }: ModListItemProps) {
       <div className="flex flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">{mod.name}</h3>
-          {isInstalled && isEnabled && (
+          {isInstalled && isEnabled && !hasUpdate && (
             <span className="rounded bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
               Active
+            </span>
+          )}
+          {hasUpdate && !hasWarnings && (
+            <span className="rounded bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-500">
+              Update available
             </span>
           )}
           {hasWarnings && (
@@ -129,12 +143,12 @@ export function ModListItem({ mod }: ModListItemProps) {
               Missing deps
             </span>
           )}
-          {isQueued && (
+          {isQueued && !hasUpdate && (
             <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
               Queued
             </span>
           )}
-          {isPaused && (
+          {isPaused && !hasUpdate && (
             <span className="rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500">
               Paused
             </span>
@@ -144,25 +158,25 @@ export function ModListItem({ mod }: ModListItemProps) {
         <p className="line-clamp-1 text-xs text-muted-foreground">{mod.description}</p>
         
         {/* Download Progress */}
-        {isDownloading && downloadTask && (
+        {isDownloading && downloadTask ? (
           <div className="flex items-center gap-2 mt-1">
             <Progress value={downloadTask.progress} className="h-1.5 flex-1" />
             <span className="text-xs text-muted-foreground whitespace-nowrap">
               {downloadTask.progress.toFixed(0)}%
             </span>
           </div>
-        )}
+        ) : null}
       </div>
       {/* Enable/Disable Toggle */}
-      {isInstalled && !isUninstalling && (
+      {isInstalled && !isUninstalling ? (
         <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <span className="text-sm text-muted-foreground">Enabled</span>
-          <Switch 
-            checked={isEnabled} 
+          <Switch
+            checked={isEnabled}
             onCheckedChange={() => toggleMod(selectedGameId, mod.id)}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Mod Stats */}
       <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
@@ -220,4 +234,4 @@ export function ModListItem({ mod }: ModListItemProps) {
     </div>
     </>
   )
-}
+})

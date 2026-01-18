@@ -1,6 +1,6 @@
-import { ArrowLeft, Download, Trash2, ExternalLink, AlertCircle, FileText, History, Network, Package, Pause, Play, Loader2, CheckCircle2, AlertTriangle, XCircle, X } from "lucide-react"
+import { ArrowLeft, Download, Trash2, ExternalLink, AlertCircle, FileText, History, Network, Package, Pause, Play, Loader2, CheckCircle2, AlertTriangle, XCircle, X, RefreshCw } from "lucide-react"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
+import { Skeleton } from "@/components/ui/skeleton"
 import { HtmlReadme } from "@/components/readme/html-readme"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -19,6 +20,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-utils"
 import { DependencyModDialog } from "@/components/features/dependencies/dependency-mod-dialog"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
+import { useThunderstoreReadme } from "@/lib/queries/useThunderstoreReadme"
+import { isVersionGreater } from "@/lib/version-utils"
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -81,61 +84,73 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const pauseDownload = useDownloadStore((s) => s.pauseDownload)
   const resumeDownload = useDownloadStore((s) => s.resumeDownload)
   const cancelDownload = useDownloadStore((s) => s.cancelDownload)
-  
+
   const toggleMod = useModManagementStore((s) => s.toggleMod)
   const uninstallMod = useModManagementStore((s) => s.uninstallMod)
   const installedVersionsByGame = useModManagementStore((s) => s.installedModVersionsByGame)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
-  
+
   const [selectedDepMod, setSelectedDepMod] = useState<Mod | null>(null)
   const [showDepModDialog, setShowDepModDialog] = useState(false)
   const [showDownloadDialog, setShowDownloadDialog] = useState(false)
-  const [selectedVersion, setSelectedVersion] = useState<string>(mod.version)
-  
-  // Reset selectedVersion when mod changes
-  useEffect(() => {
-    setSelectedVersion(mod.version)
-  }, [mod.id, mod.version])
-  
+
+  // Use lazy initialization to set installed version by default (rerender-lazy-state-init)
+  const [selectedVersion, setSelectedVersion] = useState<string>(() => {
+    const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+    return installedVersion || mod.version
+  })
+
+  // Fetch readme from Thunderstore API
+  const { data: readmeHtml, isLoading: isLoadingReadme, isError: isReadmeError, error: readmeError, refetch: refetchReadme } = useThunderstoreReadme({
+    author: mod.author,
+    name: mod.name,
+  })
+
   // Subscribe to the specific task so component re-renders on changes
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])
-  
+
   // Subscribe to the Sets directly, not derived booleans
   const installedSet = useModManagementStore((s) => s.installedModsByGame[mod.gameId])
   const enabledSet = useModManagementStore((s) => s.enabledModsByGame[mod.gameId])
   const uninstallingSet = useModManagementStore((s) => s.uninstallingMods)
-  
+
   // Derive booleans from Sets
   const installed = installedSet ? installedSet.has(mod.id) : false
   const enabled = enabledSet ? enabledSet.has(mod.id) : false
   const isUninstalling = uninstallingSet.has(mod.id)
-  
+
+  // Get the actually installed version (not just mod.version which is the latest)
+  const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+
+  // Extract primitive dependencies for useMemo (rerender-dependencies)
+  const installedVersionsForGame = installedVersionsByGame[mod.gameId]
+
   // Analyze dependencies
   const depInfos = useMemo(() => {
-    const installedVersions = installedVersionsByGame[mod.gameId] || {}
+    const installedVersions = installedVersionsForGame || {}
     return analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsByGame, enforceDependencyVersions])
+  }, [mod, installedVersionsForGame, enforceDependencyVersions])
 
   const handleBack = () => {
     if (onBack) {
       onBack()
     }
   }
-  
+
   const handleDepClick = (depMod: Mod) => {
     setSelectedDepMod(depMod)
     setShowDepModDialog(true)
   }
-  
+
   const handleDownloadMissingDeps = () => {
     depInfos
-      .filter(dep => 
-        dep.resolvedMod && 
+      .filter(dep =>
+        dep.resolvedMod &&
         (dep.status === "not_installed" || dep.status === "installed_wrong")
       )
       .forEach(dep => {
@@ -151,43 +166,49 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
         }
       })
   }
-  
+
   const handleInstall = () => {
+    // Check if the selected version is already installed
+    if (selectedVersion === installedVersion) {
+      // Already installed, don't download again
+      return
+    }
+
     // Check if there are any dependencies that need to be installed
-    const hasDepsToInstall = depInfos.some(dep => 
-      dep.resolvedMod && 
+    const hasDepsToInstall = depInfos.some(dep =>
+      dep.resolvedMod &&
       (dep.status === "not_installed" || dep.status === "installed_wrong")
     )
-    
+
     if (hasDepsToInstall) {
       // Show dialog to let user choose which dependencies to install
       setShowDownloadDialog(true)
     } else {
       // No dependencies or all are already installed correctly, download directly
-      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
+      startDownload(mod.id, mod.gameId, mod.name, selectedVersion, mod.author, mod.iconUrl)
     }
   }
-  
+
   const handleUninstall = () => {
     uninstallMod(mod.gameId, mod.id)
   }
-  
+
   const handleToggleEnabled = () => {
     toggleMod(mod.gameId, mod.id)
   }
-  
+
   const handlePause = () => {
     if (downloadTask) {
       pauseDownload(downloadTask.modId)
     }
   }
-  
+
   const handleResume = () => {
     if (downloadTask) {
       resumeDownload(downloadTask.modId)
     }
   }
-  
+
   const handleCancel = () => {
     if (downloadTask) {
       cancelDownload(downloadTask.modId)
@@ -196,13 +217,14 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   return (
     <div className="flex flex-col">
-      <DependencyModDialog 
-        mod={selectedDepMod} 
-        open={showDepModDialog} 
+      <DependencyModDialog
+        mod={selectedDepMod}
+        open={showDepModDialog}
         onOpenChange={setShowDepModDialog}
       />
       <DependencyDownloadDialog
         mod={mod}
+        requestedVersion={selectedVersion}
         open={showDownloadDialog}
         onOpenChange={setShowDownloadDialog}
       />
@@ -264,7 +286,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             </div>
           </div>
         )}
-        
+
         {downloadTask && downloadTask.status === "downloading" && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -292,7 +314,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             </div>
           </div>
         )}
-        
+
         {downloadTask && downloadTask.status === "paused" && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -316,44 +338,60 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             </div>
           </div>
         )}
-        
+
+
         {(!downloadTask || downloadTask.status === "completed" || downloadTask.status === "error") && !installed && (
           <Button variant="default" size="lg" className="w-full gap-2" onClick={handleInstall}>
             <Download className="size-4" />
-            <span>Install</span>
+            <span>Install v{selectedVersion}</span>
           </Button>
         )}
-        
+
         {(!downloadTask || downloadTask.status === "completed" || downloadTask.status === "error") && installed && (
           <div className="space-y-3">
-            {!isUninstalling && (
-              <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 p-3">
-                <div>
-                  <p className="text-sm font-medium">Enable Mod</p>
-                  <p className="text-xs text-muted-foreground">Load this mod in-game</p>
-                </div>
-                <Switch checked={enabled} onCheckedChange={handleToggleEnabled} />
-              </div>
-            )}
-            <Button 
-              variant="destructive" 
-              size="lg" 
-              className="w-full gap-2" 
-              onClick={handleUninstall}
-              disabled={isUninstalling}
-            >
-              {isUninstalling ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Uninstalling...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="size-4" />
-                  <span>Uninstall</span>
-                </>
-              )}
-            </Button>
+            {isVersionGreater(mod.version, installedVersion) ? (
+              <>
+                <Button variant="default" size="lg" className="w-full gap-2"
+                  onClick={() => setSelectedVersion(mod.version)}
+                >
+                  <Download className="size-3 mr-1.5" />
+                  Upgrade to v{mod.version}
+                </Button>
+              </>
+            ) : null}
+            {/* Only show Enable toggle and Uninstall when selected version matches installed */}
+            {selectedVersion === installedVersion ? (
+              <>
+                {!isUninstalling ? (
+                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 p-3">
+                    <div>
+                      <p className="text-sm font-medium">Enable Mod</p>
+                      <p className="text-xs text-muted-foreground">Load this mod in-game</p>
+                    </div>
+                    <Switch checked={enabled} onCheckedChange={handleToggleEnabled} />
+                  </div>
+                ) : null}
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  className="w-full gap-2"
+                  onClick={handleUninstall}
+                  disabled={isUninstalling}
+                >
+                  {isUninstalling ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Uninstalling...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-4" />
+                      <span>Uninstall</span>
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : null}
           </div>
         )}
       </div>
@@ -361,10 +399,30 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       {/* Metadata */}
       <div className="shrink-0 border-b border-border p-4">
         <div className="space-y-2 rounded-md border border-border bg-muted/50 p-3">
+          {/* Show installed version if mod is installed */}
+          {installed && installedVersion ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Installed</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium">v{installedVersion}</span>
+                  {isVersionGreater(mod.version, installedVersion) ? (
+                    <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                      Update available
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+
+              <Separator />
+            </>
+          ) : null}
+
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Version</span>
-            <Select 
-              value={selectedVersion} 
+
+            <Select
+              value={selectedVersion}
               onValueChange={(value) => value && setSelectedVersion(value)}
             >
               <SelectTrigger className="h-7 w-auto min-w-[100px] gap-1 px-2">
@@ -427,8 +485,43 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
         {/* Tab Content */}
         <TabsContent value="readme" className="p-4">
           <div>
-            <HtmlReadme html={mod.readmeHtml} />
+            {isLoadingReadme && (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-32 w-full mt-4" />
+                <Skeleton className="h-4 w-2/3 mt-4" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            )}
 
+            {isReadmeError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-medium text-destructive">Failed to load readme</p>
+                    <p className="text-xs text-muted-foreground">
+                      {readmeError?.message || "An error occurred while fetching the readme"}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetchReadme()}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="size-3" />
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isLoadingReadme && !isReadmeError && readmeHtml && (
+              <HtmlReadme html={readmeHtml} />
+            )}
           </div>
         </TabsContent>
 
@@ -492,9 +585,8 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                 {depInfos.map((depInfo, idx) => (
                   <div
                     key={idx}
-                    className={`flex items-center gap-3 rounded-md border border-border bg-card p-3 transition-colors ${
-                      depInfo.resolvedMod ? "hover:bg-muted/50 cursor-pointer" : ""
-                    }`}
+                    className={`flex items-center gap-3 rounded-md border border-border bg-card p-3 transition-colors ${depInfo.resolvedMod ? "hover:bg-muted/50 cursor-pointer" : ""
+                      }`}
                     onClick={() => {
                       if (depInfo.resolvedMod) {
                         handleDepClick(depInfo.resolvedMod)
@@ -512,8 +604,8 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {depInfo.parsed.version 
-                          ? `Requires v${depInfo.parsed.version}` 
+                        {depInfo.parsed.version
+                          ? `Requires v${depInfo.parsed.version}`
                           : "Any version"}
                         {depInfo.installedVersion && ` • Installed: v${depInfo.installedVersion}`}
                       </p>
@@ -564,10 +656,18 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                         {version.download_count.toLocaleString()}
                       </TableCell>
                       <TableCell className="py-2 text-right">
-                        {version.version_number === mod.version && mod.isEnabled ? (
+                        {version.version_number === installedVersion ? (
                           <Badge variant="outline" className="text-xs">Installed</Badge>
                         ) : (
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setSelectedVersion(version.version_number)
+                              startDownload(mod.id, mod.gameId, mod.name, version.version_number, mod.author, mod.iconUrl)
+                            }}
+                          >
                             Install
                           </Button>
                         )}
@@ -601,16 +701,16 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 export function ModInspector() {
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectMod = useAppStore((s) => s.selectMod)
-  
+
   const mod = MODS.find((m) => m.id === selectedModId)
 
   if (!mod) {
     return null
   }
-  
+
   const handleBack = () => {
     selectMod(null)
   }
-  
-  return <ModInspectorContent mod={mod} onBack={handleBack} />
+
+  return <ModInspectorContent key={mod.id} mod={mod} onBack={handleBack} />
 }

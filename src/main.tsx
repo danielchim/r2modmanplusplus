@@ -1,23 +1,43 @@
-import { StrictMode } from "react"
+import { StrictMode, lazy, Suspense } from "react"
 import { createRoot } from "react-dom/client"
 import { RouterProvider } from "@tanstack/react-router"
-import { scan } from "react-scan"; // must be imported before React and React DOM
+import { QueryClientProvider } from "@tanstack/react-query"
 
 import "./index.css"
 import { createRouter } from "./router"
 import { AppBootstrap } from "./components/app-bootstrap"
+import { queryClient } from "./lib/query-client"
 
 const router = createRouter()
 
 const rootEl = document.getElementById("root")
 if (!rootEl) throw new Error("Root element not found")
-scan({
-  enabled: true,
-});
+
+// Only load dev tools in development (bundle-defer-third-party)
+if (import.meta.env.DEV) {
+  // Dynamically import react-scan after initial render
+  import("react-scan").then(({ scan }) => {
+    scan({ enabled: true })
+  })
+}
+
+// Lazy load React Query Devtools (bundle-defer-third-party)
+const ReactQueryDevtools = lazy(() =>
+  import("@tanstack/react-query-devtools").then((m) => ({
+    default: m.ReactQueryDevtools,
+  }))
+)
 
 createRoot(rootEl).render(
   <StrictMode>
-    <AppBootstrap />
-    <RouterProvider router={router} />
+    <QueryClientProvider client={queryClient}>
+      <AppBootstrap />
+      <RouterProvider router={router} />
+      {import.meta.env.DEV && (
+        <Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </Suspense>
+      )}
+    </QueryClientProvider>
   </StrictMode>
 )
