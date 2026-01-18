@@ -1,5 +1,6 @@
 import { MOD_CATEGORIES } from "./mod-categories"
 import { BONELAB_MODS } from "./bonelab-mods"
+import { H3VR_MODS } from "./h3vr-mods"
 
 export type ModVersion = {
   version_number: string
@@ -127,6 +128,7 @@ const generateMods = (gameId: string, count: number, kind: "mod" | "modpack" = "
 
 export const MODS: Mod[] = [
   ...BONELAB_MODS,
+  ...H3VR_MODS,
   ...generateMods("ror2", 100, "mod"),
   ...generateMods("ror2", 20, "modpack"),
   ...generateMods("valheim", 65, "mod"),

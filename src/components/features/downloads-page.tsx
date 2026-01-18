@@ -1,140 +1,60 @@
-import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock } from "lucide-react"
+import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { useDownloadStore, type DownloadTask } from "@/store/download-store"
+import { GAMES } from "@/mocks/games"
 
-type DownloadStatus = "queued" | "downloading" | "verifying" | "installing" | "completed" | "failed" | "paused"
-
-type DownloadItem = {
-  id: string
-  name: string
-  version: string
-  author: string
-  status: DownloadStatus
-  progress: number
-  speed: string
-  eta: string
-  size: string
-  downloaded: string
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B"
+  const k = 1024
+  const sizes = ["B", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
-const FAKE_DOWNLOADS: DownloadItem[] = [
-  {
-    id: "1",
-    name: "BepInExPack",
-    version: "5.4.2100",
-    author: "bbepis",
-    status: "downloading",
-    progress: 67,
-    speed: "8.2 MB/s",
-    eta: "12s",
-    size: "45.2 MB",
-    downloaded: "30.3 MB",
-  },
-  {
-    id: "2",
-    name: "R2API",
-    version: "5.1.7",
-    author: "RiskofThunder",
-    status: "downloading",
-    progress: 34,
-    speed: "6.8 MB/s",
-    eta: "28s",
-    size: "78.5 MB",
-    downloaded: "26.7 MB",
-  },
-  {
-    id: "3",
-    name: "HookGenPatcher",
-    version: "1.2.5",
-    author: "RiskofThunder",
-    status: "queued",
-    progress: 0,
-    speed: "—",
-    eta: "—",
-    size: "12.4 MB",
-    downloaded: "0 B",
-  },
-  {
-    id: "4",
-    name: "MoreCompany",
-    version: "1.8.1",
-    author: "notnotnotswipez",
-    status: "verifying",
-    progress: 100,
-    speed: "—",
-    eta: "—",
-    size: "23.7 MB",
-    downloaded: "23.7 MB",
-  },
-  {
-    id: "5",
-    name: "BetterStamina",
-    version: "2.3.0",
-    author: "XoXFaby",
-    status: "completed",
-    progress: 100,
-    speed: "—",
-    eta: "—",
-    size: "8.9 MB",
-    downloaded: "8.9 MB",
-  },
-  {
-    id: "6",
-    name: "TooManyFriends",
-    version: "1.0.4",
-    author: "tristanmcpherson",
-    status: "paused",
-    progress: 45,
-    speed: "—",
-    eta: "—",
-    size: "15.3 MB",
-    downloaded: "6.9 MB",
-  },
-]
+function formatSpeed(bps: number): string {
+  return `${formatBytes(bps)}/s`
+}
 
-function getStatusBadgeVariant(status: DownloadStatus): "default" | "secondary" | "destructive" | "outline" {
+function getStatusBadgeVariant(status: DownloadTask["status"]): "default" | "secondary" | "destructive" | "outline" {
   switch (status) {
     case "downloading":
-    case "verifying":
-    case "installing":
       return "default"
     case "completed":
       return "secondary"
-    case "failed":
+    case "error":
       return "destructive"
     default:
       return "outline"
   }
 }
 
-function getStatusIcon(status: DownloadStatus) {
+function getStatusIcon(status: DownloadTask["status"]) {
   switch (status) {
     case "downloading":
-      return <Clock className="size-3" />
+      return <Loader2 className="size-3 animate-spin" />
     case "completed":
       return <CheckCircle2 className="size-3" />
-    case "failed":
+    case "error":
       return <AlertCircle className="size-3" />
+    case "queued":
+      return <Clock className="size-3" />
     default:
       return null
   }
 }
 
-function getStatusLabel(status: DownloadStatus): string {
+function getStatusLabel(status: DownloadTask["status"]): string {
   switch (status) {
     case "queued":
       return "Queued"
     case "downloading":
       return "Downloading"
-    case "verifying":
-      return "Verifying"
-    case "installing":
-      return "Installing"
     case "completed":
       return "Completed"
-    case "failed":
+    case "error":
       return "Failed"
     case "paused":
       return "Paused"
@@ -142,13 +62,38 @@ function getStatusLabel(status: DownloadStatus): string {
 }
 
 export function DownloadsPage() {
-  const activeDownloads = FAKE_DOWNLOADS.filter(
-    (d) => d.status === "downloading" || d.status === "verifying" || d.status === "installing"
+  const tasks = useDownloadStore((s) => s.tasks)
+  const pauseDownload = useDownloadStore((s) => s.pauseDownload)
+  const resumeDownload = useDownloadStore((s) => s.resumeDownload)
+  const cancelDownload = useDownloadStore((s) => s.cancelDownload)
+  const pauseAll = useDownloadStore((s) => s.pauseAll)
+  const resumeAll = useDownloadStore((s) => s.resumeAll)
+  const cancelAll = useDownloadStore((s) => s.cancelAll)
+  const getAllActiveTasks = useDownloadStore((s) => s.getAllActiveTasks)
+  const getPausedTasks = useDownloadStore((s) => s.getPausedTasks)
+  
+  const allTasks = Object.values(tasks)
+  const activeTasks = getAllActiveTasks()
+  const pausedTasks = getPausedTasks()
+  
+  // Group tasks by game
+  const tasksByGame = allTasks.reduce((acc, task) => {
+    if (!acc[task.gameId]) {
+      acc[task.gameId] = []
+    }
+    acc[task.gameId].push(task)
+    return acc
+  }, {} as Record<string, DownloadTask[]>)
+  
+  const activeDownloads = allTasks.filter(
+    (d) => d.status === "downloading"
   ).length
+  
+  const totalSpeed = allTasks
+    .filter((d) => d.status === "downloading")
+    .reduce((sum, task) => sum + task.speedBps, 0)
 
-  const queuedCount = FAKE_DOWNLOADS.filter(
-    (d) => d.status === "queued" || d.status === "downloading" || d.status === "verifying" || d.status === "installing" || d.status === "paused"
-  ).length
+  const queuedCount = activeTasks.length
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -167,7 +112,7 @@ export function DownloadsPage() {
               <div className="flex items-center gap-6">
                 <div className="text-right">
                   <div className="text-xs text-muted-foreground">Download</div>
-                  <div className="text-sm font-medium tabular-nums">14.2 MB/s</div>
+                  <div className="text-sm font-medium tabular-nums">{formatSpeed(totalSpeed)}</div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-muted-foreground">Upload</div>
@@ -196,96 +141,161 @@ export function DownloadsPage() {
               {queuedCount === 0 ? "No downloads in the queue" : `${activeDownloads} active, ${queuedCount - activeDownloads} pending`}
             </p>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {activeDownloads === 0 ? "All caught up" : "Auto-updates enabled"}
+          <div className="flex items-center gap-2">
+            {queuedCount > 0 && (
+              <>
+                {pausedTasks.length > 0 ? (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={resumeAll}
+                  >
+                    <Play className="size-4 mr-1.5" />
+                    Resume All
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={pauseAll}
+                    disabled={activeDownloads === 0}
+                  >
+                    <Pause className="size-4 mr-1.5" />
+                    Pause All
+                  </Button>
+                )}
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={cancelAll}
+                >
+                  <X className="size-4 mr-1.5" />
+                  Cancel All
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Downloads List */}
-        <div className="space-y-2">
-          {FAKE_DOWNLOADS.length === 0 ? (
+        {/* Downloads List - Grouped by Game */}
+        <div className="space-y-6">
+          {allTasks.length === 0 ? (
             <div className="rounded-lg border border-border bg-muted/50 p-12 text-center">
               <p className="text-sm text-muted-foreground">No downloads in your queue</p>
             </div>
           ) : (
-            FAKE_DOWNLOADS.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  "rounded-lg border border-border bg-card p-4",
-                  item.status === "completed" && "opacity-60"
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Icon placeholder */}
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded bg-muted text-xs font-bold text-muted-foreground">
-                    {item.name.substring(0, 2).toUpperCase()}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 space-y-2">
-                    {/* Top row: name, version, status */}
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="text-sm font-semibold text-balance">{item.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          by {item.author} · v{item.version}
-                        </p>
-                      </div>
-                      <Badge variant={getStatusBadgeVariant(item.status)} className="shrink-0">
-                        <span className="flex items-center gap-1">
-                          {getStatusIcon(item.status)}
-                          <span>{getStatusLabel(item.status)}</span>
-                        </span>
-                      </Badge>
+            Object.entries(tasksByGame).map(([gameId, gameTasks]) => {
+              const game = GAMES.find((g) => g.id === gameId)
+              if (!game) return null
+              
+              return (
+                <div key={gameId}>
+                  {/* Game Header */}
+                  <div className="mb-3 flex items-center gap-3">
+                    <img
+                      src={game.iconUrl}
+                      alt={game.name}
+                      className="size-8 rounded object-cover"
+                    />
+                    <div>
+                      <h3 className="text-sm font-semibold">{game.name}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {gameTasks.length} {gameTasks.length === 1 ? "download" : "downloads"}
+                      </p>
                     </div>
+                  </div>
+                  
+                  {/* Game Downloads */}
+                  <div className="space-y-2">
+                    {gameTasks.map((task) => (
+                      <div
+                        key={task.modId}
+                        className={cn(
+                          "rounded-lg border border-border bg-card p-4",
+                          task.status === "completed" && "opacity-60"
+                        )}
+                      >
+                        <div className="flex items-start gap-4">
+                          {/* Icon placeholder */}
+                          <div className="flex size-12 shrink-0 items-center justify-center rounded bg-muted text-xs font-bold text-muted-foreground">
+                            {task.modName.substring(0, 2).toUpperCase()}
+                          </div>
 
-                    {/* Progress bar (if active) */}
-                    {(item.status === "downloading" || item.status === "verifying" || item.status === "installing" || item.status === "paused") && (
-                      <div className="space-y-1">
-                        <Progress value={item.progress} max={100} />
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="tabular-nums">
-                            {item.downloaded} / {item.size} ({item.progress}%)
-                          </span>
-                          {item.status === "downloading" && (
-                            <span className="tabular-nums">
-                              {item.speed} · {item.eta} remaining
-                            </span>
-                          )}
+                          {/* Content */}
+                          <div className="flex-1 space-y-2">
+                            {/* Top row: name, version, status */}
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <h3 className="text-sm font-semibold text-balance">{task.modName}</h3>
+                                <p className="text-xs text-muted-foreground">
+                                  by {task.modAuthor} · v{task.modVersion}
+                                </p>
+                              </div>
+                              <Badge variant={getStatusBadgeVariant(task.status)} className="shrink-0">
+                                <span className="flex items-center gap-1">
+                                  {getStatusIcon(task.status)}
+                                  <span>{getStatusLabel(task.status)}</span>
+                                </span>
+                              </Badge>
+                            </div>
+
+                            {/* Progress bar (if active) */}
+                            {(task.status === "downloading" || task.status === "paused") && (
+                              <div className="space-y-1">
+                                <Progress value={task.progress} max={100} />
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span className="tabular-nums">
+                                    {formatBytes(task.bytesDownloaded)} / {formatBytes(task.bytesTotal)} ({task.progress}%)
+                                  </span>
+                                  {task.status === "downloading" && (
+                                    <span className="tabular-nums">
+                                      {formatSpeed(task.speedBps)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Completed info */}
+                            {task.status === "completed" && (
+                              <div className="text-xs text-muted-foreground">
+                                Downloaded {formatBytes(task.bytesTotal)} successfully
+                              </div>
+                            )}
+                            
+                            {/* Error info */}
+                            {task.status === "error" && (
+                              <div className="text-xs text-destructive">
+                                {task.error || "Download failed"}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex shrink-0 items-center gap-1">
+                            {task.status === "downloading" && (
+                              <Button variant="ghost" size="icon" onClick={() => pauseDownload(task.modId)}>
+                                <Pause className="size-4" />
+                              </Button>
+                            )}
+                            {task.status === "paused" && (
+                              <Button variant="ghost" size="icon" onClick={() => resumeDownload(task.modId)}>
+                                <Play className="size-4" />
+                              </Button>
+                            )}
+                            {(task.status === "queued" || task.status === "downloading" || task.status === "paused") && (
+                              <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.modId)}>
+                                <X className="size-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    )}
-
-                    {/* Completed info */}
-                    {item.status === "completed" && (
-                      <div className="text-xs text-muted-foreground">
-                        Downloaded {item.size} successfully
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex shrink-0 items-center gap-1">
-                    {item.status === "downloading" && (
-                      <Button variant="ghost" size="icon">
-                        <Pause className="size-4" />
-                      </Button>
-                    )}
-                    {item.status === "paused" && (
-                      <Button variant="ghost" size="icon">
-                        <Play className="size-4" />
-                      </Button>
-                    )}
-                    {(item.status === "queued" || item.status === "downloading" || item.status === "paused") && (
-                      <Button variant="ghost" size="icon">
-                        <X className="size-4" />
-                      </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>

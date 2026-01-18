@@ -1,9 +1,13 @@
 import { useState } from "react"
 import { Menu } from "lucide-react"
+import { Toaster } from "sonner"
 import { GlobalRail } from "./global-rail"
 import { ContextPanel } from "./context-panel"
 import { MobileRailSheet } from "./mobile-rail-sheet"
+import { SettingsDialog } from "@/components/features/settings/settings-dialog"
+import { DownloadManager } from "@/components/features/download/download-manager"
 import { Button } from "@/components/ui/button"
+import { useAppStore } from "@/store/app-store"
 
 interface AppShellProps {
   children: React.ReactNode
@@ -12,11 +16,12 @@ interface AppShellProps {
 
 export function AppShell({ children, showContextPanel = true }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const showContextPanelState = useAppStore((s) => s.showContextPanel)
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:flex h-full">
         <GlobalRail />
       </div>
 
@@ -39,7 +44,10 @@ export function AppShell({ children, showContextPanel = true }: AppShellProps) {
 
         {children}
       </div>
-      {showContextPanel && <ContextPanel />}
+      {showContextPanel && showContextPanelState && <ContextPanel />}
+      <SettingsDialog />
+      <DownloadManager />
+      <Toaster position="bottom-right" />
     </div>
   )
 }

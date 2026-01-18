@@ -1,8 +1,9 @@
 import { useState } from "react"
-import { Plus, Upload, Download as DownloadIcon, ChevronDown } from "lucide-react"
+import { Plus, Upload, Download as DownloadIcon, ChevronDown, Settings, FolderOpen, FileCode, FileDown, Edit, Trash2 } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
 import { useProfileStore } from "@/store/profile-store"
+import { useModManagementStore } from "@/store/mod-management-store"
 import { PROFILES } from "@/mocks/profiles"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,18 +18,35 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
 import { CreateProfileDialog } from "./create-profile-dialog"
+import { RenameProfileDialog } from "./rename-profile-dialog"
+import { UninstallAllModsDialog } from "./uninstall-all-mods-dialog"
 
 export function GameDashboard() {
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
+  const [renameProfileOpen, setRenameProfileOpen] = useState(false)
+  const [uninstallAllOpen, setUninstallAllOpen] = useState(false)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
+  const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
   const activeProfileId = useProfileStore(
     (s) => s.activeProfileIdByGame[selectedGameId]
   )
   const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
+  const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
+  const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
+  const installedModCount = installedModsSet?.size ?? 0
 
   const handleCreateProfile = (profileName: string) => {
     // TODO: Implement actual profile creation logic
     console.log("Creating profile:", profileName, "for game:", selectedGameId)
+  }
+
+  const handleRenameProfile = (newName: string) => {
+    // TODO: Implement actual profile rename logic
+    console.log("Renaming profile:", activeProfileId, "to:", newName, "for game:", selectedGameId)
+  }
+
+  const handleUninstallAll = () => {
+    uninstallAllMods(selectedGameId)
   }
 
   const gameProfiles = PROFILES.filter((p) => p.gameId === selectedGameId)
@@ -40,6 +58,18 @@ export function GameDashboard() {
         open={createProfileOpen}
         onOpenChange={setCreateProfileOpen}
         onCreateProfile={handleCreateProfile}
+      />
+      <RenameProfileDialog
+        open={renameProfileOpen}
+        onOpenChange={setRenameProfileOpen}
+        onRenameProfile={handleRenameProfile}
+        currentName={currentProfile?.name ?? activeProfileId ?? "Default"}
+      />
+      <UninstallAllModsDialog
+        open={uninstallAllOpen}
+        onOpenChange={setUninstallAllOpen}
+        modCount={installedModCount}
+        onConfirm={handleUninstallAll}
       />
       <div className="flex flex-col gap-4 p-4">
         {/* Section Title */}
@@ -111,35 +141,65 @@ export function GameDashboard() {
             <span>Import Profile Code</span>
           </Button>
           <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-            <DownloadIcon className="size-4" />
-            <span>Export Profile</span>
+            <FolderOpen className="size-4" />
+            <span>Import Local Mod</span>
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start gap-2"
+            onClick={() => setRenameProfileOpen(true)}
+          >
+            <Edit className="size-4" />
+            <span>Rename Profile</span>
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            className="w-full justify-start gap-2"
+            onClick={() => setUninstallAllOpen(true)}
+            disabled={installedModCount === 0}
+          >
+            <Trash2 className="size-4" />
+            <span>Uninstall All Mods</span>
+            {installedModCount > 0 && (
+              <span className="ml-auto text-xs">({installedModCount})</span>
+            )}
           </Button>
         </div>
+        
+        {/* Export Profile Dropdown - Outside space-y container to prevent layout shift */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm" className="w-full justify-start gap-2" />
+            }
+          >
+            <DownloadIcon className="size-4" />
+            <span>Export Profile</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[var(--anchor-width)]">
+            <DropdownMenuItem className="gap-2">
+              <FileDown className="size-4" />
+              <span>Export as File</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2">
+              <FileCode className="size-4" />
+              <span>Export as Code</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {/* Profile List */}
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">All Profiles</h3>
-            <Button variant="ghost" size="icon-xs" aria-label="Add profile">
-              <Plus className="size-3" />
-            </Button>
-          </div>
-          <div className="space-y-1">
-            {gameProfiles.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => setActiveProfile(selectedGameId, profile.id)}
-                className="flex w-full items-center justify-between rounded-md border border-transparent px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:border-ring data-[active=true]:bg-muted"
-                data-active={profile.id === activeProfileId}
-              >
-                <span className="text-sm">{profile.name}</span>
-                {profile.id === activeProfileId && (
-                  <Plus className="size-3 rotate-45 text-muted-foreground" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Game Settings */}
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full justify-start gap-2"
+          onClick={() => openSettingsToGame(selectedGameId)}
+        >
+          <Settings className="size-4" />
+          <span>Game Settings</span>
+        </Button>
 
         {/* Launch Controls */}
         <div className="mt-auto space-y-2 border-t border-border pt-4">

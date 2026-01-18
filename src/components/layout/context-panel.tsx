@@ -2,9 +2,12 @@ import { useState, useRef, useEffect } from "react"
 import { useAppStore } from "@/store/app-store"
 import { GameDashboard } from "@/components/features/game-dashboard"
 import { ModInspector } from "@/components/features/mod-inspector"
+import { Button } from "@/components/ui/button"
+import { XIcon } from "lucide-react"
 
 export function ContextPanel() {
   const selectedModId = useAppStore((s) => s.selectedModId)
+  const setShowContextPanel = useAppStore((s) => s.setShowContextPanel)
   const [width, setWidth] = useState(320)
   const [isResizing, setIsResizing] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -52,6 +55,19 @@ export function ContextPanel() {
           setIsResizing(true)
         }}
       />
+      
+      {/* Close Button */}
+      <div className="absolute right-2 top-2 z-20">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setShowContextPanel(false)}
+          aria-label="Close panel"
+        >
+          <XIcon className="size-4" />
+        </Button>
+      </div>
+      
       {selectedModId ? <ModInspector /> : <GameDashboard />}
     </div>
   )

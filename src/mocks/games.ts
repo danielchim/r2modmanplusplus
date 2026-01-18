@@ -13,6 +13,12 @@ export const GAMES: Game[] = [
     bannerUrl: `/game_selection/bonelab.webp`
   },
   {
+    id: "h3vr",
+    name: "Hot Dogs, Horseshoes & Hand Grenades",
+    iconUrl: "https://via.placeholder.com/64x64/dc2626/ffffff?text=H3",
+    bannerUrl: `/game_selection/h3vr.webp`
+  },
+  {
     id: "ror2",
     name: "Risk of Rain 2",
     iconUrl: "https://via.placeholder.com/64x64/4a5568/ffffff?text=ROR2",

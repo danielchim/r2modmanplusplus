@@ -11,6 +11,9 @@ type AppState = {
   // UI state
   searchQuery: string
   sortBy: "name" | "downloads" | "updated"
+  showContextPanel: boolean
+  settingsOpen: boolean
+  settingsActiveSection: string | null
   
   // Actions
   setView: (view: View) => void
@@ -18,6 +21,9 @@ type AppState = {
   selectMod: (modId: string | null) => void
   setSearchQuery: (query: string) => void
   setSortBy: (sortBy: "name" | "downloads" | "updated") => void
+  setShowContextPanel: (show: boolean) => void
+  setSettingsOpen: (open: boolean) => void
+  openSettingsToGame: (gameId: string) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -27,11 +33,17 @@ export const useAppStore = create<AppState>((set) => ({
   selectedModId: null,
   searchQuery: "",
   sortBy: "name",
+  showContextPanel: true,
+  settingsOpen: false,
+  settingsActiveSection: null,
   
   // Actions
   setView: (view) => set({ view }),
   selectGame: (gameId) => set({ selectedGameId: gameId, selectedModId: null }),
-  selectMod: (modId) => set({ selectedModId: modId }),
+  selectMod: (modId) => set({ selectedModId: modId, showContextPanel: modId !== null }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSortBy: (sortBy) => set({ sortBy: sortBy }),
+  setShowContextPanel: (show) => set({ showContextPanel: show }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  openSettingsToGame: (gameId) => set({ settingsOpen: true, settingsActiveSection: `game-${gameId}` }),
 }))

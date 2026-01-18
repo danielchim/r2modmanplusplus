@@ -31,6 +31,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectGame = useAppStore((s) => s.selectGame)
+  const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const activeProfileId = useProfileStore((s) => s.activeProfileIdByGame[selectedGameId])
   const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
@@ -48,9 +49,9 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   return (
     <>
       <AddGameDialog open={addGameOpen} onOpenChange={setAddGameOpen} />
-      <div className="flex h-full w-full flex-col bg-card">
+      <div className="flex h-full w-full flex-col bg-card min-h-0">
       {/* Top Section: Game Selector */}
-      <div className="border-b border-border">
+      <div className="shrink-0 border-b border-border">
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger
             render={
@@ -150,7 +151,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
       </div>
 
       {/* Middle Section: Navigation */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="shrink-0 p-2">
         <nav className="space-y-1">
           <Link to="/" onClick={() => onNavigate?.()}>
             <Button
@@ -196,44 +197,47 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2"
-            onClick={() => onNavigate?.()}
+            onClick={() => {
+              setSettingsOpen(true)
+              onNavigate?.()
+            }}
           >
             <SettingsIcon className="size-4" />
             <span className="text-sm">Settings</span>
           </Button>
         </nav>
+      </div>
 
-        {/* Recently Managed Section */}
-        <div className="mt-6">
-          <div className="mb-2 px-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Recently Managed
-            </h2>
-          </div>
-          <div className="space-y-1">
-            {recentGames.map((game) => (
-              <button
-                key={`recent-${game.id}`}
-                onClick={() => {
-                  selectGame(game.id)
-                  onNavigate?.()
-                }}
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <img
-                  src={game.bannerUrl}
-                  alt={game.name}
-                  className="size-12 rounded object-cover"
-                />
-                <span className="text-xs text-muted-foreground">{game.name}</span>
-              </button>
-            ))}
-          </div>
+      {/* Recently Managed Section - Scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-2">
+        <div className="mb-2 px-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Recently Managed
+          </h2>
+        </div>
+        <div className="space-y-1">
+          {recentGames.map((game) => (
+            <button
+              key={`recent-${game.id}`}
+              onClick={() => {
+                selectGame(game.id)
+                onNavigate?.()
+              }}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <img
+                src={game.bannerUrl}
+                alt={game.name}
+                className="size-12 rounded object-cover"
+              />
+              <span className="text-xs text-muted-foreground">{game.name}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Bottom Section: Downloads & User */}
-      <div className="border-t border-border p-2">
+      {/* Bottom Section: Downloads & User - Pinned */}
+      <div className="shrink-0 border-t border-border p-2">
         <Link to="/downloads" className="block" onClick={() => onNavigate?.()}>
           <Button
             variant="ghost"
@@ -259,7 +263,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
 
 export function GlobalRail() {
   return (
-    <div className="flex w-[240px] shrink-0 flex-col border-r border-border">
+    <div className="flex w-[240px] h-full shrink-0 flex-col border-r border-border">
       <GlobalRailContent />
     </div>
   )

@@ -38,7 +38,7 @@ export function ModsLibrary() {
   // Reset filters to open when viewport becomes desktop-sized
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)')
-    
+
     const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
       if (e.matches) {
         // Desktop: ensure filters are open by default
@@ -53,12 +53,18 @@ export function ModsLibrary() {
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
-  
+
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
-  const getInstalledModIds = useModManagementStore((s) => s.getInstalledModIds)
+  const setShowContextPanel = useAppStore((s) => s.setShowContextPanel)
+  const selectMod = useAppStore((s) => s.selectMod)
+  
+  // Subscribe to the installed mods Set directly for real-time updates
+  const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
+  const installedModIds = installedModsSet ? Array.from(installedModsSet) : []
+  
   const activeProfileId = useProfileStore(
     (s) => s.activeProfileIdByGame[selectedGameId]
   )
@@ -88,7 +94,6 @@ export function ModsLibrary() {
 
   // Filter and sort mods
   const filteredMods = useMemo(() => {
-    const installedModIds = getInstalledModIds(selectedGameId)
     let mods = MODS.filter((m) => m.gameId === selectedGameId)
 
     // Tab filter: Installed vs Online
@@ -131,11 +136,10 @@ export function ModsLibrary() {
     }
 
     return mods
-  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, getInstalledModIds])
+  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModIds])
 
   // Compute category counts (ignoring selectedCategories to show availability)
   const categoryCounts = useMemo(() => {
-    const installedModIds = getInstalledModIds(selectedGameId)
     let baseMods = MODS.filter(
       (m) => m.gameId === selectedGameId && m.kind === section
     )
@@ -153,7 +157,7 @@ export function ModsLibrary() {
     })
 
     return counts
-  }, [selectedGameId, section, tab, getInstalledModIds])
+  }, [selectedGameId, section, tab, installedModIds])
 
   return (
     <>
@@ -163,150 +167,193 @@ export function ModsLibrary() {
         onCreateProfile={handleCreateProfile}
       />
       <div className="flex h-full flex-col">
-      {/* Game Banner */}
-      <div className="relative h-[200px] shrink-0 overflow-hidden">
-        <img
-          src={currentGame?.bannerUrl}
-          alt={currentGame?.name}
-          className="size-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-        <div className="absolute bottom-4 left-6">
-          <h1 className="text-3xl font-bold text-balance">{currentGame?.name}</h1>
+        {/* Game Banner */}
+        <div className="relative h-[200px] shrink-0 overflow-hidden">
+          <img
+            src={currentGame?.bannerUrl}
+            alt={currentGame?.name}
+            className="size-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
+          <div className="absolute bottom-4 left-6">
+            <h1 className="text-3xl font-bold text-balance">{currentGame?.name}</h1>
+          </div>
+          <div className="absolute bottom-4 right-6 flex gap-2">
+            <Button variant="default" size="default">
+              Start Modded
+            </Button>
+            <Button variant="outline" size="default">
+              Start Vanilla
+            </Button>
+            <Button variant="outline" size="default">
+              Open Game Folder
+            </Button>
+          </div>
         </div>
-        <div className="absolute bottom-4 right-6 flex gap-2">
-          <Button variant="default" size="default">
-            Start Modded
-          </Button>
-          <Button variant="outline" size="default">
-            Start Vanilla
-          </Button>
-          <Button variant="outline" size="default">
-            Open Game Folder
-          </Button>
-        </div>
-      </div>
 
-      {/* Profile Selector & Tabs */}
-      <div className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="flex items-center gap-4 px-6 py-3">
-          <div className="flex-1">
-            <div className="text-xs text-muted-foreground mb-1">Profile</div>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                }
-              >
-                <span>{currentProfile?.name ?? activeProfileId ?? "Default"}</span>
-                <ChevronDown className="size-4 text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                className="w-[280px] rounded-xl shadow-xl py-2 ring-1 ring-border/80"
-                align="start"
-              >
-                {/* All Profiles Section */}
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="px-3 py-2">All Profiles</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={activeProfileId ?? ""}
-                    onValueChange={(profileId) => setActiveProfile(selectedGameId, profileId)}
+        {/* Profile Selector & Tabs */}
+        <div className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm">
+          <div className="flex items-center gap-4 px-6 py-3">
+            <div className="flex-1 flex items-end gap-2">
+              <div className="flex-1">
+                <div className="text-xs text-muted-foreground mb-1">Profile</div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    }
                   >
-                    {gameProfiles.map((profile) => (
-                      <DropdownMenuRadioItem 
-                        key={profile.id} 
-                        value={profile.id} 
-                        className="mx-1 gap-3 rounded-md px-3 py-2"
+                    <span>{currentProfile?.name ?? activeProfileId ?? "Default"}</span>
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-[280px] rounded-xl shadow-xl py-2 ring-1 ring-border/80"
+                    align="start"
+                  >
+                    {/* All Profiles Section */}
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel className="px-3 py-2">All Profiles</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={activeProfileId ?? ""}
+                        onValueChange={(profileId) => setActiveProfile(selectedGameId, profileId)}
                       >
-                        <span>{profile.name}</span>
-                        <span className="ml-auto text-xs text-muted-foreground">{profile.modCount} mods</span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-                
-                <DropdownMenuSeparator className="mx-0 my-2" />
-                
-                {/* Create New Profile Section */}
-                <DropdownMenuGroup>
-                  <DropdownMenuItem 
-                    className="mx-1 gap-3 rounded-md px-3 py-2"
-                    onClick={() => setCreateProfileOpen(true)}
-                  >
-                    <Plus className="size-5" />
-                    <span>Create new profile</span>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        <div className="flex gap-1 px-6">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={tab === "installed" ? "rounded-b-none border-b-2 border-primary" : "rounded-b-none"}
-            onClick={() => setTab("installed")}
-          >
-            Installed
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={tab === "online" ? "rounded-b-none border-b-2 border-primary" : "rounded-b-none"}
-            onClick={() => setTab("online")}
-          >
-            Online
-          </Button>
-        </div>
-      </div>
+                        {gameProfiles.map((profile) => (
+                          <DropdownMenuRadioItem
+                            key={profile.id}
+                            value={profile.id}
+                            className="mx-1 gap-3 rounded-md px-3 py-2"
+                          >
+                            <span>{profile.name}</span>
+                            <span className="ml-auto text-xs text-muted-foreground">{profile.modCount} mods</span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
 
-      {/* Toolbar */}
-      <div className="shrink-0 border-b border-border bg-card px-6 py-3">
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+                    <DropdownMenuSeparator className="mx-0 my-2" />
+
+                    {/* Create New Profile Section */}
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        className="mx-1 gap-3 rounded-md px-3 py-2"
+                        onClick={() => setCreateProfileOpen(true)}
+                      >
+                        <Plus className="size-5" />
+                        <span>Create new profile</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="More options"
+                  onClick={() => {
+                    selectMod(null) // Clear selected mod to show game dashboard
+                    setShowContextPanel(true)
+                  }}
+                >
+                  <MoreVertical className="size-4" />
+                </Button>
+              </div>
+            </div>
           </div>
-          {/* View Mode Toggle */}
-          <div className="flex gap-1 border border-border rounded-md">
+          <div className="flex gap-1 px-6">
             <Button
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              size="icon"
-              className="rounded-r-none"
-              onClick={() => setViewMode("grid")}
-              aria-label="Grid view"
+              variant="ghost"
+              size="sm"
+              className={tab === "installed" ? "rounded-b-none border-b-2 border-primary" : "rounded-b-none"}
+              onClick={() => setTab("installed")}
             >
-              <Grid3x3 className="size-4" />
+              Installed
             </Button>
             <Button
-              variant={viewMode === "list" ? "secondary" : "ghost"}
-              size="icon"
-              className="rounded-l-none"
-              onClick={() => setViewMode("list")}
-              aria-label="List view"
+              variant="ghost"
+              size="sm"
+              className={tab === "online" ? "rounded-b-none border-b-2 border-primary" : "rounded-b-none"}
+              onClick={() => setTab("online")}
             >
-              <List className="size-4" />
+              Online
             </Button>
           </div>
-          
-          {/* Mobile Filter Button (Sheet Trigger) */}
-          <Sheet>
-            <SheetTrigger
-              className="lg:hidden inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-border bg-background hover:bg-accent hover:text-accent-foreground size-9"
+        </div>
+
+        {/* Toolbar */}
+        <div className="shrink-0 border-b border-border bg-card px-6 py-3">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            {/* View Mode Toggle */}
+            <div className="flex gap-1 border border-border rounded-md">
+              <Button
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                size="icon"
+                className="rounded-r-none"
+                onClick={() => setViewMode("grid")}
+                aria-label="Grid view"
+              >
+                <Grid3x3 className="size-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                size="icon"
+                className="rounded-l-none"
+                onClick={() => setViewMode("list")}
+                aria-label="List view"
+              >
+                <List className="size-4" />
+              </Button>
+            </div>
+
+            {/* Mobile Filter Button (Sheet Trigger) */}
+            <Sheet>
+              <SheetTrigger
+                className="lg:hidden inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-border bg-background hover:bg-accent hover:text-accent-foreground size-9"
+                aria-label="Filter"
+              >
+                <SlidersHorizontal className="size-4" />
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-[280px]">
+                <ModFilters
+                  section={section}
+                  onSectionChange={setSection}
+                  categories={[...MOD_CATEGORIES]}
+                  selectedCategories={selectedCategories}
+                  onToggleCategory={handleToggleCategory}
+                  onClearCategories={handleClearCategories}
+                  categoryCounts={categoryCounts}
+                />
+              </SheetContent>
+            </Sheet>
+
+            {/* Desktop Filter Toggle Button */}
+            <Button
+              variant="outline"
+              size="icon"
               aria-label="Filter"
+              className="hidden lg:inline-flex"
+              onClick={() => setFiltersOpen((v) => !v)}
             >
               <SlidersHorizontal className="size-4" />
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[280px]">
+            </Button>
+          </div>
+        </div>
+
+        {/* Content Area: Filter Sidebar + Results */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Filter Sidebar - Desktop Only */}
+          {filtersOpen && (
+            <div className="hidden lg:block w-[280px] shrink-0">
               <ModFilters
                 section={section}
                 onSectionChange={setSection}
@@ -316,81 +363,47 @@ export function ModsLibrary() {
                 onClearCategories={handleClearCategories}
                 categoryCounts={categoryCounts}
               />
-            </SheetContent>
-          </Sheet>
+            </div>
+          )}
 
-          {/* Desktop Filter Toggle Button */}
-          <Button 
-            variant="outline" 
-            size="icon" 
-            aria-label="Filter"
-            className="hidden lg:inline-flex"
-            onClick={() => setFiltersOpen((v) => !v)}
-          >
-            <SlidersHorizontal className="size-4" />
-          </Button>
-
-          <Button variant="outline" size="icon" aria-label="More options">
-            <MoreVertical className="size-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Content Area: Filter Sidebar + Results */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Filter Sidebar - Desktop Only */}
-        {filtersOpen && (
-          <div className="hidden lg:block w-[280px] shrink-0">
-            <ModFilters
-              section={section}
-              onSectionChange={setSection}
-              categories={[...MOD_CATEGORIES]}
-              selectedCategories={selectedCategories}
-              onToggleCategory={handleToggleCategory}
-              onClearCategories={handleClearCategories}
-              categoryCounts={categoryCounts}
-            />
-          </div>
-        )}
-
-        {/* Results Area */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4 lg:p-6">
-            <h2 className="mb-4 text-lg font-semibold">
-              {tab === "installed" 
-                ? (section === "mod" ? "Installed Mods" : "Installed Modpacks")
-                : (section === "mod" ? "All Mods" : "All Modpacks")
-              }
-            </h2>
-            {filteredMods.length === 0 ? (
-              <div className="flex h-[400px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-muted-foreground">No {section === "mod" ? "mods" : "modpacks"} found</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {searchQuery || selectedCategories.length > 0
-                      ? "Try clearing filters or adjusting your search"
-                      : tab === "installed"
-                        ? `No ${section === "mod" ? "mods" : "modpacks"} installed yet`
-                        : `No ${section === "mod" ? "mods" : "modpacks"} available`}
-                  </p>
+          {/* Results Area */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 lg:p-6">
+              <h2 className="mb-4 text-lg font-semibold">
+                {tab === "installed"
+                  ? (section === "mod" ? "Installed Mods" : "Installed Modpacks")
+                  : (section === "mod" ? "All Mods" : "All Modpacks")
+                }
+              </h2>
+              {filteredMods.length === 0 ? (
+                <div className="flex h-[400px] items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-muted-foreground">No {section === "mod" ? "mods" : "modpacks"} found</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {searchQuery || selectedCategories.length > 0
+                        ? "Try clearing filters or adjusting your search"
+                        : tab === "installed"
+                          ? `No ${section === "mod" ? "mods" : "modpacks"} installed yet`
+                          : `No ${section === "mod" ? "mods" : "modpacks"} available`}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : viewMode === "grid" ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                {filteredMods.map((mod) => (
-                  <ModTile key={mod.id} mod={mod} />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {filteredMods.map((mod) => (
-                  <ModListItem key={mod.id} mod={mod} />
-                ))}
-              </div>
-            )}
+              ) : viewMode === "grid" ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                  {filteredMods.map((mod) => (
+                    <ModTile key={mod.id} mod={mod} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {filteredMods.map((mod) => (
+                    <ModListItem key={mod.id} mod={mod} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </>
   )
