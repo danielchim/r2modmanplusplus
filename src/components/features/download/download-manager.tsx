@@ -26,6 +26,7 @@ export function DownloadManager() {
   const speedLimitBps = useSettingsStore((s) => s.global.speedLimitBps)
   
   const previousTasksRef = useRef<Record<string, any>>({})
+  const scheduledCleanupRef = useRef<Set<string>>(new Set())
 
   // Monitor status transitions and fire toasts
   useEffect(() => {
@@ -65,15 +66,17 @@ export function DownloadManager() {
   // Simulation tick
   useEffect(() => {
     const interval = setInterval(() => {
-      const downloading = getDownloadingTasks()
+      let downloading = getDownloadingTasks()
       const queued = getQueuedTasks()
       
-      // Force-start logic: if downloading exceeds max concurrent, pause the last one
+      // Force-start logic: if downloading exceeds max concurrent, pause the excess
       if (downloading.length > maxConcurrentDownloads) {
-        const taskToPause = downloading[downloading.length - 1]
-        if (taskToPause) {
-          setStatus(taskToPause.modId, "paused")
-        }
+        const tasksToPause = downloading.slice(maxConcurrentDownloads)
+        tasksToPause.forEach((task) => {
+          setStatus(task.modId, "paused")
+        })
+        // Recompute downloading after pausing
+        downloading = getDownloadingTasks()
       }
       
       // Promote queued tasks if slots available
@@ -84,7 +87,7 @@ export function DownloadManager() {
         })
       }
       
-      // Update progress for downloading tasks
+      // Update progress for downloading tasks (use the recomputed list)
       downloading.forEach((task) => {
         // Random failure simulation
         if (Math.random() < FAILURE_CHANCE) {
@@ -132,9 +135,15 @@ export function DownloadManager() {
     const completedTasks = Object.values(tasks).filter((t) => t.status === "completed")
     
     completedTasks.forEach((task) => {
-      setTimeout(() => {
-        cancelDownload(task.modId)
-      }, 10000)
+      // Only schedule cleanup if not already scheduled for this modId
+      if (!scheduledCleanupRef.current.has(task.modId)) {
+        scheduledCleanupRef.current.add(task.modId)
+        
+        setTimeout(() => {
+          cancelDownload(task.modId)
+          scheduledCleanupRef.current.delete(task.modId)
+        }, 10000)
+      }
     })
   }, [tasks, cancelDownload])
 

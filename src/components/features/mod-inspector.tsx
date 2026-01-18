@@ -1,6 +1,6 @@
 import { ArrowLeft, Download, Trash2, ExternalLink, AlertCircle, FileText, History, Network, Package, Pause, Play, Loader2, CheckCircle2, AlertTriangle, XCircle, X } from "lucide-react"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { HtmlReadme } from "@/components/readme/html-readme"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-utils"
 import { DependencyModDialog } from "@/components/features/dependencies/dependency-mod-dialog"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
@@ -89,6 +90,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const [selectedDepMod, setSelectedDepMod] = useState<Mod | null>(null)
   const [showDepModDialog, setShowDepModDialog] = useState(false)
   const [showDownloadDialog, setShowDownloadDialog] = useState(false)
+  const [selectedVersion, setSelectedVersion] = useState<string>(mod.version)
+  
+  // Reset selectedVersion when mod changes
+  useEffect(() => {
+    setSelectedVersion(mod.version)
+  }, [mod.id, mod.version])
   
   // Subscribe to the specific task so component re-renders on changes
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])
@@ -138,7 +145,8 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             dep.resolvedMod.gameId,
             dep.resolvedMod.name,
             dep.resolvedMod.version,
-            dep.resolvedMod.author
+            dep.resolvedMod.author,
+            dep.resolvedMod.iconUrl
           )
         }
       })
@@ -156,7 +164,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       setShowDownloadDialog(true)
     } else {
       // No dependencies or all are already installed correctly, download directly
-      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author)
+      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
     }
   }
   
@@ -355,7 +363,26 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
         <div className="space-y-2 rounded-md border border-border bg-muted/50 p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Version</span>
-            <Badge variant="secondary">{mod.version}</Badge>
+            <Select 
+              value={selectedVersion} 
+              onValueChange={(value) => value && setSelectedVersion(value)}
+            >
+              <SelectTrigger className="h-7 w-auto min-w-[100px] gap-1 px-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="w-[200px]">
+                {mod.versions.map((version) => (
+                  <SelectItem key={version.version_number} value={version.version_number}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">{version.version_number}</span>
+                      {version.version_number === mod.version && (
+                        <Badge variant="secondary" className="text-[10px] px-1 py-0">Latest</Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Separator />
           <div className="flex items-center justify-between">

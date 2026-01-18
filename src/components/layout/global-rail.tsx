@@ -32,6 +32,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectGame = useAppStore((s) => s.selectGame)
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
+  const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const activeProfileId = useProfileStore((s) => s.activeProfileIdByGame[selectedGameId])
   const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
@@ -166,24 +167,32 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               <span className="text-sm">Home</span>
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2"
-            onClick={() => onNavigate?.()}
-          >
-            <Box className="size-4" />
-            <span className="text-sm">Installed Mods</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2"
-            onClick={() => onNavigate?.()}
-          >
-            <Globe className="size-4" />
-            <span className="text-sm">Online Mods</span>
-          </Button>
+          <Link to="/" onClick={() => {
+            setModLibraryTab("installed")
+            onNavigate?.()
+          }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2"
+            >
+              <Box className="size-4" />
+              <span className="text-sm">Installed Mods</span>
+            </Button>
+          </Link>
+          <Link to="/" onClick={() => {
+            setModLibraryTab("online")
+            onNavigate?.()
+          }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2"
+            >
+              <Globe className="size-4" />
+              <span className="text-sm">Online Mods</span>
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"

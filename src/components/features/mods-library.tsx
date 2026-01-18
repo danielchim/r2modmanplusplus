@@ -32,7 +32,6 @@ export function ModsLibrary() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [section, setSection] = useState<"mod" | "modpack">("mod")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [tab, setTab] = useState<"installed" | "online">("installed")
   const [filtersOpen, setFiltersOpen] = useState(true)
 
   // Reset filters to open when viewport becomes desktop-sized
@@ -60,10 +59,11 @@ export function ModsLibrary() {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setShowContextPanel = useAppStore((s) => s.setShowContextPanel)
   const selectMod = useAppStore((s) => s.selectMod)
+  const tab = useAppStore((s) => s.modLibraryTab)
+  const setTab = useAppStore((s) => s.setModLibraryTab)
   
   // Subscribe to the installed mods Set directly for real-time updates
   const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
-  const installedModIds = installedModsSet ? Array.from(installedModsSet) : []
   
   const activeProfileId = useProfileStore(
     (s) => s.activeProfileIdByGame[selectedGameId]
@@ -98,7 +98,7 @@ export function ModsLibrary() {
 
     // Tab filter: Installed vs Online
     if (tab === "installed") {
-      mods = mods.filter((m) => installedModIds.includes(m.id))
+      mods = mods.filter((m) => installedModsSet?.has(m.id))
     }
     // For "online" tab, show all mods
 
@@ -136,7 +136,7 @@ export function ModsLibrary() {
     }
 
     return mods
-  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModIds])
+  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModsSet])
 
   // Compute category counts (ignoring selectedCategories to show availability)
   const categoryCounts = useMemo(() => {
@@ -146,7 +146,7 @@ export function ModsLibrary() {
 
     // Apply tab filter to counts as well
     if (tab === "installed") {
-      baseMods = baseMods.filter((m) => installedModIds.includes(m.id))
+      baseMods = baseMods.filter((m) => installedModsSet?.has(m.id))
     }
 
     const counts: Record<string, number> = {}
@@ -157,7 +157,7 @@ export function ModsLibrary() {
     })
 
     return counts
-  }, [selectedGameId, section, tab, installedModIds])
+  }, [selectedGameId, section, tab, installedModsSet])
 
   return (
     <>

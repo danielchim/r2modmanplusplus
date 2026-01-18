@@ -8,6 +8,7 @@ export type DownloadTask = {
   modName: string
   modVersion: string
   modAuthor: string
+  modIconUrl: string
   status: DownloadStatus
   progress: number // 0-100
   bytesDownloaded: number
@@ -23,12 +24,12 @@ type DownloadStore = {
   tasks: Record<string, DownloadTask>
   
   // Actions
-  startDownload: (modId: string, gameId: string, modName: string, modVersion: string, modAuthor: string) => void
+  startDownload: (modId: string, gameId: string, modName: string, modVersion: string, modAuthor: string, modIconUrl: string) => void
   pauseDownload: (modId: string) => void
   resumeDownload: (modId: string) => void
   cancelDownload: (modId: string) => void
   pauseAll: () => void
-  resumeAll: () => void
+  resumeAll: (maxConcurrentDownloads: number) => void
   cancelAll: () => void
   updateProgress: (modId: string, bytesDownloaded: number, speedBps: number) => void
   completeDownload: (modId: string) => void
@@ -47,7 +48,7 @@ type DownloadStore = {
 export const useDownloadStore = create<DownloadStore>((set, get) => ({
   tasks: {},
   
-  startDownload: (modId, gameId, modName, modVersion, modAuthor) => {
+  startDownload: (modId, gameId, modName, modVersion, modAuthor, modIconUrl) => {
     set((state) => {
       // Generate a random file size between 5MB and 100MB for simulation
       const bytesTotal = Math.floor(Math.random() * (100 * 1024 * 1024 - 5 * 1024 * 1024) + 5 * 1024 * 1024)
@@ -61,6 +62,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
             modName,
             modVersion,
             modAuthor,
+            modIconUrl,
             status: "queued",
             progress: 0,
             bytesDownloaded: 0,
@@ -126,6 +128,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
       const newTasks = { ...state.tasks }
       Object.keys(newTasks).forEach((modId) => {
         const task = newTasks[modId]
+        // Pause both downloading and queued tasks
         if (task.status === "downloading" || task.status === "queued") {
           newTasks[modId] = {
             ...task,
@@ -138,21 +141,42 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     })
   },
   
-  resumeAll: () => {
+  resumeAll: (maxConcurrentDownloads) => {
     set((state) => {
       const newTasks = { ...state.tasks }
-      Object.keys(newTasks).forEach((modId) => {
-        const task = newTasks[modId]
-        if (task.status === "paused") {
-          // Set to queued instead of downloading to respect max concurrent downloads
-          // DownloadManager will promote them to downloading when slots are available
-          newTasks[modId] = {
+      
+      // Count how many are already downloading (continue those)
+      const currentDownloadingCount = Object.values(newTasks).filter(
+        (t) => t.status === "downloading"
+      ).length
+      
+      // Calculate available slots for paused tasks
+      const availableSlots = maxConcurrentDownloads - currentDownloadingCount
+      
+      // Get all paused tasks
+      const pausedTasks = Object.values(newTasks).filter((t) => t.status === "paused")
+      
+      // Resume up to availableSlots to downloading, set the rest to queued
+      let resumedCount = 0
+      pausedTasks.forEach((task) => {
+        if (resumedCount < availableSlots) {
+          // Resume to downloading (fill available slots)
+          newTasks[task.modId] = {
+            ...task,
+            status: "downloading",
+            lastTickAt: Date.now(),
+            lastBytesDownloaded: task.bytesDownloaded,
+          }
+          resumedCount++
+        } else {
+          // Set remaining paused tasks to queued
+          newTasks[task.modId] = {
             ...task,
             status: "queued",
-            speedBps: 0,
           }
         }
       })
+      
       return { tasks: newTasks }
     })
   },

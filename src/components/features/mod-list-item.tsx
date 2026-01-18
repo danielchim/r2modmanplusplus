@@ -85,7 +85,7 @@ export function ModListItem({ mod }: ModListItemProps) {
         setShowDependencyDialog(true)
       } else {
         // No dependencies or all are already installed correctly, download directly
-        startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author)
+        startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
       }
     }
   }

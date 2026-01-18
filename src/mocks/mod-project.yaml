@@ -1,0 +1,33 @@
+version: 1
+
+dependencies:
+
+  hard:
+
+    h3vr.otherloader: 1.0.0
+
+assets:
+
+  runtime:
+
+    sequential: true
+
+    nested:
+
+    - assets:
+
+        - path: any_*
+
+          plugin: h3vr.otherloader
+
+          loader: item_data
+
+    - assets:
+
+        - path: late_any_*
+
+          plugin: h3vr.otherloader
+
+          loader: item_unordered_late
+
+...

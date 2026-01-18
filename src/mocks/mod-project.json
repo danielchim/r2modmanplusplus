@@ -1,0 +1,25 @@
+{
+    "manifestVersion": 2,
+    "name": "fsce-Ashes_Weaver_QwikPoint",
+    "authorName": "fsce",
+    "websiteUrl": "",
+    "displayName": "Ashes_Weaver_QwikPoint",
+    "description": "Experience Reflex history in VR! Weaver's Qwik-Point comes into H3!",
+    "gameVersion": "",
+    "networkMode": "",
+    "packageType": "",
+    "installMode": "",
+    "loaders": [],
+    "dependencies": [
+        "devyndamonster-OtherLoader-1.2.0"
+    ],
+    "incompatibilities": [],
+    "optionalDependencies": [],
+    "versionNumber": {
+        "major": 1,
+        "minor": 0,
+        "patch": 0
+    },
+    "enabled": true,
+    "icon": ""
+}

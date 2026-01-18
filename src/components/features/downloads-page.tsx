@@ -1,9 +1,10 @@
-import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2 } from "lucide-react"
+import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useDownloadStore, type DownloadTask } from "@/store/download-store"
+import { useSettingsStore } from "@/store/settings-store"
 import { GAMES } from "@/mocks/games"
 
 function formatBytes(bytes: number): string {
@@ -71,6 +72,9 @@ export function DownloadsPage() {
   const cancelAll = useDownloadStore((s) => s.cancelAll)
   const getAllActiveTasks = useDownloadStore((s) => s.getAllActiveTasks)
   const getPausedTasks = useDownloadStore((s) => s.getPausedTasks)
+  const startDownload = useDownloadStore((s) => s.startDownload)
+  
+  const maxConcurrentDownloads = useSettingsStore((s) => s.global.maxConcurrentDownloads)
   
   const allTasks = Object.values(tasks)
   const activeTasks = getAllActiveTasks()
@@ -148,7 +152,7 @@ export function DownloadsPage() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={resumeAll}
+                    onClick={() => resumeAll(maxConcurrentDownloads)}
                   >
                     <Play className="size-4 mr-1.5" />
                     Resume All
@@ -193,7 +197,7 @@ export function DownloadsPage() {
                   {/* Game Header */}
                   <div className="mb-3 flex items-center gap-3">
                     <img
-                      src={game.iconUrl}
+                      src={game.bannerUrl}
                       alt={game.name}
                       className="size-8 rounded object-cover"
                     />
@@ -216,10 +220,12 @@ export function DownloadsPage() {
                         )}
                       >
                         <div className="flex items-start gap-4">
-                          {/* Icon placeholder */}
-                          <div className="flex size-12 shrink-0 items-center justify-center rounded bg-muted text-xs font-bold text-muted-foreground">
-                            {task.modName.substring(0, 2).toUpperCase()}
-                          </div>
+                          {/* Mod Image */}
+                          <img
+                            src={task.modIconUrl}
+                            alt={task.modName}
+                            className="size-12 shrink-0 rounded object-cover"
+                          />
 
                           {/* Content */}
                           <div className="flex-1 space-y-2">
@@ -282,6 +288,27 @@ export function DownloadsPage() {
                               <Button variant="ghost" size="icon" onClick={() => resumeDownload(task.modId)}>
                                 <Play className="size-4" />
                               </Button>
+                            )}
+                            {task.status === "error" && (
+                              <>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => startDownload(
+                                    task.modId, 
+                                    task.gameId, 
+                                    task.modName, 
+                                    task.modVersion, 
+                                    task.modAuthor, 
+                                    task.modIconUrl
+                                  )}
+                                >
+                                  <RotateCcw className="size-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.modId)}>
+                                  <X className="size-4" />
+                                </Button>
+                              </>
                             )}
                             {(task.status === "queued" || task.status === "downloading" || task.status === "paused") && (
                               <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.modId)}>

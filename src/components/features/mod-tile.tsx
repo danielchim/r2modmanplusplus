@@ -1,6 +1,6 @@
 import type { Mod } from "@/mocks/mods"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, memo } from "react"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -18,7 +18,7 @@ type ModTileProps = {
   mod: Mod
 }
 
-export function ModTile({ mod }: ModTileProps) {
+export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
@@ -85,7 +85,7 @@ export function ModTile({ mod }: ModTileProps) {
         setShowDependencyDialog(true)
       } else {
         // No dependencies or all are already installed correctly, download directly
-        startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author)
+        startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
       }
     }
   }
@@ -225,4 +225,4 @@ export function ModTile({ mod }: ModTileProps) {
     </div>
     </>
   )
-}
+})

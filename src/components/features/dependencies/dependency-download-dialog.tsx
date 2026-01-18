@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, memo, useEffect } from "react"
 import { CheckCircle2, AlertCircle, AlertTriangle, XCircle, Download } from "lucide-react"
 import {
   Dialog,
@@ -65,7 +65,7 @@ function getStatusVariant(status: DependencyStatus): "default" | "secondary" | "
   }
 }
 
-export function DependencyDownloadDialog({ mod, open, onOpenChange }: DependencyDownloadDialogProps) {
+export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({ mod, open, onOpenChange }: DependencyDownloadDialogProps) {
   const installedVersionsByGame = useModManagementStore((s) => s.installedModVersionsByGame)
   const installedModsByGame = useModManagementStore((s) => s.installedModsByGame)
   const setDependencyWarnings = useModManagementStore((s) => s.setDependencyWarnings)
@@ -88,7 +88,7 @@ export function DependencyDownloadDialog({ mod, open, onOpenChange }: Dependency
   }, [mod, installedVersionsByGame, enforceDependencyVersions])
   
   // Initialize selected deps when dialog opens (select all that need downloading by default)
-  useMemo(() => {
+  useEffect(() => {
     if (!mod || !open) return
     
     const needsDownload = depInfos
@@ -121,7 +121,7 @@ export function DependencyDownloadDialog({ mod, open, onOpenChange }: Dependency
     const isTargetInstalled = installed ? installed.has(mod.id) : false
     
     if (!isTargetInstalled) {
-      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author)
+      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
     }
     
     // Store unresolved dependency warnings
@@ -142,7 +142,7 @@ export function DependencyDownloadDialog({ mod, open, onOpenChange }: Dependency
     
     // Download target mod if not already installed
     if (!isTargetInstalled) {
-      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author)
+      startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
     }
     
     // Download selected dependencies
@@ -150,7 +150,7 @@ export function DependencyDownloadDialog({ mod, open, onOpenChange }: Dependency
       const depInfo = depInfos.find(d => d.resolvedMod?.id === depId)
       if (depInfo && depInfo.resolvedMod) {
         const depMod = depInfo.resolvedMod
-        startDownload(depMod.id, depMod.gameId, depMod.name, depMod.version, depMod.author)
+        startDownload(depMod.id, depMod.gameId, depMod.name, depMod.version, depMod.author, depMod.iconUrl)
       }
     })
     
@@ -321,4 +321,4 @@ export function DependencyDownloadDialog({ mod, open, onOpenChange }: Dependency
       </DialogContent>
     </Dialog>
   )
-}
+})

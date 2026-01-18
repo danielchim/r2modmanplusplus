@@ -7,6 +7,7 @@ type AppState = {
   view: View
   selectedGameId: string
   selectedModId: string | null
+  modLibraryTab: "installed" | "online"
   
   // UI state
   searchQuery: string
@@ -19,6 +20,7 @@ type AppState = {
   setView: (view: View) => void
   selectGame: (gameId: string) => void
   selectMod: (modId: string | null) => void
+  setModLibraryTab: (tab: "installed" | "online") => void
   setSearchQuery: (query: string) => void
   setSortBy: (sortBy: "name" | "downloads" | "updated") => void
   setShowContextPanel: (show: boolean) => void
@@ -31,6 +33,7 @@ export const useAppStore = create<AppState>((set) => ({
   view: "library",
   selectedGameId: "bonelab",
   selectedModId: null,
+  modLibraryTab: "installed",
   searchQuery: "",
   sortBy: "name",
   showContextPanel: true,
@@ -41,6 +44,7 @@ export const useAppStore = create<AppState>((set) => ({
   setView: (view) => set({ view }),
   selectGame: (gameId) => set({ selectedGameId: gameId, selectedModId: null }),
   selectMod: (modId) => set({ selectedModId: modId, showContextPanel: modId !== null }),
+  setModLibraryTab: (tab) => set({ modLibraryTab: tab }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSortBy: (sortBy) => set({ sortBy: sortBy }),
   setShowContextPanel: (show) => set({ showContextPanel: show }),
