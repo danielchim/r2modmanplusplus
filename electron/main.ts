@@ -24,7 +24,7 @@ function createWindow() {
     height: 800,
     title: "r2modmanplusplus",
     webPreferences: {
-      preload: path.join(__dirname, "../preload/index.mjs"),
+      preload: path.join(__dirname, "../preload/preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
