@@ -18,7 +18,7 @@ type AppState = {
   
   // Actions
   setView: (view: View) => void
-  selectGame: (gameId: string) => void
+  selectGame: (gameId: string | null) => void
   selectMod: (modId: string | null) => void
   setModLibraryTab: (tab: "installed" | "online") => void
   setSearchQuery: (query: string) => void
