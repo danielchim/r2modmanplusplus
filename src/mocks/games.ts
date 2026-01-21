@@ -19,7 +19,7 @@ export const GAMES: Game[] = [
     bannerUrl: `/game_selection/h3vr.webp`
   },
   {
-    id: "ror2",
+    id: "riskofrain2",
     name: "Risk of Rain 2",
     iconUrl: "https://via.placeholder.com/64x64/4a5568/ffffff?text=ROR2",
     bannerUrl: `/game_selection/ror2.webp`
@@ -37,7 +37,7 @@ export const GAMES: Game[] = [
     bannerUrl: `/game_selection/lethal-company.webp`
   },
   {
-    id: "dyson-sphere",
+    id: "dyson-sphere-program",
     name: "Dyson Sphere Program",
     iconUrl: "https://via.placeholder.com/64x64/7c3aed/ffffff?text=DSP",
     bannerUrl: `/game_selection/dyson-sphere-program.webp`
@@ -49,22 +49,10 @@ export const GAMES: Game[] = [
     bannerUrl: `/game_selection/20-minutes-till-dawn.webp`
   },
   {
-    id: "9-years-of-shadows",
-    name: "9 Years of Shadows",
-    iconUrl: "https://via.placeholder.com/64x64/ea580c/ffffff?text=9YS",
-    bannerUrl: `/game_selection/9-years-of-shadows.webp`
-  },
-  {
     id: "across-the-obelisk",
     name: "Across the Obelisk",
     iconUrl: "https://via.placeholder.com/64x64/7c2d12/ffffff?text=ATO",
     bannerUrl: `/game_selection/across-the-obelisk.webp`
-  },
-  {
-    id: "aegis-descend",
-    name: "Aegis Descend",
-    iconUrl: "https://via.placeholder.com/64x64/fbbf24/ffffff?text=AD",
-    bannerUrl: `/game_selection/aegis-descend.webp`
   },
   {
     id: "against",
@@ -79,7 +67,7 @@ export const GAMES: Game[] = [
     bannerUrl: `/game_selection/against-the-storm.webp`
   },
   {
-    id: "ale-and-tale",
+    id: "ale-and-tale-tavern",
     name: "Ale & Tale Tavern",
     iconUrl: "https://via.placeholder.com/64x64/d97706/ffffff?text=AT",
     bannerUrl: `/game_selection/ale-and-tale-tavern.webp`
@@ -97,28 +85,22 @@ export const GAMES: Game[] = [
     bannerUrl: `/game_selection/among-us.webp`
   },
   {
-    id: "an-untarnished-game",
-    name: "An Untarnished Game",
+    id: "an-unfinished-game",
+    name: "An Unfinished Game",
     iconUrl: "https://via.placeholder.com/64x64/0891b2/ffffff?text=UG",
     bannerUrl: `/game_selection/an-unfinished-game.webp`
   },
   {
-    id: "ancient-dungeon",
+    id: "ancient-dungeon-vr",
     name: "Ancient Dungeon VR",
     iconUrl: "https://via.placeholder.com/64x64/c026d3/ffffff?text=AD",
     bannerUrl: `/game_selection/ancient-dungeon-vr.webp`
   },
   {
-    id: "aneurismy",
-    name: "Aneurismy",
+    id: "aneurism-iv",
+    name: "Aneurism IV",
     iconUrl: "https://via.placeholder.com/64x64/e11d48/ffffff?text=AN",
     bannerUrl: `/game_selection/aneurism-iv.webp`
-  },
-  {
-    id: "aquamarine",
-    name: "Aquamarine",
-    iconUrl: "https://via.placeholder.com/64x64/06b6d4/ffffff?text=AQ",
-    bannerUrl: `/game_selection/aquamarine.webp`
   },
   {
     id: "aska",
