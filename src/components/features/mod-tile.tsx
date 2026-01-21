@@ -4,6 +4,7 @@ import { useState, useMemo, memo } from "react"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useProfileStore } from "@/store/profile-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { cn } from "@/lib/utils"
@@ -24,16 +25,13 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   
-  // Early return if no game selected (shouldn't happen, but type-safe)
-  if (!selectedGameId) {
-    return null
-  }
-  
   const toggleMod = useModManagementStore((s) => s.toggleMod)
   const uninstallMod = useModManagementStore((s) => s.uninstallMod)
   const getDependencyWarnings = useModManagementStore((s) => s.getDependencyWarnings)
-  const installedVersionsByGame = useModManagementStore((s) => s.installedModVersionsByGame)
+  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
+  
+  const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
   
   const startDownload = useDownloadStore((s) => s.startDownload)
   
@@ -42,8 +40,12 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const isSelected = selectedModId === mod.id
   
   // Subscribe to the Sets directly, not derived booleans
-  const installedSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
-  const enabledSet = useModManagementStore((s) => s.enabledModsByGame[selectedGameId])
+  const installedSet = useModManagementStore((s) => 
+    activeProfileId ? s.installedModsByProfile[activeProfileId] : undefined
+  )
+  const enabledSet = useModManagementStore((s) => 
+    activeProfileId ? s.enabledModsByProfile[activeProfileId] : undefined
+  )
   const uninstallingSet = useModManagementStore((s) => s.uninstallingMods)
   
   // Subscribe to download task
@@ -55,7 +57,7 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const isUninstalling = uninstallingSet.has(mod.id)
   
   // Check for dependency warnings
-  const depWarnings = getDependencyWarnings(selectedGameId, mod.id)
+  const depWarnings = activeProfileId ? getDependencyWarnings(activeProfileId, mod.id) : []
   const hasWarnings = isInstalled && depWarnings.length > 0
   
   // Check download states
@@ -65,27 +67,29 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const hasDownloadTask = isDownloading || isQueued || isPaused
 
   // Get the actually installed version
-  const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+  const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
   const hasUpdate = isInstalled && installedVersion && isVersionGreater(mod.version, installedVersion)
 
   // Extract primitive dependencies for useMemo (rerender-dependencies)
-  const installedVersionsForGame = installedVersionsByGame[mod.gameId]
+  const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
 
   // Analyze dependencies
   const depInfos = useMemo(() => {
-    const installedVersions = installedVersionsForGame || {}
+    const installedVersions = installedVersionsForProfile || {}
     return analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsForGame, enforceDependencyVersions])
+  }, [mod, installedVersionsForProfile, enforceDependencyVersions])
 
   const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!activeProfileId) return
+    
     if (isInstalled) {
-      uninstallMod(selectedGameId, mod.id)
+      uninstallMod(activeProfileId, mod.id)
     } else {
       // Check if there are any dependencies that need to be installed
       const hasDepsToInstall = depInfos.some(dep => 
@@ -163,7 +167,7 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
             <span className="text-sm text-muted-foreground">Enabled</span>
             <Switch
               checked={isEnabled}
-              onCheckedChange={() => toggleMod(selectedGameId, mod.id)}
+              onCheckedChange={() => activeProfileId && toggleMod(activeProfileId, mod.id)}
             />
           </div>
         ) : null}

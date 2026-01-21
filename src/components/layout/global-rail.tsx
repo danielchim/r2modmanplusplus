@@ -48,8 +48,14 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   
   const selectedGame = selectedGameId ? GAMES.find((g) => g.id === selectedGameId) : null
   
-  // Recently managed games (newest first, max 3)
+  // Managed games for the dropdown
+  const managedGames = managedGameIds
+    .map((id) => GAMES.find((g) => g.id === id))
+    .filter((g): g is typeof GAMES[number] => g !== undefined)
+  
+  // Recently managed games (newest first, max 3, filtered to managed only)
   const recentGames = recentManagedGameIds
+    .filter((id) => managedGameIds.includes(id))
     .slice()
     .reverse()
     .slice(0, 3)
@@ -121,28 +127,34 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               <div className="overflow-y-auto flex-1 min-h-0">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="px-3 py-2">Games</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={selectedGameId ?? undefined}
-                    onValueChange={(nextId) => {
-                      selectGame(nextId)
-                      onNavigate?.()
-                    }}
-                  >
-                    {GAMES.map((game) => (
-                      <DropdownMenuRadioItem 
-                        key={game.id} 
-                        value={game.id} 
-                        className="mx-1 gap-3 rounded-md px-3 py-2"
-                      >
-                        <img
-                          src={game.bannerUrl}
-                          alt=""
-                          className="size-10 rounded object-cover"
-                        />
-                        <span>{game.name}</span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
+                  {managedGames.length === 0 ? (
+                    <div className="px-3 py-6 text-center">
+                      <p className="text-xs text-muted-foreground">No games added yet</p>
+                    </div>
+                  ) : (
+                    <DropdownMenuRadioGroup
+                      value={selectedGameId ?? undefined}
+                      onValueChange={(nextId) => {
+                        selectGame(nextId)
+                        onNavigate?.()
+                      }}
+                    >
+                      {managedGames.map((game) => (
+                        <DropdownMenuRadioItem 
+                          key={game.id} 
+                          value={game.id} 
+                          className="mx-1 gap-3 rounded-md px-3 py-2"
+                        >
+                          <img
+                            src={game.bannerUrl}
+                            alt=""
+                            className="size-10 rounded object-cover"
+                          />
+                          <span>{game.name}</span>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  )}
                 </DropdownMenuGroup>
                 
                 <DropdownMenuSeparator className="mx-0 my-2" />

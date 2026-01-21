@@ -2,12 +2,16 @@ import { useMemo, useState, useEffect } from "react"
 import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
-import { useProfileStore } from "@/store/profile-store"
+import { useProfileStore, type Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
 import { GAMES } from "@/mocks/games"
-import { PROFILES } from "@/mocks/profiles"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
+
+// Stable fallback constants to avoid creating new references in selectors
+const EMPTY_PROFILES: readonly Profile[] = []
+const EMPTY_SET = new Set<string>()
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -75,21 +79,32 @@ export function ModsLibrary() {
   }
   
   // Subscribe to the installed mods Set directly for real-time updates
-  const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
+  const activeProfileId = useProfileStore((s) => s.activeProfileIdByGame[selectedGameId])
+  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
+  // Use stable fallback to avoid new Set() every render
+  const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
+  const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
   
-  const activeProfileId = useProfileStore(
-    (s) => s.activeProfileIdByGame[selectedGameId]
-  )
+  // Avoid returning new [] in selector - return undefined and default outside
+  const profilesFromStore = useProfileStore((s) => s.profilesByGame[selectedGameId])
+  const profiles = profilesFromStore ?? EMPTY_PROFILES
+  const createProfile = useProfileStore((s) => s.createProfile)
   const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
+  
+  // Check if profiles are enabled (requires install folder)
+  const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
+  const installFolder = getPerGameSettings(selectedGameId).gameInstallFolder
+  const profilesEnabled = installFolder?.trim().length > 0
 
   const currentGame = GAMES.find((g) => g.id === selectedGameId)
-  const gameProfiles = PROFILES.filter((p) => p.gameId === selectedGameId)
+  const gameProfiles = profiles.map(profile => ({
+    ...profile,
+    modCount: installedModsByProfile[profile.id]?.size ?? 0
+  }))
   const currentProfile = gameProfiles.find((p) => p.id === activeProfileId)
 
   const handleCreateProfile = (profileName: string) => {
-    // TODO: Implement actual profile creation logic
-    console.log("Creating profile:", profileName, "for game:", selectedGameId)
-    // For now, just log it - you'll need to implement the actual creation in the profile store
+    createProfile(selectedGameId, profileName)
   }
 
   const handleToggleCategory = (category: string) => {
@@ -110,7 +125,7 @@ export function ModsLibrary() {
 
     // Tab filter: Installed vs Online
     if (tab === "installed") {
-      mods = mods.filter((m) => installedModsSet?.has(m.id))
+      mods = mods.filter((m) => installedModsSetOrEmpty.has(m.id))
     }
     // For "online" tab, show all mods
 
@@ -148,7 +163,7 @@ export function ModsLibrary() {
     }
 
     return mods
-  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModsSet])
+  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModsSetOrEmpty])
 
   // Compute category counts (ignoring selectedCategories to show availability)
   const categoryCounts = useMemo(() => {
@@ -158,7 +173,7 @@ export function ModsLibrary() {
 
     // Apply tab filter to counts as well
     if (tab === "installed") {
-      baseMods = baseMods.filter((m) => installedModsSet?.has(m.id))
+      baseMods = baseMods.filter((m) => installedModsSetOrEmpty.has(m.id))
     }
 
     const counts: Record<string, number> = {}
@@ -169,7 +184,7 @@ export function ModsLibrary() {
     })
 
     return counts
-  }, [selectedGameId, section, tab, installedModsSet])
+  }, [selectedGameId, section, tab, installedModsSetOrEmpty])
 
   return (
     <>
@@ -211,14 +226,15 @@ export function ModsLibrary() {
                 <div className="text-xs text-muted-foreground mb-1">Profile</div>
                 <DropdownMenu>
                   <DropdownMenuTrigger
+                    disabled={!profilesEnabled}
                     render={
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     }
                   >
-                    <span>{currentProfile?.name ?? activeProfileId ?? "Default"}</span>
+                    <span>{profilesEnabled ? (currentProfile?.name ?? activeProfileId ?? "Default") : "Not available"}</span>
                     <ChevronDown className="size-4 text-muted-foreground" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent

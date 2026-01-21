@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useDownloadStore } from "@/store/download-store"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 
 const TICK_INTERVAL = 500 // ms
@@ -20,6 +21,7 @@ export function DownloadManager() {
   const cancelDownload = useDownloadStore((s) => s.cancelDownload)
   
   const installMod = useModManagementStore((s) => s.installMod)
+  const activeProfileIdByGame = useProfileStore((s) => s.activeProfileIdByGame)
   
   const maxConcurrentDownloads = useSettingsStore((s) => s.global.maxConcurrentDownloads)
   const speedLimitEnabled = useSettingsStore((s) => s.global.speedLimitEnabled)
@@ -48,8 +50,13 @@ export function DownloadManager() {
       
       // Completed
       if (prevTask && prevTask.status !== "completed" && task.status === "completed") {
-        toast.success(`${task.modName} installed successfully`)
-        installMod(task.gameId, task.modId, task.modVersion)
+        const profileId = activeProfileIdByGame[task.gameId]
+        if (profileId) {
+          toast.success(`${task.modName} installed successfully`)
+          installMod(profileId, task.modId, task.modVersion)
+        } else {
+          toast.error(`Cannot install ${task.modName}: No active profile. Set game install folder first.`)
+        }
       }
       
       // Failed
@@ -61,7 +68,7 @@ export function DownloadManager() {
     })
 
     previousTasksRef.current = currentTasks
-  }, [tasks, installMod])
+  }, [tasks, installMod, activeProfileIdByGame])
 
   // Simulation tick
   useEffect(() => {

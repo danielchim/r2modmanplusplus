@@ -15,11 +15,12 @@ type GameManagementState = {
   addManagedGame: (gameId: string) => void
   appendRecentManagedGame: (gameId: string) => void
   setDefaultGameId: (gameId: string | null) => void
+  removeManagedGame: (gameId: string) => string | null
 }
 
 export const useGameManagementStore = create<GameManagementState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       managedGameIds: [],
       recentManagedGameIds: [],
@@ -53,6 +54,38 @@ export const useGameManagementStore = create<GameManagementState>()(
         set({
           defaultGameId: gameId,
         }),
+      
+      removeManagedGame: (gameId) => {
+        const state = get()
+        
+        // Remove from managed games
+        const updatedManagedGameIds = state.managedGameIds.filter((id) => id !== gameId)
+        
+        // Remove from recent games
+        const updatedRecentGameIds = state.recentManagedGameIds.filter((id) => id !== gameId)
+        
+        // Determine next default
+        let nextDefaultGameId: string | null = null
+        if (state.defaultGameId === gameId) {
+          // Pick the most recent remaining game, or the last managed game
+          const candidatesFromRecent = updatedRecentGameIds.filter((id) => updatedManagedGameIds.includes(id))
+          if (candidatesFromRecent.length > 0) {
+            nextDefaultGameId = candidatesFromRecent[candidatesFromRecent.length - 1]
+          } else if (updatedManagedGameIds.length > 0) {
+            nextDefaultGameId = updatedManagedGameIds[updatedManagedGameIds.length - 1]
+          }
+        } else {
+          nextDefaultGameId = state.defaultGameId
+        }
+        
+        set({
+          managedGameIds: updatedManagedGameIds,
+          recentManagedGameIds: updatedRecentGameIds,
+          defaultGameId: nextDefaultGameId,
+        })
+        
+        return nextDefaultGameId
+      },
     }),
     {
       name: "r2modman.gameManagement",

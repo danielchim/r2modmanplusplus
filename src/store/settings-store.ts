@@ -37,6 +37,8 @@ type SettingsState = {
   updateGlobal: (updates: Partial<GlobalSettings>) => void
   updatePerGame: (gameId: string, updates: Partial<PerGameSettings>) => void
   getPerGame: (gameId: string) => PerGameSettings
+  resetPerGame: (gameId: string) => void
+  deletePerGame: (gameId: string) => void
 }
 
 const defaultGlobalSettings: GlobalSettings = {
@@ -90,6 +92,22 @@ export const useSettingsStore = create<SettingsState>()(
           ...state.perGame[gameId],
         }
       },
+      
+      resetPerGame: (gameId) =>
+        set((state) => ({
+          perGame: {
+            ...state.perGame,
+            [gameId]: { ...defaultPerGameSettings },
+          },
+        })),
+      
+      deletePerGame: (gameId) =>
+        set((state) => {
+          const { [gameId]: _removed, ...remaining } = state.perGame
+          return {
+            perGame: remaining,
+          }
+        }),
     }),
     {
       name: "r2modman.settings",

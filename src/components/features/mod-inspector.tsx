@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
@@ -87,8 +88,11 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   const toggleMod = useModManagementStore((s) => s.toggleMod)
   const uninstallMod = useModManagementStore((s) => s.uninstallMod)
-  const installedVersionsByGame = useModManagementStore((s) => s.installedModVersionsByGame)
+  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
+  
+  const selectedGameId = useAppStore((s) => s.selectedGameId)
+  const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : undefined
 
   const [selectedDepMod, setSelectedDepMod] = useState<Mod | null>(null)
   const [showDepModDialog, setShowDepModDialog] = useState(false)
@@ -96,7 +100,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   // Use lazy initialization to set installed version by default (rerender-lazy-state-init)
   const [selectedVersion, setSelectedVersion] = useState<string>(() => {
-    const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+    const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
     return installedVersion || mod.version
   })
 
@@ -110,8 +114,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])
 
   // Subscribe to the Sets directly, not derived booleans
-  const installedSet = useModManagementStore((s) => s.installedModsByGame[mod.gameId])
-  const enabledSet = useModManagementStore((s) => s.enabledModsByGame[mod.gameId])
+  const installedSet = useModManagementStore((s) => 
+    activeProfileId ? s.installedModsByProfile[activeProfileId] : undefined
+  )
+  const enabledSet = useModManagementStore((s) => 
+    activeProfileId ? s.enabledModsByProfile[activeProfileId] : undefined
+  )
   const uninstallingSet = useModManagementStore((s) => s.uninstallingMods)
 
   // Derive booleans from Sets
@@ -120,21 +128,21 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const isUninstalling = uninstallingSet.has(mod.id)
 
   // Get the actually installed version (not just mod.version which is the latest)
-  const installedVersion = installedVersionsByGame[mod.gameId]?.[mod.id]
+  const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
 
   // Extract primitive dependencies for useMemo (rerender-dependencies)
-  const installedVersionsForGame = installedVersionsByGame[mod.gameId]
+  const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
 
   // Analyze dependencies
   const depInfos = useMemo(() => {
-    const installedVersions = installedVersionsForGame || {}
+    const installedVersions = installedVersionsForProfile || {}
     return analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsForGame, enforceDependencyVersions])
+  }, [mod, installedVersionsForProfile, enforceDependencyVersions])
 
   const handleBack = () => {
     if (onBack) {

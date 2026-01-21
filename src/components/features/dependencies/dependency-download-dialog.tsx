@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-utils"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { useDownloadStore } from "@/store/download-store"
 import { MODS } from "@/mocks/mods"
@@ -68,8 +69,9 @@ function getStatusVariant(status: DependencyStatus): "default" | "secondary" | "
 }
 
 export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({ mod, requestedVersion, open, onOpenChange }: DependencyDownloadDialogProps) {
-  const installedVersionsByGame = useModManagementStore((s) => s.installedModVersionsByGame)
-  const installedModsByGame = useModManagementStore((s) => s.installedModsByGame)
+  const activeProfileId = useProfileStore((s) => mod ? s.activeProfileIdByGame[mod.gameId] : undefined)
+  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
+  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
   const setDependencyWarnings = useModManagementStore((s) => s.setDependencyWarnings)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
   const startDownload = useDownloadStore((s) => s.startDownload)
@@ -81,16 +83,16 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   
   // Analyze dependencies when dialog opens
   const depInfos = useMemo(() => {
-    if (!mod) return []
+    if (!mod || !activeProfileId) return []
     
-    const installedVersions = installedVersionsByGame[mod.gameId] || {}
+    const installedVersions = installedVersionsByProfile[activeProfileId] || {}
     return analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsByGame, enforceDependencyVersions, forceRefresh])
+  }, [mod, activeProfileId, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
   
   // Get all selectable dependency IDs (not_installed or installed_wrong)
   const selectableDeps = useMemo(() => {
@@ -144,8 +146,10 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const isSomeSelected = selectedDepIds.size > 0 && selectedDepIds.size < selectableDeps.length
   
   const handleDownloadModOnly = () => {
+    if (!activeProfileId) return
+    
     // Only download the target mod
-    const installed = installedModsByGame[mod.gameId]
+    const installed = installedModsByProfile[activeProfileId]
     const isTargetInstalled = installed ? installed.has(mod.id) : false
     
     if (!isTargetInstalled) {
@@ -158,14 +162,16 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       .map(dep => dep.parsed.fullString)
     
     if (unresolvedDeps.length > 0) {
-      setDependencyWarnings(mod.gameId, mod.id, unresolvedDeps)
+      setDependencyWarnings(activeProfileId, mod.id, unresolvedDeps)
     }
     
     onOpenChange(false)
   }
   
   const handleDownloadSelected = () => {
-    const installed = installedModsByGame[mod.gameId]
+    if (!activeProfileId) return
+    
+    const installed = installedModsByProfile[activeProfileId]
     const isTargetInstalled = installed ? installed.has(mod.id) : false
     
     // Download target mod if not already installed
@@ -188,7 +194,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       .map(dep => dep.parsed.fullString)
     
     if (unresolvedDeps.length > 0) {
-      setDependencyWarnings(mod.gameId, mod.id, unresolvedDeps)
+      setDependencyWarnings(activeProfileId, mod.id, unresolvedDeps)
     }
     
     onOpenChange(false)
@@ -198,7 +204,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     onOpenChange(false)
   }
   
-  const targetInstalled = installedModsByGame[mod.gameId]?.has(mod.id) || false
+  const targetInstalled = activeProfileId ? (installedModsByProfile[activeProfileId]?.has(mod.id) || false) : false
   
   return (
     <>

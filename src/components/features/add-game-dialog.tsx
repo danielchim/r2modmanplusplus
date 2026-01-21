@@ -5,6 +5,13 @@ import {
   AlertDialog,
   AlertDialogContent,
 } from "@/components/ui/alert-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -14,6 +21,8 @@ import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { GAMES, type Game } from "@/mocks/games"
 import { selectFolder } from "@/lib/desktop"
+import { CreateProfileDialog } from "./create-profile-dialog"
+import { toast } from "sonner"
 
 type AddGameDialogProps = {
   open: boolean
@@ -28,6 +37,9 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const [pickedGame, setPickedGame] = useState<Game | null>(null)
   const [installFolder, setInstallFolder] = useState("")
   const [query, setQuery] = useState("")
+  const [profileChoice, setProfileChoice] = useState<"default" | "create" | "import">("default")
+  const [createProfileOpen, setCreateProfileOpen] = useState(false)
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
 
   const addManagedGame = useGameManagementStore((s) => s.addManagedGame)
   const appendRecentManagedGame = useGameManagementStore(
@@ -35,12 +47,16 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   )
   const setDefaultGameId = useGameManagementStore((s) => s.setDefaultGameId)
   const ensureDefaultProfile = useProfileStore((s) => s.ensureDefaultProfile)
+  const createProfile = useProfileStore((s) => s.createProfile)
+  const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
   const selectGame = useAppStore((s) => s.selectGame)
   const updatePerGameSettings = useSettingsStore((s) => s.updatePerGame)
 
   const filteredGames = GAMES.filter((game) =>
     game.name.toLowerCase().includes(query.toLowerCase())
   )
+  
+  const isValidPath = installFolder.trim().length > 0
 
   const handleGameClick = (game: Game) => {
     setPickedGame(game)
@@ -53,9 +69,19 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
       setInstallFolder(folder)
     }
   }
+  
+  const handleCreateProfile = (profileName: string) => {
+    if (!pickedGame) return
+    const profile = createProfile(pickedGame.id, profileName)
+    setSelectedProfileId(profile.id)
+    setProfileChoice("create")
+    setCreateProfileOpen(false)
+  }
 
   const handleAddGame = () => {
     if (!pickedGame) return
+    
+    const isValidPath = installFolder.trim().length > 0
 
     // Add to managed games
     addManagedGame(pickedGame.id)
@@ -64,13 +90,26 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
     // Set as default game (latest added becomes default)
     setDefaultGameId(pickedGame.id)
 
-    // Ensure default profile exists
-    ensureDefaultProfile(pickedGame.id)
-
-    // Save install folder if provided
-    if (installFolder.trim()) {
-      updatePerGameSettings(pickedGame.id, { gameInstallFolder: installFolder })
+    // Only create profiles if install folder is valid (non-empty)
+    if (isValidPath) {
+      if (installFolder.trim()) {
+        updatePerGameSettings(pickedGame.id, { gameInstallFolder: installFolder })
+      }
+      
+      // Ensure default profile exists
+      const defaultProfileId = ensureDefaultProfile(pickedGame.id)
+      
+      // Set active profile based on user choice
+      if (profileChoice === "create" && selectedProfileId) {
+        setActiveProfile(pickedGame.id, selectedProfileId)
+      } else if (profileChoice === "import") {
+        toast.info("Profile import not implemented yet")
+        setActiveProfile(pickedGame.id, defaultProfileId)
+      } else {
+        setActiveProfile(pickedGame.id, defaultProfileId)
+      }
     }
+    // If !isValidPath: don't call ensureDefaultProfile or setActiveProfile
 
     // Select the game
     selectGame(pickedGame.id)
@@ -81,6 +120,8 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
     setPickedGame(null)
     setInstallFolder("")
     setQuery("")
+    setProfileChoice("default")
+    setSelectedProfileId(null)
   }
 
   const handleBack = () => {
@@ -98,7 +139,13 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+    <>
+      <CreateProfileDialog
+        open={createProfileOpen}
+        onOpenChange={setCreateProfileOpen}
+        onCreateProfile={handleCreateProfile}
+      />
+      <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent 
         className="max-w-[80vw]! w-[80vw]! h-[80vh] p-0 gap-0 overflow-hidden flex flex-col"
         onOverlayClick={() => handleOpenChange(false)}
@@ -252,7 +299,6 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                   />
                   <div className="flex-1">
                     <h3 className="font-semibold">{pickedGame.name}</h3>
-                    <p className="text-sm text-muted-foreground">Profile: Default</p>
                   </div>
                 </div>
 
@@ -282,6 +328,34 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                     If you skip this, the Launch buttons will be disabled until you set the folder later.
                   </p>
                 </div>
+
+                {/* Profile Selection - Only if valid path */}
+                {isValidPath && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Profile</label>
+                    <Select value={profileChoice} onValueChange={(value) => setProfileChoice(value as typeof profileChoice)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Use Default profile</SelectItem>
+                        <SelectItem value="create">Create new profile…</SelectItem>
+                        <SelectItem value="import">Import from code…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {profileChoice === "create" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setCreateProfileOpen(true)}
+                      >
+                        {selectedProfileId ? "Change profile name" : "Choose profile name"}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -298,5 +372,6 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
         )}
       </AlertDialogContent>
     </AlertDialog>
+    </>
   )
 }

@@ -1,12 +1,11 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Upload, Download as DownloadIcon, ChevronDown, Settings, FolderOpen, FileCode, FileDown, Edit, Trash2 } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
-import { useProfileStore } from "@/store/profile-store"
+import { useProfileStore, type Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useSettingsStore } from "@/store/settings-store"
-import { getExeNames } from "@/lib/ecosystem"
-import { PROFILES } from "@/mocks/profiles"
+// import { getExeNames } from "@/lib/ecosystem" // Will be used for IPC binary verification later
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
@@ -22,11 +21,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { CreateProfileDialog } from "./create-profile-dialog"
 import { RenameProfileDialog } from "./rename-profile-dialog"
+import { DeleteProfileDialog } from "./delete-profile-dialog"
 import { UninstallAllModsDialog } from "./uninstall-all-mods-dialog"
+import { toast } from "sonner"
+
+// Stable fallback constant to avoid creating new [] in selectors
+const EMPTY_PROFILES: readonly Profile[] = []
 
 export function GameDashboard() {
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [renameProfileOpen, setRenameProfileOpen] = useState(false)
+  const [deleteProfileOpen, setDeleteProfileOpen] = useState(false)
   const [uninstallAllOpen, setUninstallAllOpen] = useState(false)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
@@ -47,14 +52,32 @@ export function GameDashboard() {
     (s) => s.activeProfileIdByGame[selectedGameId]
   )
   const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
+  const createProfile = useProfileStore((s) => s.createProfile)
+  const renameProfile = useProfileStore((s) => s.renameProfile)
+  const deleteProfile = useProfileStore((s) => s.deleteProfile)
+  const ensureDefaultProfile = useProfileStore((s) => s.ensureDefaultProfile)
+  // Avoid returning new [] in selector - return undefined and default outside
+  const profilesFromStore = useProfileStore((s) => s.profilesByGame[selectedGameId])
+  const profiles = profilesFromStore ?? EMPTY_PROFILES
+  
   const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
-  const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
+  const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
+  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
+  const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModCount = installedModsSet?.size ?? 0
   
   // Check if game binary can be found
   const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
   const installFolder = getPerGameSettings(selectedGameId).gameInstallFolder
-  const exeNames = getExeNames(selectedGameId) // Will be used for IPC binary verification later
+  const profilesEnabled = installFolder?.trim().length > 0
+  // const exeNames = getExeNames(selectedGameId) // Will be used for IPC binary verification later
+  
+  // Auto-ensure default profile when install folder becomes valid
+  useEffect(() => {
+    if (profilesEnabled && selectedGameId) {
+      ensureDefaultProfile(selectedGameId)
+    }
+  }, [profilesEnabled, selectedGameId, ensureDefaultProfile])
   
   // Determine launch button state and tooltip
   let launchDisabled = true
@@ -68,20 +91,37 @@ export function GameDashboard() {
   }
 
   const handleCreateProfile = (profileName: string) => {
-    // TODO: Implement actual profile creation logic
-    console.log("Creating profile:", profileName, "for game:", selectedGameId)
+    createProfile(selectedGameId, profileName)
+    toast.success("Profile created")
   }
 
   const handleRenameProfile = (newName: string) => {
-    // TODO: Implement actual profile rename logic
-    console.log("Renaming profile:", activeProfileId, "to:", newName, "for game:", selectedGameId)
+    if (!activeProfileId) return
+    renameProfile(selectedGameId, activeProfileId, newName)
+    toast.success("Profile renamed")
+  }
+  
+  const handleDeleteProfile = () => {
+    if (!activeProfileId) return
+    const result = deleteProfile(selectedGameId, activeProfileId)
+    if (!result.deleted) {
+      toast.error("Cannot delete default profile")
+    } else {
+      deleteProfileState(activeProfileId)
+      toast.success("Profile deleted")
+    }
+    setDeleteProfileOpen(false)
   }
 
   const handleUninstallAll = () => {
-    uninstallAllMods(selectedGameId)
+    if (!activeProfileId) return
+    uninstallAllMods(activeProfileId)
   }
 
-  const gameProfiles = PROFILES.filter((p) => p.gameId === selectedGameId)
+  const gameProfiles = profiles.map(profile => ({
+    ...profile,
+    modCount: installedModsByProfile[profile.id]?.size ?? 0
+  }))
   const currentProfile = gameProfiles.find((p) => p.id === activeProfileId)
 
   return (
@@ -96,6 +136,14 @@ export function GameDashboard() {
         onOpenChange={setRenameProfileOpen}
         onRenameProfile={handleRenameProfile}
         currentName={currentProfile?.name ?? activeProfileId ?? "Default"}
+      />
+      <DeleteProfileDialog
+        open={deleteProfileOpen}
+        onOpenChange={setDeleteProfileOpen}
+        profileName={currentProfile?.name ?? activeProfileId ?? "Default"}
+        onConfirm={handleDeleteProfile}
+        disabled={activeProfileId === `${selectedGameId}-default`}
+        disabledReason="Cannot delete the default profile"
       />
       <UninstallAllModsDialog
         open={uninstallAllOpen}
@@ -112,17 +160,20 @@ export function GameDashboard() {
         {/* Current Profile Display */}
         <DropdownMenu>
           <DropdownMenuTrigger
+            disabled={!profilesEnabled}
             render={
               <button
                 type="button"
-                className="w-full rounded-md border border-border bg-muted/50 p-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="w-full rounded-md border border-border bg-muted/50 p-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               />
             }
           >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">Current Profile</div>
-                <div className="mt-1 font-medium">{currentProfile?.name ?? activeProfileId ?? "Default"}</div>
+                <div className="mt-1 font-medium">
+                  {profilesEnabled ? (currentProfile?.name ?? activeProfileId ?? "Default") : "Not available"}
+                </div>
               </div>
               <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
             </div>
@@ -168,11 +219,26 @@ export function GameDashboard() {
 
         {/* Profile Actions */}
         <div className="space-y-2">
-          <Button variant="outline" size="sm" className="w-full justify-start gap-2">
+          {!profilesEnabled && (
+            <div className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground text-center">
+              Set install folder in Game Settings to enable profiles
+            </div>
+          )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start gap-2"
+            disabled={!profilesEnabled}
+          >
             <Upload className="size-4" />
             <span>Import Profile Code</span>
           </Button>
-          <Button variant="outline" size="sm" className="w-full justify-start gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start gap-2"
+            disabled={!profilesEnabled}
+          >
             <FolderOpen className="size-4" />
             <span>Import Local Mod</span>
           </Button>
@@ -181,9 +247,20 @@ export function GameDashboard() {
             size="sm" 
             className="w-full justify-start gap-2"
             onClick={() => setRenameProfileOpen(true)}
+            disabled={!profilesEnabled}
           >
             <Edit className="size-4" />
             <span>Rename Profile</span>
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            className="w-full justify-start gap-2"
+            onClick={() => setDeleteProfileOpen(true)}
+            disabled={!profilesEnabled || activeProfileId === `${selectedGameId}-default`}
+          >
+            <Trash2 className="size-4" />
+            <span>Delete Profile</span>
           </Button>
           <Button 
             variant="destructive" 
@@ -203,6 +280,7 @@ export function GameDashboard() {
         {/* Export Profile Dropdown - Outside space-y container to prevent layout shift */}
         <DropdownMenu>
           <DropdownMenuTrigger
+            disabled={!profilesEnabled}
             render={
               <Button variant="outline" size="sm" className="w-full justify-start gap-2" />
             }
