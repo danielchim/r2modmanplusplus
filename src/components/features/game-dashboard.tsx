@@ -4,8 +4,11 @@ import { Plus, Upload, Download as DownloadIcon, ChevronDown, Settings, FolderOp
 import { useAppStore } from "@/store/app-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useSettingsStore } from "@/store/settings-store"
+import { getExeNames } from "@/lib/ecosystem"
 import { PROFILES } from "@/mocks/profiles"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -47,6 +50,22 @@ export function GameDashboard() {
   const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
   const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
   const installedModCount = installedModsSet?.size ?? 0
+  
+  // Check if game binary can be found
+  const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
+  const installFolder = getPerGameSettings(selectedGameId).gameInstallFolder
+  const exeNames = getExeNames(selectedGameId) // Will be used for IPC binary verification later
+  
+  // Determine launch button state and tooltip
+  let launchDisabled = true
+  let launchTooltip = "Install folder not set"
+  
+  if (installFolder) {
+    // Install folder is set, but we can't verify binary without IPC yet
+    // TODO: Add IPC call to check if any of exeNames exist in installFolder
+    launchDisabled = true
+    launchTooltip = "Game binary was not found"
+  }
 
   const handleCreateProfile = (profileName: string) => {
     // TODO: Implement actual profile creation logic
@@ -216,12 +235,45 @@ export function GameDashboard() {
 
         {/* Launch Controls */}
         <div className="mt-auto space-y-2 border-t border-border pt-4">
-          <Button variant="default" size="lg" className="w-full">
-            Start Modded
-          </Button>
-          <Button variant="outline" size="lg" className="w-full">
-            Start Vanilla
-          </Button>
+          <Tooltip open={launchDisabled ? undefined : false}>
+            <TooltipTrigger
+              render={
+                <span className="inline-block w-full" />
+              }
+            >
+              <Button 
+                variant="default" 
+                size="lg" 
+                className="w-full" 
+                disabled={launchDisabled}
+              >
+                Start Modded
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {launchTooltip}
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip open={launchDisabled ? undefined : false}>
+            <TooltipTrigger
+              render={
+                <span className="inline-block w-full" />
+              }
+            >
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="w-full" 
+                disabled={launchDisabled}
+              >
+                Start Vanilla
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {launchTooltip}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Status Indicator */}
