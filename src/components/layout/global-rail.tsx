@@ -36,9 +36,16 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
+  const profilesByGame = useProfileStore((s) => s.profilesByGame)
   const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
   const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
   const managedGameIds = useGameManagementStore((s) => s.managedGameIds)
+  
+  // Get active profile name
+  const activeProfile = selectedGameId && activeProfileId 
+    ? profilesByGame[selectedGameId]?.find(p => p.id === activeProfileId)
+    : null
+  const activeProfileName = activeProfile?.name ?? "No profile"
   
   // Force open Add Game dialog on first run or after all games are removed
   useEffect(() => {
@@ -94,7 +101,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                 <div className="flex-1 min-w-0">
                   <h1 className="text-sm font-semibold truncate">{selectedGame.name}</h1>
                   <p className="text-xs text-muted-foreground truncate">
-                    {activeProfileId ?? "No profile"}
+                    {activeProfileName}
                   </p>
                 </div>
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
@@ -117,7 +124,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{selectedGame.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {activeProfileId ?? "No profile"}
+                        {activeProfileName}
                       </div>
                     </div>
                   </div>
@@ -139,6 +146,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                       value={selectedGameId ?? undefined}
                       onValueChange={(nextId) => {
                         selectGame(nextId)
+                        setMenuOpen(false)
                         onNavigate?.()
                       }}
                     >
