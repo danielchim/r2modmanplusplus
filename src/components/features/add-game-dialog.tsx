@@ -18,11 +18,12 @@ import { selectFolder } from "@/lib/desktop"
 type AddGameDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  forceOpen?: boolean
 }
 
 type Step = "select" | "location"
 
-export function AddGameDialog({ open, onOpenChange }: AddGameDialogProps) {
+export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGameDialogProps) {
   const [step, setStep] = useState<Step>("select")
   const [pickedGame, setPickedGame] = useState<Game | null>(null)
   const [installFolder, setInstallFolder] = useState("")
@@ -87,12 +88,20 @@ export function AddGameDialog({ open, onOpenChange }: AddGameDialogProps) {
     setPickedGame(null)
     setInstallFolder("")
   }
+  
+  const handleOpenChange = (nextOpen: boolean) => {
+    // Prevent closing if forced open (first run)
+    if (forceOpen && !nextOpen) {
+      return
+    }
+    onOpenChange(nextOpen)
+  }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent 
         className="max-w-[80vw]! w-[80vw]! h-[80vh] p-0 gap-0 overflow-hidden flex flex-col"
-        onOverlayClick={() => onOpenChange(false)}
+        onOverlayClick={() => handleOpenChange(false)}
       >
         {/* Step 1: Game Selection */}
         {step === "select" && (
@@ -100,7 +109,12 @@ export function AddGameDialog({ open, onOpenChange }: AddGameDialogProps) {
             {/* Header */}
             <div className="border-b border-border px-6 py-4">
               <h2 className="text-lg font-semibold mb-1">Game selection</h2>
-              <p className="text-sm text-muted-foreground">Which game are you managing your mods for?</p>
+              <p className="text-sm text-muted-foreground">
+                {forceOpen 
+                  ? "Add your first game to get started" 
+                  : "Which game are you managing your mods for?"
+                }
+              </p>
             </div>
 
             {/* Main content */}

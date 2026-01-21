@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Home, Box, Globe, Settings as SettingsIcon, Download, User, ChevronDown, Plus } from "lucide-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 
@@ -36,6 +36,15 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
   const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
+  const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
+  const managedGameIds = useGameManagementStore((s) => s.managedGameIds)
+  
+  // Force open Add Game dialog on first run (no games added yet)
+  useEffect(() => {
+    if (defaultGameId === null && managedGameIds.length === 0) {
+      setAddGameOpen(true)
+    }
+  }, [defaultGameId, managedGameIds.length])
   
   const selectedGame = selectedGameId ? GAMES.find((g) => g.id === selectedGameId) : null
   
@@ -49,7 +58,11 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
 
   return (
     <>
-      <AddGameDialog open={addGameOpen} onOpenChange={setAddGameOpen} />
+      <AddGameDialog 
+        open={addGameOpen} 
+        onOpenChange={setAddGameOpen}
+        forceOpen={defaultGameId === null && managedGameIds.length === 0}
+      />
       <div className="flex h-full w-full flex-col bg-card min-h-0">
       {/* Top Section: Game Selector */}
       <div className="shrink-0 border-b border-border">
