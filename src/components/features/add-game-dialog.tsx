@@ -321,7 +321,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                       onClick={handleBrowseFolder}
                     >
                       <FolderOpen className="size-4 mr-2" />
-                      Browse
+                      Select Folder
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -329,33 +329,40 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                   </p>
                 </div>
 
-                {/* Profile Selection - Only if valid path */}
-                {isValidPath && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Profile</label>
-                    <Select value={profileChoice} onValueChange={(value) => setProfileChoice(value as typeof profileChoice)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Use Default profile</SelectItem>
-                        <SelectItem value="create">Create new profile…</SelectItem>
-                        <SelectItem value="import">Import from code…</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {profileChoice === "create" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setCreateProfileOpen(true)}
-                      >
-                        {selectedProfileId ? "Change profile name" : "Choose profile name"}
-                      </Button>
-                    )}
-                  </div>
-                )}
+                {/* Profile Selection - Always visible, disabled when no path */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Profile</label>
+                  <Select 
+                    value={profileChoice} 
+                    onValueChange={(value) => setProfileChoice(value as typeof profileChoice)}
+                    disabled={!isValidPath}
+                  >
+                    <SelectTrigger disabled={!isValidPath}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Use Default profile</SelectItem>
+                      <SelectItem value="create">Create new profile…</SelectItem>
+                      <SelectItem value="import">Import from code…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!isValidPath && (
+                    <p className="text-xs text-muted-foreground">
+                      Set the install folder to enable profile selection
+                    </p>
+                  )}
+                  {profileChoice === "create" && isValidPath && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setCreateProfileOpen(true)}
+                    >
+                      {selectedProfileId ? "Change profile name" : "Choose profile name"}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
