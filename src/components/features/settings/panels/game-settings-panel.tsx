@@ -46,16 +46,10 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     )
   }
 
-  const handleChangeInstallFolder = async () => {
+  const handleSelectInstallFolder = async () => {
     const newPath = await selectFolder()
     if (newPath) {
       updatePerGame(gameId, { gameInstallFolder: newPath })
-    }
-  }
-
-  const handleBrowseInstallFolder = (path: string | undefined) => {
-    if (path) {
-      openFolder(path)
     }
   }
 
@@ -96,25 +90,13 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
           description="Location where the game is installed"
           value={perGameSettings.gameInstallFolder || "Not set"}
           rightContent={
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  handleBrowseInstallFolder(perGameSettings.gameInstallFolder)
-                }
-                disabled={!perGameSettings.gameInstallFolder}
-              >
-                Browse
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleChangeInstallFolder}
-              >
-                Change
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSelectInstallFolder}
+            >
+              Select Folder
+            </Button>
           }
         />
 
