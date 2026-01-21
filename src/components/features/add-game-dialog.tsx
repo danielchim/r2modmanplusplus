@@ -371,7 +371,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
               <Button variant="ghost" onClick={handleBack}>
                 Cancel
               </Button>
-              <Button onClick={handleAddGame}>
+              <Button onClick={handleAddGame} disabled={!pickedGame}>
                 Add Game
               </Button>
             </div>

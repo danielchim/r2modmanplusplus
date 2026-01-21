@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, shell } from "electron"
 import path from "node:path"
 
 // The built directory structure
@@ -70,3 +70,20 @@ app.on("activate", () => {
 })
 
 app.whenReady().then(createWindow)
+
+// IPC Handlers for desktop features
+ipcMain.handle("dialog:selectFolder", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"],
+  })
+  
+  if (result.canceled) {
+    return null
+  }
+  
+  return result.filePaths[0]
+})
+
+ipcMain.handle("shell:openFolder", async (_event, folderPath: string) => {
+  await shell.openPath(folderPath)
+})

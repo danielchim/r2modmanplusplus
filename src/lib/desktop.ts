@@ -4,12 +4,7 @@
  * Check if running in desktop environment
  */
 export function isDesktop(): boolean {
-  // Check for common desktop environment markers
-  // This can be enhanced when we add Electron/Tauri
-  return typeof window !== 'undefined' && 
-         (window.navigator.userAgent.includes('Electron') || 
-          // @ts-ignore - Tauri specific
-          window.__TAURI__ !== undefined)
+  return typeof window !== 'undefined' && window.electron !== undefined
 }
 
 /**
@@ -17,14 +12,8 @@ export function isDesktop(): boolean {
  * Fallback: copies path to clipboard in web environment
  */
 export async function openFolder(path: string): Promise<void> {
-  if (isDesktop()) {
-    // TODO: Implement desktop-specific folder opening
-    // For Electron: shell.openPath(path)
-    // For Tauri: invoke('open_folder', { path })
-    console.log('Desktop: Opening folder', path)
-    
-    // For now, just copy to clipboard even in "desktop" mode
-    await copyToClipboard(path)
+  if (isDesktop() && window.electron) {
+    await window.electron.openFolder(path)
     return
   }
   
@@ -61,10 +50,8 @@ export async function copyToClipboard(text: string): Promise<void> {
  * Web fallback: shows input dialog
  */
 export async function selectFolder(): Promise<string | null> {
-  if (isDesktop()) {
-    // TODO: Implement desktop-specific folder selection
-    console.log('Desktop: Opening folder picker')
-    return null
+  if (isDesktop() && window.electron) {
+    return await window.electron.selectFolder()
   }
   
   // Web fallback: prompt for path

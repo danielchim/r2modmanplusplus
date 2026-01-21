@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld("electron", {
   onMainProcessMessage: (callback: (message: string) => void) => {
     ipcRenderer.on("main-process-message", (_event, message) => callback(message))
   },
+  
+  // Desktop features
+  selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
+  openFolder: (folderPath: string) => ipcRenderer.invoke("shell:openFolder", folderPath),
 })
 
 // Optional: expose app version or other static info
