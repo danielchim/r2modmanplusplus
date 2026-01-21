@@ -62,6 +62,18 @@ export function ModsLibrary() {
   const tab = useAppStore((s) => s.modLibraryTab)
   const setTab = useAppStore((s) => s.setModLibraryTab)
   
+  // Early return if no game selected
+  if (!selectedGameId) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground">No game selected</p>
+          <p className="text-sm text-muted-foreground">Add a game to get started</p>
+        </div>
+      </div>
+    )
+  }
+  
   // Subscribe to the installed mods Set directly for real-time updates
   const installedModsSet = useModManagementStore((s) => s.installedModsByGame[selectedGameId])
   

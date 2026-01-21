@@ -34,10 +34,10 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const activeProfileId = useProfileStore((s) => s.activeProfileIdByGame[selectedGameId])
+  const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
   const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
   
-  const selectedGame = GAMES.find((g) => g.id === selectedGameId) ?? GAMES[0]
+  const selectedGame = selectedGameId ? GAMES.find((g) => g.id === selectedGameId) : null
   
   // Recently managed games (newest first, max 3)
   const recentGames = recentManagedGameIds
@@ -53,102 +53,120 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
       <div className="flex h-full w-full flex-col bg-card min-h-0">
       {/* Top Section: Game Selector */}
       <div className="shrink-0 border-b border-border">
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                className="w-full rounded-none border-none p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              />
-            }
-          >
-            <div className="flex items-center gap-3">
-              <img
-                src={selectedGame.bannerUrl}
-                alt={selectedGame.name}
-                className="size-16 rounded object-cover"
-              />
-              <div className="flex-1 min-w-0">
-                <h1 className="text-sm font-semibold truncate">{selectedGame.name}</h1>
-                <p className="text-xs text-muted-foreground truncate">
-                  {activeProfileId ?? "No profile"}
-                </p>
+        {selectedGame ? (
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="w-full rounded-none border-none p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                />
+              }
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src={selectedGame.bannerUrl}
+                  alt={selectedGame.name}
+                  className="size-16 rounded object-cover"
+                />
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-sm font-semibold truncate">{selectedGame.name}</h1>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {activeProfileId ?? "No profile"}
+                  </p>
+                </div>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
               </div>
-              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-            </div>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            className="w-[288px] max-h-[80vh] flex flex-col rounded-xl shadow-xl py-2 ring-1 ring-border/80" 
-            align="start"
-            sideOffset={-90}
-          >
-            {/* Header Section: Current Game + Profile */}
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="p-0 font-normal text-foreground">
-                <div className="flex items-center gap-3 px-3 py-2">
-                  <img
-                    src={selectedGame.bannerUrl}
-                    alt={selectedGame.name}
-                    className="size-14 rounded object-cover"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold truncate">{selectedGame.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {activeProfileId ?? "No profile"}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent 
+              className="w-[288px] max-h-[80vh] flex flex-col rounded-xl shadow-xl py-2 ring-1 ring-border/80" 
+              align="start"
+              sideOffset={-90}
+            >
+              {/* Header Section: Current Game + Profile */}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="p-0 font-normal text-foreground">
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <img
+                      src={selectedGame.bannerUrl}
+                      alt={selectedGame.name}
+                      className="size-14 rounded object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold truncate">{selectedGame.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {activeProfileId ?? "No profile"}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-            
-            <DropdownMenuSeparator className="mx-0 my-2" />
-            
-            {/* Games List Section - Scrollable */}
-            <div className="overflow-y-auto flex-1 min-h-0">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="px-3 py-2">Games</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={selectedGameId}
-                  onValueChange={(nextId) => {
-                    selectGame(nextId)
-                    onNavigate?.()
-                  }}
-                >
-                  {GAMES.map((game) => (
-                    <DropdownMenuRadioItem 
-                      key={game.id} 
-                      value={game.id} 
-                      className="mx-1 gap-3 rounded-md px-3 py-2"
-                    >
-                      <img
-                        src={game.bannerUrl}
-                        alt=""
-                        className="size-10 rounded object-cover"
-                      />
-                      <span>{game.name}</span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
+                </DropdownMenuLabel>
               </DropdownMenuGroup>
               
               <DropdownMenuSeparator className="mx-0 my-2" />
               
-              {/* Add Game Section */}
-              <DropdownMenuGroup>
-                <DropdownMenuItem 
-                  className="mx-1 gap-3 rounded-md px-3 py-2"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    setAddGameOpen(true)
-                  }}
-                >
-                  <Plus className="size-5" />
-                  <span>Add game</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+              {/* Games List Section - Scrollable */}
+              <div className="overflow-y-auto flex-1 min-h-0">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-3 py-2">Games</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={selectedGameId ?? undefined}
+                    onValueChange={(nextId) => {
+                      selectGame(nextId)
+                      onNavigate?.()
+                    }}
+                  >
+                    {GAMES.map((game) => (
+                      <DropdownMenuRadioItem 
+                        key={game.id} 
+                        value={game.id} 
+                        className="mx-1 gap-3 rounded-md px-3 py-2"
+                      >
+                        <img
+                          src={game.bannerUrl}
+                          alt=""
+                          className="size-10 rounded object-cover"
+                        />
+                        <span>{game.name}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+                
+                <DropdownMenuSeparator className="mx-0 my-2" />
+                
+                {/* Add Game Section */}
+                <DropdownMenuGroup>
+                  <DropdownMenuItem 
+                    className="mx-1 gap-3 rounded-md px-3 py-2"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setAddGameOpen(true)
+                    }}
+                  >
+                    <Plus className="size-5" />
+                    <span>Add game</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddGameOpen(true)}
+            className="w-full rounded-none border-none p-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-16 rounded bg-muted flex items-center justify-center">
+                <Plus className="size-8 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-sm font-semibold">No game selected</h1>
+                <p className="text-xs text-muted-foreground">Click to add a game</p>
+              </div>
             </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </button>
+        )}
       </div>
 
       {/* Middle Section: Navigation */}
@@ -228,25 +246,33 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
             Recently Managed
           </h2>
         </div>
-        <div className="space-y-1">
-          {recentGames.map((game) => (
-            <button
-              key={`recent-${game.id}`}
-              onClick={() => {
-                selectGame(game.id)
-                onNavigate?.()
-              }}
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <img
-                src={game.bannerUrl}
-                alt={game.name}
-                className="size-12 rounded object-cover"
-              />
-              <span className="text-xs text-muted-foreground">{game.name}</span>
-            </button>
-          ))}
-        </div>
+        {recentGames.length === 0 ? (
+          <div className="px-3 py-8 text-center">
+            <p className="text-xs text-muted-foreground">
+              No recently managed games yet
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {recentGames.map((game) => (
+              <button
+                key={`recent-${game.id}`}
+                onClick={() => {
+                  selectGame(game.id)
+                  onNavigate?.()
+                }}
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <img
+                  src={game.bannerUrl}
+                  alt={game.name}
+                  className="size-12 rounded object-cover"
+                />
+                <span className="text-xs text-muted-foreground">{game.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom Section: Downloads & User - Pinned */}

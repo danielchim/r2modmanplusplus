@@ -5,11 +5,14 @@
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "dev": "vite dev",
+    "dev:electron": "electron-vite dev",
+    "build": "vite build",
+    "build:electron": "electron-vite build",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "preview": "electron-vite preview",
+    "preview": "vite preview",
+    "preview:electron": "electron-vite preview",
     "dist": "pnpm build && electron-builder",
     "dist:mac": "pnpm build && electron-builder --mac"
   },
@@ -64,7 +67,8 @@
       "output": "release"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "package.json"
     ],
     "mac": {
       "target": [

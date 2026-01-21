@@ -24,6 +24,11 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   
+  // Early return if no game selected (shouldn't happen, but type-safe)
+  if (!selectedGameId) {
+    return null
+  }
+  
   const toggleMod = useModManagementStore((s) => s.toggleMod)
   const uninstallMod = useModManagementStore((s) => s.uninstallMod)
   const getDependencyWarnings = useModManagementStore((s) => s.getDependencyWarnings)

@@ -27,6 +27,19 @@ export function GameDashboard() {
   const [uninstallAllOpen, setUninstallAllOpen] = useState(false)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
+  
+  // Early return if no game selected
+  if (!selectedGameId) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground">No game selected</p>
+          <p className="text-sm text-muted-foreground">Add a game to get started</p>
+        </div>
+      </div>
+    )
+  }
+  
   const activeProfileId = useProfileStore(
     (s) => s.activeProfileIdByGame[selectedGameId]
   )

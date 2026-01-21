@@ -5,7 +5,7 @@ type View = "library" | "settings" | "config"
 type AppState = {
   // Navigation
   view: View
-  selectedGameId: string
+  selectedGameId: string | null
   selectedModId: string | null
   modLibraryTab: "installed" | "online"
   
@@ -31,7 +31,7 @@ type AppState = {
 export const useAppStore = create<AppState>((set) => ({
   // Initial state
   view: "library",
-  selectedGameId: "bonelab",
+  selectedGameId: null,
   selectedModId: null,
   modLibraryTab: "installed",
   searchQuery: "",

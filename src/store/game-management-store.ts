@@ -21,9 +21,9 @@ export const useGameManagementStore = create<GameManagementState>()(
   persist(
     (set) => ({
       // Initial state
-      managedGameIds: ["bonelab", "h3vr", "ror2"],
-      recentManagedGameIds: ["bonelab", "h3vr", "ror2"],
-      defaultGameId: "bonelab",
+      managedGameIds: [],
+      recentManagedGameIds: [],
+      defaultGameId: null,
       
       // Actions
       addManagedGame: (gameId) =>
