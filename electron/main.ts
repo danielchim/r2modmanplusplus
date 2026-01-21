@@ -3,27 +3,31 @@ import path from "node:path"
 
 // The built directory structure
 //
-// ├─┬─┬ dist
-// │ │ └── index.html
-// │ │
-// │ ├─┬ dist-electron
-// │ │ ├── main.js
-// │ │ └── preload.js
+// ├─┬─┬ out
+// │ │ ├─┬ main
+// │ │ │ └── index.js
+// │ │ ├─┬ preload
+// │ │ │ └── index.mjs
+// │ │ └─┬ renderer
+// │ │   └── index.html
 // │
-process.env.DIST = path.join(__dirname, "../dist")
+process.env.DIST = path.join(__dirname, "../renderer")
 process.env.VITE_PUBLIC = app.isPackaged
   ? process.env.DIST
-  : path.join(process.env.DIST, "../public")
+  : path.join(process.env.DIST, "../../public")
 
 let win: BrowserWindow | null
 
 function createWindow() {
+  console.log("VITE_DEV_SERVER_URL:", process.env.VITE_DEV_SERVER_URL)
+  console.log("isPackaged:", app.isPackaged)
+  
   win = new BrowserWindow({
     width: 1200,
     height: 800,
     title: "r2modmanplusplus",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "../preload/index.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -39,7 +43,7 @@ function createWindow() {
     // Open devTools in development
     win.webContents.openDevTools()
   } else {
-    // win.loadFile('dist/index.html')
+    // win.loadFile('out/renderer/index.html')
     win.loadFile(path.join(process.env.DIST!, "index.html"))
   }
 }
