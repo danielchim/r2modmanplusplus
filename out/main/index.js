@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import path from "node:path";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
@@ -43,3 +43,15 @@ app.on("activate", () => {
   }
 });
 app.whenReady().then(createWindow);
+ipcMain.handle("dialog:selectFolder", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"]
+  });
+  if (result.canceled) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+ipcMain.handle("shell:openFolder", async (_event, folderPath) => {
+  await shell.openPath(folderPath);
+});

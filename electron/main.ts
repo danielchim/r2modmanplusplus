@@ -7,7 +7,7 @@ import path from "node:path"
 // │ │ ├─┬ main
 // │ │ │ └── index.js
 // │ │ ├─┬ preload
-// │ │ │ └── index.mjs
+// │ │ │ └── index.js
 // │ │ └─┬ renderer
 // │ │   └── index.html
 // │
@@ -26,7 +26,7 @@ function createWindow() {
     minHeight: 600,
     title: "r2modmanplusplus",
     webPreferences: {
-      preload: path.join(__dirname, "../preload/index.mjs"),
+      preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
