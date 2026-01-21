@@ -54,7 +54,13 @@ export async function selectFolder(): Promise<string | null> {
     return await window.electron.selectFolder()
   }
   
-  // Web fallback: prompt for path
-  const path = prompt('Enter folder path:')
-  return path
+  // Web fallback: try prompt, but handle if blocked
+  try {
+    const path = prompt('Enter folder path:')
+    return path
+  } catch (err) {
+    console.error('Folder selection not available:', err)
+    // Return null if prompt is blocked (CSP, etc)
+    return null
+  }
 }
