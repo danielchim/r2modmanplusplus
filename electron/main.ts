@@ -19,9 +19,6 @@ process.env.VITE_PUBLIC = app.isPackaged
 let win: BrowserWindow | null
 
 function createWindow() {
-  console.log("VITE_DEV_SERVER_URL:", process.env.VITE_DEV_SERVER_URL)
-  console.log("isPackaged:", app.isPackaged)
-  
   win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -38,13 +35,17 @@ function createWindow() {
     win?.webContents.send("main-process-message", new Date().toLocaleString())
   })
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL)
+  // In dev mode, electron-vite sets ELECTRON_RENDERER_URL
+  // Fallback to VITE_DEV_SERVER_URL for compatibility with vite-plugin-electron
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL
+
+  if (!app.isPackaged && devServerUrl) {
+    win.loadURL(devServerUrl)
     // Open devTools in development
     win.webContents.openDevTools()
   } else {
-    // win.loadFile('out/renderer/index.html')
-    win.loadFile(path.join(process.env.DIST!, "index.html"))
+    // Production: load from built renderer output
+    win.loadFile(path.join(__dirname, "../renderer/index.html"))
   }
 }
 
