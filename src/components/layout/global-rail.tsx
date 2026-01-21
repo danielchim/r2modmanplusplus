@@ -32,6 +32,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectGame = useAppStore((s) => s.selectGame)
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
+  const settingsOpen = useAppStore((s) => s.settingsOpen)
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
@@ -39,12 +40,14 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
   const managedGameIds = useGameManagementStore((s) => s.managedGameIds)
   
-  // Force open Add Game dialog on first run (no games added yet)
+  // Force open Add Game dialog on first run or after all games are removed
   useEffect(() => {
-    if (defaultGameId === null && managedGameIds.length === 0) {
+    const noGames = defaultGameId === null && managedGameIds.length === 0
+    // Only show if no games AND settings is not open
+    if (noGames && !settingsOpen) {
       setAddGameOpen(true)
     }
-  }, [defaultGameId, managedGameIds.length])
+  }, [defaultGameId, managedGameIds.length, settingsOpen])
   
   const selectedGame = selectedGameId ? GAMES.find((g) => g.id === selectedGameId) : null
   
