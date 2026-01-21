@@ -8,6 +8,7 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
+      outDir: "out/main",
       rollupOptions: {
         input: path.resolve(__dirname, "electron/main.ts"),
         output: {
@@ -19,14 +20,19 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
+      outDir: "out/preload",
       rollupOptions: {
         input: path.resolve(__dirname, "electron/preload.ts"),
+        output: {
+          entryFileNames: "index.mjs",
+        },
       },
     },
   },
   renderer: {
     root: ".",
     build: {
+      outDir: "out/renderer",
       rollupOptions: {
         input: path.resolve(__dirname, "index.html"),
       },
