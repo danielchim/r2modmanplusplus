@@ -6,7 +6,7 @@ import { useProfileStore, type Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
-import { GAMES } from "@/mocks/games"
+import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
 
 // Stable fallback constants to avoid creating new references in selectors
@@ -96,7 +96,7 @@ export function ModsLibrary() {
     )
   }
 
-  const currentGame = GAMES.find((g) => g.id === selectedGameId)
+  const currentGame = ECOSYSTEM_GAMES.find((g) => g.id === selectedGameId)
   const gameProfiles = profiles.map(profile => ({
     ...profile,
     modCount: installedModsByProfile[profile.id]?.size ?? 0

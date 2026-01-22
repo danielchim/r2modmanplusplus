@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useDownloadStore, type DownloadTask } from "@/store/download-store"
 import { useSettingsStore } from "@/store/settings-store"
-import { GAMES } from "@/mocks/games"
+import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -189,7 +189,7 @@ export function DownloadsPage() {
             </div>
           ) : (
             Object.entries(tasksByGame).map(([gameId, gameTasks]) => {
-              const game = GAMES.find((g) => g.id === gameId)
+              const game = ECOSYSTEM_GAMES.find((g) => g.id === gameId)
               if (!game) return null
               
               return (

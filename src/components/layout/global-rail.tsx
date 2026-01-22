@@ -5,7 +5,7 @@ import { Link, useRouterState } from "@tanstack/react-router"
 import { useAppStore } from "@/store/app-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useGameManagementStore } from "@/store/game-management-store"
-import { GAMES } from "@/mocks/games"
+import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -57,12 +57,12 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
     }
   }, [defaultGameId, managedGameIds.length, settingsOpen])
   
-  const selectedGame = selectedGameId ? GAMES.find((g) => g.id === selectedGameId) : null
+  const selectedGame = selectedGameId ? ECOSYSTEM_GAMES.find((g) => g.id === selectedGameId) : null
   
   // Managed games for the dropdown
   const managedGames = managedGameIds
-    .map((id) => GAMES.find((g) => g.id === id))
-    .filter((g): g is typeof GAMES[number] => g !== undefined)
+    .map((id) => ECOSYSTEM_GAMES.find((g) => g.id === id))
+    .filter((g): g is typeof ECOSYSTEM_GAMES[number] => g !== undefined)
   
   // Recently managed games (newest first, max 3, filtered to managed only)
   const recentGames = recentManagedGameIds
@@ -70,8 +70,8 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
     .slice()
     .reverse()
     .slice(0, 3)
-    .map((id) => GAMES.find((g) => g.id === id))
-    .filter((g): g is typeof GAMES[number] => g !== undefined)
+    .map((id) => ECOSYSTEM_GAMES.find((g) => g.id === id))
+    .filter((g): g is typeof ECOSYSTEM_GAMES[number] => g !== undefined)
 
   return (
     <>

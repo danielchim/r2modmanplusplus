@@ -7,7 +7,7 @@ import { useModManagementStore } from "@/store/mod-management-store"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { useAppStore } from "@/store/app-store"
 import { openFolder, selectFolder } from "@/lib/desktop"
-import { GAMES } from "@/mocks/games"
+import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { toast } from "sonner"
 
 interface GameSettingsPanelProps {
@@ -47,7 +47,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     )
   }
 
-  const game = GAMES.find((g) => g.id === gameId)
+  const game = ECOSYSTEM_GAMES.find((g) => g.id === gameId)
   const perGameSettings = getPerGame(gameId)
 
   if (!game) {

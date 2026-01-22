@@ -10,7 +10,7 @@ import { ModpacksPanel } from "./panels/modpacks-panel"
 import { OtherPanel } from "./panels/other-panel"
 import { GameSettingsPanel } from "./panels/game-settings-panel"
 import { AddGameDialog } from "@/components/features/add-game-dialog"
-import { GAMES } from "@/mocks/games"
+import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { cn } from "@/lib/utils"
 
 const staticNavigationSections = [
@@ -63,7 +63,7 @@ export function SettingsDialog() {
 
   // Build dynamic games section
   const managedGames = managedGameIds
-    .map((id) => GAMES.find((g) => g.id === id))
+    .map((id) => ECOSYSTEM_GAMES.find((g) => g.id === id))
     .filter(Boolean)
 
   const gamesSection = managedGames.length > 0 ? {
