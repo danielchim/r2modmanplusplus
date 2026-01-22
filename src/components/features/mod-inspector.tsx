@@ -198,11 +198,15 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   }
 
   const handleUninstall = () => {
-    uninstallMod(mod.gameId, mod.id)
+    if (activeProfileId) {
+      uninstallMod(activeProfileId, mod.id)
+    }
   }
 
   const handleToggleEnabled = () => {
-    toggleMod(mod.gameId, mod.id)
+    if (activeProfileId) {
+      toggleMod(activeProfileId, mod.id)
+    }
   }
 
   const handlePause = () => {

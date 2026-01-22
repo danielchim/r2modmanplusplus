@@ -2,14 +2,14 @@ import { useState, useEffect } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { XIcon } from "lucide-react"
+import { XIcon, PlusIcon } from "lucide-react"
 import { LocationsPanel } from "./panels/locations-panel"
 import { DownloadsPanel } from "./panels/downloads-panel"
 import { DebuggingPanel } from "./panels/debugging-panel"
 import { ModpacksPanel } from "./panels/modpacks-panel"
 import { OtherPanel } from "./panels/other-panel"
 import { GameSettingsPanel } from "./panels/game-settings-panel"
+import { AddGameDialog } from "@/components/features/add-game-dialog"
 import { GAMES } from "@/mocks/games"
 import { cn } from "@/lib/utils"
 
@@ -43,6 +43,7 @@ export function SettingsDialog() {
   const managedGameIds = useGameManagementStore((s) => s.managedGameIds)
   const [activeSection, setActiveSection] = useState(settingsActiveSection || "other")
   const [searchQuery] = useState("")
+  const [addGameOpen, setAddGameOpen] = useState(false)
 
   // Update active section when settingsActiveSection changes
   useEffect(() => {
@@ -90,11 +91,16 @@ export function SettingsDialog() {
   const activeGameId = activeItem && 'gameId' in activeItem ? (activeItem as any).gameId as string : undefined
 
   return (
-    <Dialog open={settingsOpen} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="max-w-[1100px] w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-2rem))] max-h-none p-0 overflow-hidden flex"
-        onOverlayClick={() => handleOpenChange(false)}
-      >
+    <>
+      <AddGameDialog 
+        open={addGameOpen} 
+        onOpenChange={setAddGameOpen}
+      />
+      <Dialog open={settingsOpen} onOpenChange={handleOpenChange}>
+        <DialogContent
+          className="max-w-[1100px] w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-2rem))] max-h-none p-0 overflow-hidden flex"
+          onOverlayClick={() => handleOpenChange(false)}
+        >
         {/* Left Sidebar */}
         <div className="w-60 shrink-0 border-r border-border bg-muted/30 flex flex-col">
           {/* Header */}
@@ -126,6 +132,15 @@ export function SettingsDialog() {
                       {item.label}
                     </button>
                   ))}
+                  {section.title === "Games" && (
+                    <button
+                      onClick={() => setAddGameOpen(true)}
+                      className="w-full text-left px-3 py-2 rounded-md text-sm transition-colors text-muted-foreground hover:bg-muted/50 hover:text-foreground flex items-center gap-2"
+                    >
+                      <PlusIcon className="size-4" />
+                      Add Game
+                    </button>
+                  )}
                 </nav>
               </div>
             ))}
@@ -136,15 +151,11 @@ export function SettingsDialog() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Close Button */}
           <div className="absolute top-4 right-4">
-            <DialogClose>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0"
-                aria-label="Close settings"
-              >
-                <XIcon className="size-4" />
-              </Button>
+            <DialogClose
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-9 w-9 shrink-0"
+              aria-label="Close settings"
+            >
+              <XIcon className="size-4" />
             </DialogClose>
           </div>
 
@@ -161,5 +172,6 @@ export function SettingsDialog() {
         </div>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

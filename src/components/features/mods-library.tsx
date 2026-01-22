@@ -66,6 +66,24 @@ export function ModsLibrary() {
   const tab = useAppStore((s) => s.modLibraryTab)
   const setTab = useAppStore((s) => s.setModLibraryTab)
   
+  // Subscribe to the installed mods Set directly for real-time updates
+  const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
+  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
+  // Use stable fallback to avoid new Set() every render
+  const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
+  const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
+  
+  // Avoid returning new [] in selector - return undefined and default outside
+  const profilesFromStore = selectedGameId ? useProfileStore((s) => s.profilesByGame[selectedGameId]) : undefined
+  const profiles = profilesFromStore ?? EMPTY_PROFILES
+  const createProfile = useProfileStore((s) => s.createProfile)
+  const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
+  
+  // Check if profiles are enabled (requires install folder)
+  const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
+  const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
+  const profilesEnabled = installFolder?.trim().length > 0
+  
   // Early return if no game selected
   if (!selectedGameId) {
     return (
@@ -77,24 +95,6 @@ export function ModsLibrary() {
       </div>
     )
   }
-  
-  // Subscribe to the installed mods Set directly for real-time updates
-  const activeProfileId = useProfileStore((s) => s.activeProfileIdByGame[selectedGameId])
-  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
-  // Use stable fallback to avoid new Set() every render
-  const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
-  const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
-  
-  // Avoid returning new [] in selector - return undefined and default outside
-  const profilesFromStore = useProfileStore((s) => s.profilesByGame[selectedGameId])
-  const profiles = profilesFromStore ?? EMPTY_PROFILES
-  const createProfile = useProfileStore((s) => s.createProfile)
-  const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
-  
-  // Check if profiles are enabled (requires install folder)
-  const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
-  const installFolder = getPerGameSettings(selectedGameId).gameInstallFolder
-  const profilesEnabled = installFolder?.trim().length > 0
 
   const currentGame = GAMES.find((g) => g.id === selectedGameId)
   const gameProfiles = profiles.map(profile => ({
