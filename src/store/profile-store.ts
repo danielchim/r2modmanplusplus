@@ -133,18 +133,41 @@ export const useProfileStore = create<ProfileState>()(
         }
         
         const profiles = state.profilesByGame[gameId] || []
+        const deletedIndex = profiles.findIndex(p => p.id === profileId)
         const updatedProfiles = profiles.filter(p => p.id !== profileId)
+        
+        // Determine next active profile if we're deleting the active one
+        let nextActiveProfileId: string | undefined
+        if (state.activeProfileIdByGame[gameId] === profileId) {
+          // Try previous profile (index - 1)
+          if (deletedIndex > 0 && updatedProfiles[deletedIndex - 1]) {
+            nextActiveProfileId = updatedProfiles[deletedIndex - 1].id
+          }
+          // Else try next profile (same index after deletion)
+          else if (updatedProfiles[deletedIndex]) {
+            nextActiveProfileId = updatedProfiles[deletedIndex].id
+          }
+          // Else fall back to default
+          else {
+            nextActiveProfileId = defaultProfileId
+          }
+        }
         
         set((state) => ({
           profilesByGame: {
             ...state.profilesByGame,
             [gameId]: updatedProfiles,
           },
+          ...(nextActiveProfileId && {
+            activeProfileIdByGame: {
+              ...state.activeProfileIdByGame,
+              [gameId]: nextActiveProfileId,
+            },
+          }),
         }))
         
-        // If we deleted the active profile, switch to default
-        if (state.activeProfileIdByGame[gameId] === profileId) {
-          // Ensure default exists
+        // Ensure default profile exists if we're switching to it
+        if (nextActiveProfileId === defaultProfileId) {
           get().ensureDefaultProfile(gameId)
         }
         
