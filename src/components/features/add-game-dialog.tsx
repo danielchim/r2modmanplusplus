@@ -19,7 +19,7 @@ import { useAppStore } from "@/store/app-store"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
-import { GAMES, type Game } from "@/mocks/games"
+import { ECOSYSTEM_GAMES, type EcosystemGame } from "@/lib/ecosystem-games"
 import { selectFolder } from "@/lib/desktop"
 import { CreateProfileDialog } from "./create-profile-dialog"
 import { toast } from "sonner"
@@ -34,7 +34,7 @@ type Step = "select" | "location"
 
 export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGameDialogProps) {
   const [step, setStep] = useState<Step>("select")
-  const [pickedGame, setPickedGame] = useState<Game | null>(null)
+  const [pickedGame, setPickedGame] = useState<EcosystemGame | null>(null)
   const [installFolder, setInstallFolder] = useState("")
   const [query, setQuery] = useState("")
   const [profileChoice, setProfileChoice] = useState<"default" | "create" | "import">("default")
@@ -52,13 +52,13 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const selectGame = useAppStore((s) => s.selectGame)
   const updatePerGameSettings = useSettingsStore((s) => s.updatePerGame)
 
-  const filteredGames = GAMES.filter((game) =>
+  const filteredGames = ECOSYSTEM_GAMES.filter((game) =>
     game.name.toLowerCase().includes(query.toLowerCase())
   )
   
   const isValidPath = installFolder.trim().length > 0
 
-  const handleGameClick = (game: Game) => {
+  const handleGameClick = (game: EcosystemGame) => {
     setPickedGame(game)
     setStep("location")
   }
@@ -216,7 +216,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                                 e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='400'%3E%3Crect width='300' height='400' fill='%23374151'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='sans-serif' font-size='28' font-weight='600'%3E" + encodeURIComponent(game.name) + "%3C/text%3E%3C/svg%3E"
                               }}
                             />
-                            <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                               <div className="absolute bottom-0 left-0 right-0 p-3">
                                 <p className="text-white text-sm font-medium line-clamp-2">
                                   {game.name}
@@ -237,7 +237,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                       Connect to a server to browse games.
                     </div>
                       <div className="grid grid-cols-8 gap-8">
-                      {GAMES.map((game) => (
+                      {ECOSYSTEM_GAMES.map((game) => (
                         <button
                           key={`server-${game.id}`}
                           onClick={() => handleGameClick(game)}
