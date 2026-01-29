@@ -81,6 +81,172 @@ function getStatusLabel(status: DependencyStatus) {
   }
 }
 
+function ModInspectorSkeleton({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="flex flex-col">
+      {/* Header with Back Button */}
+      <div className="shrink-0 border-b border-border p-4">
+        <button
+          onClick={onBack}
+          className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back</span>
+        </button>
+        <div className="flex items-start gap-3">
+          <Skeleton className="size-12 rounded" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        </div>
+      </div>
+
+      {/* Primary Action Skeleton */}
+      <div className="shrink-0 border-b border-border p-4">
+        <Skeleton className="h-10 w-full" />
+      </div>
+
+      {/* Metadata Skeleton */}
+      <div className="shrink-0 border-b border-border p-4">
+        <div className="space-y-2 rounded-md border border-border bg-muted/50 p-3">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Skeleton */}
+      <Tabs defaultValue="readme" className="flex flex-col">
+        <div className="shrink-0 border-b border-border overflow-x-auto py-2">
+          <TabsList variant="line" className="h-auto w-full justify-start rounded-none border-0 bg-transparent p-0">
+            <TabsTrigger value="readme" className="gap-2 rounded-none border-b-2 px-4 py-3">
+              <FileText className="size-4" />
+              <span>Readme</span>
+            </TabsTrigger>
+            <TabsTrigger value="changelog" className="gap-2 rounded-none border-b-2 px-4 py-3">
+              <History className="size-4" />
+              <span>Updates</span>
+            </TabsTrigger>
+            <TabsTrigger value="dependencies" className="gap-2 rounded-none border-b-2 px-4 py-3">
+              <Network className="size-4" />
+              <span>Deps</span>
+            </TabsTrigger>
+            <TabsTrigger value="versions" className="gap-2 rounded-none border-b-2 px-4 py-3">
+              <Package className="size-4" />
+              <span>Versions</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="readme" className="p-4">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-32 w-full mt-4" />
+            <Skeleton className="h-4 w-2/3 mt-4" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="changelog" className="p-4">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="dependencies" className="p-4">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-1/3 mb-4" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="versions" className="p-4">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-1/3 mb-4" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Footer Actions Skeleton */}
+      <div className="shrink-0 border-t border-border p-4">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SkeletonDependencyRow() {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card p-3">
+      <Skeleton className="size-4 rounded-full" />
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-5 w-20" />
+        </div>
+        <Skeleton className="h-3 w-48" />
+      </div>
+    </div>
+  )
+}
+
+function ModInspectorError({ onBack, error }: { onBack: () => void; error?: Error }) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 border-b border-border p-4">
+        <button
+          onClick={onBack}
+          className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back</span>
+        </button>
+      </div>
+      <div className="flex flex-1 items-center justify-center p-4">
+        <div className="max-w-md rounded-md border border-destructive/50 bg-destructive/10 p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-3">
+              <p className="text-sm font-medium text-destructive">Failed to load package</p>
+              <p className="text-xs text-muted-foreground">
+                {error?.message || "An error occurred while fetching the package"}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={onBack} className="gap-2">
+                  <ArrowLeft className="size-3" />
+                  Go Back
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const startDownload = useDownloadStore((s) => s.startDownload)
   const pauseDownload = useDownloadStore((s) => s.pauseDownload)
@@ -162,6 +328,9 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       enforceVersions: enforceDependencyVersions,
     })
   }, [isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
+
+  // Check if we're loading dependencies for a Thunderstore mod
+  const isLoadingDeps = isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.isLoading && !onlineDepsQuery.data
 
   const handleBack = () => {
     if (onBack) {
@@ -597,8 +766,8 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
         <TabsContent value="dependencies" className="p-4">
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Dependencies ({depInfos.length})</h3>
-              {depInfos.some(d => d.status === "not_installed" || d.status === "installed_wrong") && (
+              <h3 className="text-sm font-semibold">Dependencies ({isLoadingDeps ? "..." : depInfos.length})</h3>
+              {!isLoadingDeps && depInfos.some(d => d.status === "not_installed" || d.status === "installed_wrong") && (
                 <Button variant="secondary" size="sm" onClick={handleDownloadMissingDeps}>
                   <Download className="size-3 mr-1.5" />
                   Download missing
@@ -610,6 +779,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                 <p className="text-xs text-muted-foreground">
                   This mod has no dependencies
                 </p>
+              </div>
+            ) : isLoadingDeps ? (
+              <div className="space-y-2">
+                <SkeletonDependencyRow />
+                <SkeletonDependencyRow />
+                <SkeletonDependencyRow />
               </div>
             ) : (
               <div className="space-y-2">
@@ -763,24 +938,14 @@ export function ModInspector() {
     selectMod(null)
   }
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm p-4">
-          <Button variant="ghost" size="sm" onClick={handleBack} className="gap-2">
-            <ArrowLeft className="size-4" />
-            Back
-          </Button>
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center space-y-3">
-            <Loader2 className="size-8 animate-spin text-muted-foreground mx-auto" />
-            <p className="text-sm text-muted-foreground">Loading package...</p>
-          </div>
-        </div>
-      </div>
-    )
+  // Show error state for online mods that failed to load
+  if (isOnlineMod && onlinePackageQuery.isElectron && onlinePackageQuery.isError && !onlinePackageQuery.data) {
+    return <ModInspectorError onBack={handleBack} error={onlinePackageQuery.error as unknown as Error} />
+  }
+
+  // Show skeleton while loading online mod data
+  if (isOnlineMod && onlinePackageQuery.isElectron && isLoading && !mod) {
+    return <ModInspectorSkeleton onBack={handleBack} />
   }
 
   // Not found

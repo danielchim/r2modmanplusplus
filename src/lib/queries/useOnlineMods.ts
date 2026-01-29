@@ -121,6 +121,7 @@ export function useOnlinePackage(gameId: string, uuid4: string, enabled = true) 
       enabled: shouldFetch,
       refetchOnWindowFocus: false,
       staleTime: 10 * 60 * 1000, // 10 minutes
+      placeholderData: (previousData) => previousData, // Keep previous mod data while fetching new one
     }
   )
 
