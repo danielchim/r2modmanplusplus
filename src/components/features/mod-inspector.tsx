@@ -22,6 +22,7 @@ import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-
 import { DependencyModDialog } from "@/components/features/dependencies/dependency-mod-dialog"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { useThunderstoreReadme } from "@/lib/queries/useThunderstoreReadme"
+import { useOnlinePackage } from "@/lib/queries/useOnlineMods"
 import { isVersionGreater } from "@/lib/version-utils"
 
 function formatBytes(bytes: number): string {
@@ -712,16 +713,61 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
 export function ModInspector() {
   const selectedModId = useAppStore((s) => s.selectedModId)
+  const selectedGameId = useAppStore((s) => s.selectedGameId)
+  const tab = useAppStore((s) => s.modLibraryTab)
   const selectMod = useAppStore((s) => s.selectMod)
 
-  const mod = MODS.find((m) => m.id === selectedModId)
+  // Check if this is an online mod (UUID format from Thunderstore)
+  // UUIDs are 36 chars with hyphens (e.g., "550bcdc8-bd12-4711-9797-f31fa6c36c58")
+  const isOnlineMod = tab === "online" && selectedModId && selectedModId.length === 36 && selectedModId.includes("-")
 
-  if (!mod) {
-    return null
+  // Try to fetch from Thunderstore if it's an online mod
+  const onlinePackageQuery = useOnlinePackage(
+    selectedGameId || "",
+    selectedModId || "",
+    isOnlineMod || false
+  )
+
+  // Determine which mod to display
+  let mod: Mod | null | undefined = null
+  let isLoading = false
+
+  if (isOnlineMod && onlinePackageQuery.isElectron) {
+    // In Electron, use Thunderstore data
+    mod = onlinePackageQuery.data
+    isLoading = onlinePackageQuery.isLoading
+  } else {
+    // Fallback to MODS (for installed tab or web mode)
+    mod = MODS.find((m) => m.id === selectedModId)
   }
 
   const handleBack = () => {
     selectMod(null)
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm p-4">
+          <Button variant="ghost" size="sm" onClick={handleBack} className="gap-2">
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center space-y-3">
+            <Loader2 className="size-8 animate-spin text-muted-foreground mx-auto" />
+            <p className="text-sm text-muted-foreground">Loading package...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Not found
+  if (!mod) {
+    return null
   }
 
   return <ModInspectorContent key={mod.id} mod={mod} onBack={handleBack} />
