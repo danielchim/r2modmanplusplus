@@ -22,7 +22,7 @@ import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-
 import { DependencyModDialog } from "@/components/features/dependencies/dependency-mod-dialog"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { useThunderstoreReadme } from "@/lib/queries/useThunderstoreReadme"
-import { useOnlinePackage } from "@/lib/queries/useOnlineMods"
+import { useOnlinePackage, useOnlineDependencies } from "@/lib/queries/useOnlineMods"
 import { isVersionGreater } from "@/lib/version-utils"
 
 function formatBytes(bytes: number): string {
@@ -93,7 +93,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
   
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : undefined
+  const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
 
   const [selectedDepMod, setSelectedDepMod] = useState<Mod | null>(null)
   const [showDepModDialog, setShowDepModDialog] = useState(false)
@@ -134,8 +134,26 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   // Extract primitive dependencies for useMemo (rerender-dependencies)
   const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
 
-  // Analyze dependencies
+  // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
+  const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
+
+  // Use online dependency resolution for Thunderstore mods in Electron
+  const onlineDepsQuery = useOnlineDependencies({
+    gameId: mod.gameId,
+    dependencies: mod.dependencies,
+    installedVersions: installedVersionsForProfile || {},
+    enforceVersions: enforceDependencyVersions,
+    enabled: isThunderstoreMod,
+  })
+
+  // Analyze dependencies (use online for Thunderstore mods if available, otherwise use mock)
   const depInfos = useMemo(() => {
+    // If we have online dependency data, use it
+    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
+      return onlineDepsQuery.data
+    }
+
+    // Fallback to mock catalog analysis
     const installedVersions = installedVersionsForProfile || {}
     return analyzeModDependencies({
       mod,
@@ -143,7 +161,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsForProfile, enforceDependencyVersions])
+  }, [isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
 
   const handleBack = () => {
     if (onBack) {
