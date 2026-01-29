@@ -25,3 +25,5 @@ routeTree.gen.ts
 *.njsproj
 *.sln
 *.sw?
+
+out/renderer/assets/
