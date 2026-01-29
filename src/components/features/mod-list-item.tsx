@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { analyzeModDependencies } from "@/lib/dependency-utils"
 import { isVersionGreater } from "@/lib/version-utils"
+import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
 import { MODS } from "@/mocks/mods"
 
 type ModListItemProps = {
@@ -24,11 +25,6 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  
-  // Early return if no game selected (shouldn't happen, but type-safe)
-  if (!selectedGameId) {
-    return null
-  }
   
   const toggleMod = useModManagementStore((s) => s.toggleMod)
   const uninstallMod = useModManagementStore((s) => s.uninstallMod)
@@ -78,8 +74,26 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
   // Extract primitive dependencies for useMemo (rerender-dependencies)
   const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
 
-  // Analyze dependencies
+  // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
+  const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
+
+  // Use online dependency resolution for Thunderstore mods in Electron
+  const onlineDepsQuery = useOnlineDependencies({
+    gameId: mod.gameId,
+    dependencies: mod.dependencies,
+    installedVersions: installedVersionsForProfile || {},
+    enforceVersions: enforceDependencyVersions,
+    enabled: isThunderstoreMod,
+  })
+
+  // Analyze dependencies (use online for Thunderstore mods if available, otherwise use mock)
   const depInfos = useMemo(() => {
+    // If we have online dependency data, use it
+    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
+      return onlineDepsQuery.data
+    }
+
+    // Fallback to mock catalog analysis
     const installedVersions = installedVersionsForProfile || {}
     return analyzeModDependencies({
       mod,
@@ -87,7 +101,12 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsForProfile, enforceDependencyVersions])
+  }, [isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
+
+  // Early return if no game selected (shouldn't happen, but type-safe)
+  if (!selectedGameId) {
+    return null
+  }
 
   const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation()
