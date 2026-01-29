@@ -582,59 +582,61 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
           </div>
         )}
 
-
-        {(!downloadTask || downloadTask.status === "completed" || downloadTask.status === "error") && !installed && (
-          <Button variant="default" size="lg" className="w-full gap-2" onClick={handleInstall}>
-            <Download className="size-4" />
-            <span>Install v{selectedVersion}</span>
-          </Button>
+        {/* Primary CTA: Install/Upgrade/Downgrade */}
+        {canShowPrimaryCta && ctaKind !== "none" && (
+          <div className="space-y-2">
+            <Button
+              variant="default"
+              size="lg"
+              className="w-full gap-2"
+              onClick={handleInstall}
+              disabled={ctaKind === "unknown-installed-version"}
+            >
+              <Download className="size-4" />
+              <span>{ctaInfo.label}</span>
+            </Button>
+            {ctaKind === "unknown-installed-version" && ctaInfo.disabledReason && (
+              <div className="flex items-start gap-2 rounded-md border border-yellow-600/50 bg-yellow-600/10 p-3">
+                <AlertCircle className="size-4 text-yellow-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-muted-foreground">
+                  {ctaInfo.disabledReason}
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
-        {(!downloadTask || downloadTask.status === "completed" || downloadTask.status === "error") && installed && (
+        {/* Enable toggle and Uninstall: only when selected version matches installed */}
+        {canShowPrimaryCta && ctaKind === "none" && (
           <div className="space-y-3">
-            {isVersionGreater(mod.version, installedVersion) ? (
-              <>
-                <Button variant="default" size="lg" className="w-full gap-2"
-                  onClick={() => setSelectedVersion(mod.version)}
-                >
-                  <Download className="size-3 mr-1.5" />
-                  Upgrade to v{mod.version}
-                </Button>
-              </>
-            ) : null}
-            {/* Only show Enable toggle and Uninstall when selected version matches installed */}
-            {selectedVersion === installedVersion ? (
-              <>
-                {!isUninstalling ? (
-                  <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 p-3">
-                    <div>
-                      <p className="text-sm font-medium">Enable Mod</p>
-                      <p className="text-xs text-muted-foreground">Load this mod in-game</p>
-                    </div>
-                    <Switch checked={enabled} onCheckedChange={handleToggleEnabled} />
-                  </div>
-                ) : null}
-                <Button
-                  variant="destructive"
-                  size="lg"
-                  className="w-full gap-2"
-                  onClick={handleUninstall}
-                  disabled={isUninstalling}
-                >
-                  {isUninstalling ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      <span>Uninstalling...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="size-4" />
-                      <span>Uninstall</span>
-                    </>
-                  )}
-                </Button>
-              </>
-            ) : null}
+            {!isUninstalling && (
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 p-3">
+                <div>
+                  <p className="text-sm font-medium">Enable Mod</p>
+                  <p className="text-xs text-muted-foreground">Load this mod in-game</p>
+                </div>
+                <Switch checked={enabled} onCheckedChange={handleToggleEnabled} />
+              </div>
+            )}
+            <Button
+              variant="destructive"
+              size="lg"
+              className="w-full gap-2"
+              onClick={handleUninstall}
+              disabled={isUninstalling}
+            >
+              {isUninstalling ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Uninstalling...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="size-4" />
+                  <span>Uninstall</span>
+                </>
+              )}
+            </Button>
           </div>
         )}
       </div>
