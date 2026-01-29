@@ -109,13 +109,7 @@ export async function searchPackages(params: SearchParams): Promise<SearchResult
     // Filter by search query
     if (query) {
       const searchLower = query.toLowerCase()
-      const latestVersion = pkg.versions[0]
-      
-      const matchesName = pkg.name.toLowerCase().includes(searchLower)
-      const matchesOwner = pkg.owner.toLowerCase().includes(searchLower)
-      const matchesDescription = latestVersion?.description.toLowerCase().includes(searchLower)
-      
-      return matchesName || matchesOwner || matchesDescription
+      return pkg.name.toLowerCase().includes(searchLower)
     }
 
     return true

@@ -148,12 +148,7 @@ export function ModsLibrary() {
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      mods = mods.filter(
-        (m) =>
-          m.name.toLowerCase().includes(query) ||
-          m.author.toLowerCase().includes(query) ||
-          m.description.toLowerCase().includes(query)
-      )
+      mods = mods.filter((m) => m.name.toLowerCase().includes(query))
     }
 
     // Sort
