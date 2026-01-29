@@ -35,7 +35,9 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const settingsOpen = useAppStore((s) => s.settingsOpen)
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
+  const activeProfileId = useProfileStore((s) =>
+    selectedGameId ? s.activeProfileIdByGame[selectedGameId] ?? null : null
+  )
   const profilesByGame = useProfileStore((s) => s.profilesByGame)
   const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
   const defaultGameId = useGameManagementStore((s) => s.defaultGameId)

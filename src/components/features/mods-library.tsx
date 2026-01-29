@@ -69,14 +69,18 @@ export function ModsLibrary() {
   const setTab = useAppStore((s) => s.setModLibraryTab)
   
   // Subscribe to the installed mods Set directly for real-time updates
-  const activeProfileId = selectedGameId ? useProfileStore((s) => s.activeProfileIdByGame[selectedGameId]) : null
+  const activeProfileId = useProfileStore((s) =>
+    selectedGameId ? s.activeProfileIdByGame[selectedGameId] ?? null : null
+  )
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
   // Use stable fallback to avoid new Set() every render
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
   
   // Avoid returning new [] in selector - return undefined and default outside
-  const profilesFromStore = selectedGameId ? useProfileStore((s) => s.profilesByGame[selectedGameId]) : undefined
+  const profilesFromStore = useProfileStore((s) =>
+    selectedGameId ? s.profilesByGame[selectedGameId] ?? undefined : undefined
+  )
   const profiles = profilesFromStore ?? EMPTY_PROFILES
   const createProfile = useProfileStore((s) => s.createProfile)
   const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
