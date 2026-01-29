@@ -174,3 +174,68 @@ export function useOnlineReadme(owner: string, name: string, enabled = true) {
     isElectron: true,
   }
 }
+
+/**
+ * Parameters for resolving dependencies
+ */
+export interface UseOnlineDependenciesParams {
+  gameId: string
+  dependencies: string[]
+  installedVersions: Record<string, string>
+  enforceVersions: boolean
+  enabled?: boolean
+}
+
+/**
+ * Hook for resolving dependencies for Thunderstore mods
+ * Only works in Electron mode - returns empty array in web mode
+ * 
+ * WARNING: This hook conditionally calls tRPC hooks based on isElectron.
+ * This is safe because isElectron never changes during app lifetime.
+ */
+export function useOnlineDependencies(params: UseOnlineDependenciesParams) {
+  const { gameId, dependencies, installedVersions, enforceVersions, enabled = true } = params
+
+  // Get package index URL from ecosystem
+  const ecosystem = getEcosystemEntry(gameId)
+  const packageIndexUrl = ecosystem?.r2modman?.[0]?.packageIndex
+
+  // Check if we're in Electron mode (stable for app lifetime)
+  const isElectron = hasElectronTRPC()
+
+  // Only use the query if we're in Electron and have a package index URL
+  const shouldFetch = isElectron && enabled && !!packageIndexUrl && dependencies.length > 0
+
+  // Conditional hook call - safe because isElectron is stable
+  if (!isElectron) {
+    return {
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: async () => ({ data: [] }),
+      isElectron: false,
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const result = trpc.thunderstore.resolveDependencies.useQuery(
+    {
+      packageIndexUrl: packageIndexUrl || "",
+      gameId,
+      dependencies,
+      installedVersions,
+      enforceVersions,
+    },
+    {
+      enabled: shouldFetch,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  )
+
+  return {
+    ...result,
+    isElectron: true,
+  }
+}
