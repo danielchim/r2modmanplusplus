@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react"
-import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List } from "lucide-react"
+import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2 } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
 import { useProfileStore, type Profile } from "@/store/profile-store"
@@ -8,6 +8,8 @@ import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
+import { useOnlineMods } from "@/lib/queries/useOnlineMods"
+import type { Mod } from "@/types/mod"
 
 // Stable fallback constants to avoid creating new references in selectors
 const EMPTY_PROFILES: readonly Profile[] = []
@@ -119,7 +121,7 @@ export function ModsLibrary() {
     setSelectedCategories([])
   }
 
-  // Filter and sort mods
+  // Filter and sort mods (for installed tab or web fallback)
   const filteredMods = useMemo(() => {
     let mods = MODS.filter((m) => m.gameId === selectedGameId)
 
@@ -164,6 +166,32 @@ export function ModsLibrary() {
 
     return mods
   }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModsSetOrEmpty])
+
+  // Thunderstore online mods (only when tab === "online" and in Electron)
+  const onlineModsQuery = useOnlineMods({
+    gameId: selectedGameId,
+    query: searchQuery || undefined,
+    section: section === "mod" ? "mod" : "modpack",
+    sort: sortBy,
+    limit: 50,
+    enabled: tab === "online",
+  })
+
+  // Determine which mods to display based on tab and Electron status
+  let displayMods: Mod[] = []
+  let isLoadingMods = false
+  let hasError = false
+  
+  if (tab === "online" && onlineModsQuery.isElectron) {
+    // In Electron, use Thunderstore data
+    const pages = onlineModsQuery.data?.pages ?? []
+    displayMods = pages.flatMap(page => page.items)
+    isLoadingMods = onlineModsQuery.isLoading
+    hasError = onlineModsQuery.isError
+  } else {
+    // In web mode or installed tab, use filtered mocks
+    displayMods = filteredMods
+  }
 
   // Compute category counts (ignoring selectedCategories to show availability)
   const categoryCounts = useMemo(() => {
@@ -403,7 +431,32 @@ export function ModsLibrary() {
                   : (section === "mod" ? "All Mods" : "All Modpacks")
                 }
               </h2>
-              {filteredMods.length === 0 ? (
+              
+              {/* Loading State */}
+              {isLoadingMods && (
+                <div className="flex h-[400px] items-center justify-center">
+                  <div className="text-center space-y-2">
+                    <Loader2 className="size-8 animate-spin text-muted-foreground mx-auto" />
+                    <p className="text-muted-foreground">Loading {section === "mod" ? "mods" : "modpacks"}...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Error State */}
+              {hasError && !isLoadingMods && (
+                <div className="flex h-[400px] items-center justify-center">
+                  <div className="text-center space-y-2">
+                    <p className="text-destructive">Failed to load {section === "mod" ? "mods" : "modpacks"}</p>
+                    <p className="text-sm text-muted-foreground">Please check your connection and try again</p>
+                    <Button variant="outline" size="sm" onClick={() => onlineModsQuery.refetch()}>
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!isLoadingMods && !hasError && displayMods.length === 0 && (
                 <div className="flex h-[400px] items-center justify-center">
                   <div className="text-center">
                     <p className="text-muted-foreground">No {section === "mod" ? "mods" : "modpacks"} found</p>
@@ -416,18 +469,66 @@ export function ModsLibrary() {
                     </p>
                   </div>
                 </div>
-              ) : viewMode === "grid" ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                  {filteredMods.map((mod) => (
-                    <ModTile key={mod.id} mod={mod} />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {filteredMods.map((mod) => (
-                    <ModListItem key={mod.id} mod={mod} />
-                  ))}
-                </div>
+              )}
+
+              {/* Grid View */}
+              {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "grid" && (
+                <>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                    {displayMods.map((mod) => (
+                      <ModTile key={mod.id} mod={mod} />
+                    ))}
+                  </div>
+                  {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
+                    <div className="mt-6 flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => onlineModsQuery.fetchNextPage()}
+                        disabled={onlineModsQuery.isFetchingNextPage}
+                      >
+                        {onlineModsQuery.isFetchingNextPage ? (
+                          <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          "Load More"
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* List View */}
+              {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "list" && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    {displayMods.map((mod) => (
+                      <ModListItem key={mod.id} mod={mod} />
+                    ))}
+                  </div>
+                  {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
+                    <div className="mt-6 flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => onlineModsQuery.fetchNextPage()}
+                        disabled={onlineModsQuery.isFetchingNextPage}
+                      >
+                        {onlineModsQuery.isFetchingNextPage ? (
+                          <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          "Load More"
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
