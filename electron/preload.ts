@@ -1,4 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron"
+import { exposeElectronTRPC } from "electron-trpc-experimental/preload"
+
+// Expose tRPC IPC bridge for type-safe communication
+process.once("loaded", async () => {
+  exposeElectronTRPC()
+})
 
 // Expose protected methods that allow the renderer process to use
 // ipcRenderer without exposing the entire object
@@ -8,7 +14,7 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("main-process-message", (_event, message) => callback(message))
   },
   
-  // Desktop features
+  // Desktop features (legacy - can migrate to tRPC gradually)
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   openFolder: (folderPath: string) => ipcRenderer.invoke("shell:openFolder", folderPath),
 })

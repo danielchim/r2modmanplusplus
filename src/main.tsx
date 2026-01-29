@@ -7,6 +7,7 @@ import "./index.css"
 import { createRouter } from "./router"
 import { AppBootstrap } from "./components/app-bootstrap"
 import { queryClient } from "./lib/query-client"
+import { TRPCProvider } from "./lib/trpc"
 
 const router = createRouter()
 
@@ -31,13 +32,15 @@ const ReactQueryDevtools = lazy(() =>
 createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <AppBootstrap />
-      <RouterProvider router={router} />
-      {import.meta.env.DEV && (
-        <Suspense fallback={null}>
-          <ReactQueryDevtools initialIsOpen={false} />
-        </Suspense>
-      )}
+      <TRPCProvider queryClient={queryClient}>
+        <AppBootstrap />
+        <RouterProvider router={router} />
+        {import.meta.env.DEV && (
+          <Suspense fallback={null}>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </Suspense>
+        )}
+      </TRPCProvider>
     </QueryClientProvider>
   </StrictMode>
 )

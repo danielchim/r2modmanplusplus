@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Home, Box, Globe, Settings as SettingsIcon, Download, User, ChevronDown, Plus } from "lucide-react"
+import { Home, Globe, Settings as SettingsIcon, Download, User, ChevronDown, Plus } from "lucide-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 
 import { useAppStore } from "@/store/app-store"
@@ -221,19 +221,6 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
             >
               <Home className="size-4" />
               <span className="text-sm">Home</span>
-            </Button>
-          </Link>
-          <Link to="/" onClick={() => {
-            setModLibraryTab("installed")
-            onNavigate?.()
-          }}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2"
-            >
-              <Box className="size-4" />
-              <span className="text-sm">Installed Mods</span>
             </Button>
           </Link>
           <Link to="/" onClick={() => {

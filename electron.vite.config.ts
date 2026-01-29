@@ -18,7 +18,11 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: ["electron-trpc-experimental"],
+      }),
+    ],
     build: {
       outDir: "out/preload",
       rollupOptions: {

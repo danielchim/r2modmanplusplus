@@ -1,5 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from "electron"
 import path from "node:path"
+import { createIPCHandler } from "electron-trpc-experimental/main"
+import { appRouter } from "./trpc/router"
+import { createContext } from "./trpc/context"
 
 // The built directory structure
 //
@@ -30,6 +33,13 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  })
+
+  // Register tRPC IPC handler for this window
+  createIPCHandler({
+    router: appRouter,
+    createContext,
+    windows: [win],
   })
 
   // Test active push message to Renderer-process.

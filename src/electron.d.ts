@@ -1,3 +1,5 @@
+import type { RendererGlobalElectronTRPC } from "electron-trpc-experimental/renderer"
+
 export interface ElectronAPI {
   onMainProcessMessage: (callback: (message: string) => void) => void
   selectFolder: () => Promise<string | null>
@@ -12,5 +14,6 @@ declare global {
   interface Window {
     electron?: ElectronAPI
     app?: AppAPI
+    electronTRPC?: RendererGlobalElectronTRPC
   }
 }
