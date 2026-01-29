@@ -322,6 +322,27 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
     ? "downgrade"
     : "none"
 
+  // Generate CTA label and disabled reason based on kind
+  const getCtaInfo = (): { label: string; disabledReason?: string } => {
+    switch (ctaKind) {
+      case "install":
+        return { label: `Install v${selectedVersion}` }
+      case "upgrade":
+        return { label: `Upgrade to v${selectedVersion}` }
+      case "downgrade":
+        return { label: `Downgrade to v${selectedVersion}` }
+      case "unknown-installed-version":
+        return {
+          label: "Installed version unknown",
+          disabledReason: "This mod appears to be installed locally. Version switching is disabled until we can detect the installed version."
+        }
+      case "none":
+        return { label: "" }
+    }
+  }
+
+  const ctaInfo = getCtaInfo()
+
   // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
   const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
 
