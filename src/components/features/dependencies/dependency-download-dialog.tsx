@@ -18,6 +18,7 @@ import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { useDownloadStore } from "@/store/download-store"
+import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
 import { DependencyModDialog } from "./dependency-mod-dialog"
@@ -81,10 +82,31 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const [viewingMod, setViewingMod] = useState<Mod | null>(null)
   const [showModDialog, setShowModDialog] = useState(false)
   
-  // Analyze dependencies when dialog opens
+  // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
+  const isThunderstoreMod = mod ? (mod.id.length === 36 && mod.id.includes("-")) : false
+
+  // Get installed versions for the active profile
+  const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
+
+  // Use online dependency resolution for Thunderstore mods in Electron
+  const onlineDepsQuery = useOnlineDependencies({
+    gameId: mod?.gameId || "",
+    dependencies: mod?.dependencies || [],
+    installedVersions: installedVersionsForProfile || {},
+    enforceVersions: enforceDependencyVersions,
+    enabled: isThunderstoreMod && !!mod && !!activeProfileId,
+  })
+  
+  // Analyze dependencies when dialog opens (use online for Thunderstore mods if available, otherwise use mock)
   const depInfos = useMemo(() => {
     if (!mod || !activeProfileId) return []
     
+    // If we have online dependency data, use it
+    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
+      return onlineDepsQuery.data
+    }
+
+    // Fallback to mock catalog analysis
     const installedVersions = installedVersionsByProfile[activeProfileId] || {}
     return analyzeModDependencies({
       mod,
@@ -92,7 +114,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, activeProfileId, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
+  }, [mod, activeProfileId, isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
   
   // Get all selectable dependency IDs (not_installed or installed_wrong)
   const selectableDeps = useMemo(() => {
@@ -184,7 +206,9 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       const depInfo = depInfos.find(d => d.resolvedMod?.id === depId)
       if (depInfo && depInfo.resolvedMod) {
         const depMod = depInfo.resolvedMod
-        startDownload(depMod.id, depMod.gameId, depMod.name, depMod.version, depMod.author, depMod.iconUrl)
+        // Use required version from dependency string if specified, otherwise use latest
+        const versionToDownload = depInfo.requiredVersion || depMod.version
+        startDownload(depMod.id, depMod.gameId, depMod.name, versionToDownload, depMod.author, depMod.iconUrl)
       }
     })
     
