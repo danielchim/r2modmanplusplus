@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { analyzeModDependencies } from "@/lib/dependency-utils"
 import { isVersionGreater } from "@/lib/version-utils"
+import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
 import { MODS } from "@/mocks/mods"
 
 type ModTileProps = {
@@ -73,8 +74,26 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   // Extract primitive dependencies for useMemo (rerender-dependencies)
   const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
 
-  // Analyze dependencies
+  // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
+  const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
+
+  // Use online dependency resolution for Thunderstore mods in Electron
+  const onlineDepsQuery = useOnlineDependencies({
+    gameId: mod.gameId,
+    dependencies: mod.dependencies,
+    installedVersions: installedVersionsForProfile || {},
+    enforceVersions: enforceDependencyVersions,
+    enabled: isThunderstoreMod,
+  })
+
+  // Analyze dependencies (use online for Thunderstore mods if available, otherwise use mock)
   const depInfos = useMemo(() => {
+    // If we have online dependency data, use it
+    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
+      return onlineDepsQuery.data
+    }
+
+    // Fallback to mock catalog analysis
     const installedVersions = installedVersionsForProfile || {}
     return analyzeModDependencies({
       mod,
@@ -82,7 +101,7 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, installedVersionsForProfile, enforceDependencyVersions])
+  }, [isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
 
   const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation()
