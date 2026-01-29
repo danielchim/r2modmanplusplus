@@ -23,7 +23,7 @@ import { DependencyModDialog } from "@/components/features/dependencies/dependen
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { useThunderstoreReadme } from "@/lib/queries/useThunderstoreReadme"
 import { useOnlinePackage, useOnlineDependencies } from "@/lib/queries/useOnlineMods"
-import { isVersionGreater } from "@/lib/version-utils"
+import { isVersionGreater, compareVersions } from "@/lib/version-utils"
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -299,6 +299,28 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   // Extract primitive dependencies for useMemo (rerender-dependencies)
   const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
+
+  // Derive version state for CTA (Call-to-Action) logic
+  const hasKnownInstalledVersion = installed && typeof installedVersion === "string" && installedVersion.length > 0
+  const isSelectedInstalled = hasKnownInstalledVersion && selectedVersion === installedVersion
+  const versionCmp = hasKnownInstalledVersion ? compareVersions(selectedVersion, installedVersion) : null
+  const isUpgrade = versionCmp !== null && versionCmp > 0
+  const isDowngrade = versionCmp !== null && versionCmp < 0
+  const canShowPrimaryCta = !downloadTask || downloadTask.status === "completed" || downloadTask.status === "error"
+
+  // Determine CTA kind based on version state
+  type CtaKind = "install" | "upgrade" | "downgrade" | "none" | "unknown-installed-version"
+  const ctaKind: CtaKind = !installed
+    ? "install"
+    : installed && !hasKnownInstalledVersion
+    ? "unknown-installed-version"
+    : isSelectedInstalled
+    ? "none"
+    : isUpgrade
+    ? "upgrade"
+    : isDowngrade
+    ? "downgrade"
+    : "none"
 
   // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
   const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
