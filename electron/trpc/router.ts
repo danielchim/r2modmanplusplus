@@ -4,6 +4,7 @@ import superjson from "superjson"
 import { z } from "zod"
 import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
+import { resolveDependencies } from "../thunderstore/dependencies"
 
 /**
  * Initialize tRPC with SuperJSON for rich data serialization
@@ -126,6 +127,24 @@ const thunderstoreRouter = t.router({
         console.error(`Failed to fetch README for ${input.owner}/${input.name}:`, error)
         return ""
       }
+    }),
+
+  /**
+   * Resolve dependencies for a mod within the same Thunderstore community
+   * Returns dependency info with resolved mods and installation status
+   */
+  resolveDependencies: publicProcedure
+    .input(
+      z.object({
+        packageIndexUrl: z.string(),
+        gameId: z.string(),
+        dependencies: z.array(z.string()),
+        installedVersions: z.record(z.string(), z.string()),
+        enforceVersions: z.boolean(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await resolveDependencies(input)
     }),
 })
 
