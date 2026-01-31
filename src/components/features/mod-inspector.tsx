@@ -952,30 +952,33 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 export function ModInspector() {
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  const tab = useAppStore((s) => s.modLibraryTab)
   const selectMod = useAppStore((s) => s.selectMod)
+  
+  const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
+  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
+  const uninstallMod = useModManagementStore((s) => s.uninstallMod)
 
-  // Check if this is an online mod (UUID format from Thunderstore)
-  // UUIDs are 36 chars with hyphens (e.g., "550bcdc8-bd12-4711-9797-f31fa6c36c58")
-  const isOnlineMod = tab === "online" && selectedModId && selectedModId.length === 36 && selectedModId.includes("-")
+  // Check if this is a Thunderstore mod (UUID format: 36 chars with hyphens)
+  // Use UUID-based detection, not tab-based
+  const isThunderstoreMod = !!selectedModId && selectedModId.length === 36 && selectedModId.includes("-")
 
-  // Try to fetch from Thunderstore if it's an online mod
+  // Try to fetch from Thunderstore if it's a Thunderstore mod
   const onlinePackageQuery = useOnlinePackage(
     selectedGameId || "",
     selectedModId || "",
-    isOnlineMod || false
+    isThunderstoreMod
   )
 
   // Determine which mod to display
   let mod: Mod | null | undefined = null
   let isLoading = false
 
-  if (isOnlineMod && onlinePackageQuery.isElectron) {
-    // In Electron, use Thunderstore data
+  if (isThunderstoreMod && onlinePackageQuery.isElectron) {
+    // In Electron, use Thunderstore data for UUID mods (regardless of tab)
     mod = onlinePackageQuery.data
     isLoading = onlinePackageQuery.isLoading
   } else {
-    // Fallback to MODS (for installed tab or web mode)
+    // Fallback to MODS (for non-UUID mods or web mode)
     mod = MODS.find((m) => m.id === selectedModId)
   }
 
@@ -983,17 +986,98 @@ export function ModInspector() {
     selectMod(null)
   }
 
-  // Show error state for online mods that failed to load
-  if (isOnlineMod && onlinePackageQuery.isElectron && onlinePackageQuery.isError && !onlinePackageQuery.data) {
+  // Show error state for Thunderstore mods that failed to load
+  if (isThunderstoreMod && onlinePackageQuery.isElectron && onlinePackageQuery.isError && !onlinePackageQuery.data) {
     return <ModInspectorError onBack={handleBack} error={onlinePackageQuery.error as unknown as Error} />
   }
 
-  // Show skeleton while loading online mod data
-  if (isOnlineMod && onlinePackageQuery.isElectron && isLoading && !mod) {
+  // Show skeleton while loading Thunderstore mod data
+  if (isThunderstoreMod && onlinePackageQuery.isElectron && isLoading && !mod) {
     return <ModInspectorSkeleton onBack={handleBack} />
   }
 
-  // Not found
+  // If mod not found and selectedModId exists: show fallback for unknown installed mods
+  if (!mod && selectedModId) {
+    const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[selectedModId] : undefined
+    
+    // Show minimal "Unknown mod" inspector
+    return (
+      <div className="flex flex-col">
+        <div className="shrink-0 border-b border-border p-4">
+          <button
+            onClick={handleBack}
+            className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="size-4" />
+            <span>Back</span>
+          </button>
+          <div className="flex items-start gap-3">
+            <div className="size-12 rounded bg-muted flex items-center justify-center text-muted-foreground">
+              <Package className="size-6" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-base font-semibold">Unknown mod</h2>
+              <p className="text-xs text-muted-foreground">ID: {selectedModId}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Metadata */}
+        <div className="shrink-0 border-b border-border p-4">
+          <div className="space-y-2 rounded-md border border-border bg-muted/50 p-3">
+            {installedVersion && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Installed Version</span>
+                  <span className="text-xs font-medium">v{installedVersion}</span>
+                </div>
+                <Separator />
+              </>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Mod ID</span>
+              <code className="text-xs font-mono break-all max-w-[200px]">{selectedModId}</code>
+            </div>
+          </div>
+        </div>
+
+        {/* Info Message */}
+        <div className="p-4">
+          <div className="rounded-md border border-yellow-600/50 bg-yellow-600/10 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="size-5 text-yellow-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-600">Metadata unavailable</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This mod is installed but its metadata couldn't be loaded. It may be a locally-installed mod or a Thunderstore package that isn't available in web mode.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Uninstall Action */}
+        <div className="shrink-0 border-t border-border p-4">
+          <Button
+            variant="destructive"
+            size="lg"
+            className="w-full gap-2"
+            onClick={() => {
+              if (activeProfileId) {
+                uninstallMod(activeProfileId, selectedModId)
+                selectMod(null) // Close inspector after uninstall
+              }
+            }}
+          >
+            <Trash2 className="size-4" />
+            <span>Uninstall</span>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Not found and no selectedModId
   if (!mod) {
     return null
   }

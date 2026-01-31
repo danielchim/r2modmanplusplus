@@ -1,1 +1,1 @@
-export type { Mod, ModVersion } from "@/mocks/mods"
+export type { Mod, ModVersion } from "../mocks/mods"

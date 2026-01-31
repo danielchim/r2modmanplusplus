@@ -1,12 +1,13 @@
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { FolderPathControl } from "../folder-path-control"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { useAppStore } from "@/store/app-store"
-import { openFolder, selectFolder } from "@/lib/desktop"
+import { openFolder } from "@/lib/desktop"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { toast } from "sonner"
 
@@ -61,13 +62,6 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         </div>
       </div>
     )
-  }
-
-  const handleSelectInstallFolder = async () => {
-    const newPath = await selectFolder()
-    if (newPath) {
-      updatePerGame(gameId, { gameInstallFolder: newPath })
-    }
   }
 
   const handleLaunchParametersChange = (value: string) => {
@@ -146,15 +140,39 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         <SettingsRow
           title="Game install folder"
           description="Location where the game is installed"
-          value={perGameSettings.gameInstallFolder || "Not set"}
-          rightContent={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSelectInstallFolder}
-            >
-              Select Folder
-            </Button>
+          belowContent={
+            <FolderPathControl
+              value={perGameSettings.gameInstallFolder}
+              placeholder="Not set"
+              onChangePath={(nextPath) => updatePerGame(gameId, { gameInstallFolder: nextPath })}
+              className="w-full"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Mod download location"
+          description="Where downloaded mod archives are stored for this game. Leave blank to use global/app behavior."
+          belowContent={
+            <FolderPathControl
+              value={perGameSettings.modDownloadFolder}
+              placeholder="Not set (uses global/app behavior)"
+              onChangePath={(nextPath) => updatePerGame(gameId, { modDownloadFolder: nextPath })}
+              className="w-full"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Mod cache location"
+          description="Where cached mod files (extracted/processed mods) are stored for this game. Leave blank to use global/app behavior."
+          belowContent={
+            <FolderPathControl
+              value={perGameSettings.modCacheFolder}
+              placeholder="Not set (uses global/app behavior)"
+              onChangePath={(nextPath) => updatePerGame(gameId, { modCacheFolder: nextPath })}
+              className="w-full"
+            />
           }
         />
 
@@ -197,7 +215,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
           </p>
         </div>
 
-        <div className="space-y-0 divide-y divide-border border rounded-lg">
+        <div className="space-y-0 divide-y divide-border border rounded-lg px-6">
           <SettingsRow
             title="Reset installation"
             description="Remove all mods and reset to Default profile only. Keeps game install folder."

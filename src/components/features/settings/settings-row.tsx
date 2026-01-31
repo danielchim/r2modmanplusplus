@@ -5,6 +5,7 @@ interface SettingsRowProps {
   title: string
   description?: string
   value?: string
+  belowContent?: ReactNode
   rightContent?: ReactNode
   className?: string
 }
@@ -13,6 +14,7 @@ export function SettingsRow({
   title,
   description,
   value,
+  belowContent,
   rightContent,
   className,
 }: SettingsRowProps) {
@@ -35,9 +37,10 @@ export function SettingsRow({
             {value}
           </div>
         )}
+        {belowContent && <div className="pt-2">{belowContent}</div>}
       </div>
       {rightContent && (
-        <div className="flex-shrink-0 flex items-start pt-0.5">{rightContent}</div>
+        <div className="flex-shrink min-w-0 flex items-start pt-0.5">{rightContent}</div>
       )}
     </div>
   )

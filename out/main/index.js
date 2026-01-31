@@ -239,6 +239,115 @@ async function getPackage(packageIndexUrl, gameId, uuid4) {
   const [mod] = transformPackages([pkg], gameId);
   return mod || null;
 }
+function parseDependencyString(dep) {
+  const trimmed = dep.trim();
+  if (!trimmed) {
+    return {
+      raw: dep,
+      fullString: dep,
+      owner: "",
+      name: "",
+      key: "",
+      isValid: false
+    };
+  }
+  const parts = trimmed.split("-");
+  if (parts.length < 2) {
+    return {
+      raw: dep,
+      fullString: dep,
+      owner: "",
+      name: trimmed,
+      key: trimmed,
+      isValid: false
+    };
+  }
+  if (parts.length === 2) {
+    const [owner2, name2] = parts;
+    return {
+      raw: dep,
+      fullString: dep,
+      owner: owner2,
+      name: name2,
+      key: `${owner2}-${name2}`,
+      isValid: true
+    };
+  }
+  const owner = parts[0];
+  const version = parts[parts.length - 1];
+  const name = parts.slice(1, -1).join("-");
+  return {
+    raw: dep,
+    fullString: dep,
+    owner,
+    name,
+    version,
+    requiredVersion: version,
+    key: `${owner}-${name}`,
+    isValid: true
+  };
+}
+function computeDependencyStatus({
+  parsed,
+  resolvedMod,
+  installedVersion,
+  enforceVersions
+}) {
+  if (!resolvedMod) {
+    return "unresolved";
+  }
+  if (!installedVersion) {
+    return "not_installed";
+  }
+  if (enforceVersions && parsed.requiredVersion) {
+    if (installedVersion !== parsed.requiredVersion) {
+      return "installed_wrong";
+    }
+  }
+  return "installed_correct";
+}
+async function resolveDependencies(params) {
+  const {
+    packageIndexUrl,
+    gameId,
+    dependencies,
+    installedVersions,
+    enforceVersions
+  } = params;
+  const packages = await ensureCommunityCached(packageIndexUrl);
+  const packageMap = /* @__PURE__ */ new Map();
+  for (const pkg of packages) {
+    const key = `${pkg.owner}-${pkg.name}`;
+    packageMap.set(key, pkg);
+  }
+  const results = [];
+  for (const depString of dependencies) {
+    const parsed = parseDependencyString(depString);
+    let resolvedMod = void 0;
+    if (parsed.isValid && parsed.key) {
+      const pkg = packageMap.get(parsed.key);
+      if (pkg && pkg.versions.length > 0) {
+        resolvedMod = transformPackage(pkg, gameId);
+      }
+    }
+    const installedVersion = resolvedMod ? installedVersions[resolvedMod.id] : void 0;
+    const status = computeDependencyStatus({
+      parsed,
+      resolvedMod: resolvedMod || null,
+      installedVersion,
+      enforceVersions
+    });
+    results.push({
+      raw: depString,
+      parsed,
+      resolvedMod,
+      status,
+      installedVersion,
+      requiredVersion: parsed.requiredVersion
+    });
+  }
+  return results;
+}
 const t = initTRPC.context().create({
   isServer: true,
   transformer: superjson
@@ -325,6 +434,21 @@ const thunderstoreRouter = t.router({
       console.error(`Failed to fetch README for ${input.owner}/${input.name}:`, error);
       return "";
     }
+  }),
+  /**
+   * Resolve dependencies for a mod within the same Thunderstore community
+   * Returns dependency info with resolved mods and installation status
+   */
+  resolveDependencies: publicProcedure.input(
+    z.object({
+      packageIndexUrl: z.string(),
+      gameId: z.string(),
+      dependencies: z.array(z.string()),
+      installedVersions: z.record(z.string(), z.string()),
+      enforceVersions: z.boolean()
+    })
+  ).query(async ({ input }) => {
+    return await resolveDependencies(input);
   })
 });
 const appRouter = t.router({

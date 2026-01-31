@@ -8,12 +8,88 @@ import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
-import { useOnlineMods } from "@/lib/queries/useOnlineMods"
+import { useOnlineMods, useOnlinePackage } from "@/lib/queries/useOnlineMods"
+import { hasElectronTRPC } from "@/lib/trpc"
 import type { Mod } from "@/types/mod"
 
 // Stable fallback constants to avoid creating new references in selectors
 const EMPTY_PROFILES: readonly Profile[] = []
 const EMPTY_SET = new Set<string>()
+
+// Helper: Check if a modId is a Thunderstore UUID (36 chars with hyphens)
+function isThunderstoreUuid(modId: string): boolean {
+  return modId.length === 36 && modId.includes("-")
+}
+
+// Create MODS_BY_ID lookup map
+const MODS_BY_ID = new Map(MODS.map(m => [m.id, m]))
+
+// Helper: Create a placeholder mod for installed mods without metadata
+function createPlaceholderMod(
+  modId: string,
+  installedVersion: string | undefined,
+  selectedSection: "mod" | "modpack",
+  gameId: string
+): Mod {
+  const versionStr = installedVersion || "unknown"
+  
+  return {
+    id: modId,
+    name: isThunderstoreUuid(modId) ? "Thunderstore package" : "Unknown installed mod",
+    author: "Unknown",
+    description: `ID: ${modId}${installedVersion ? ` • Installed: v${installedVersion}` : ""}`,
+    version: versionStr,
+    downloads: 0,
+    iconUrl: "https://via.placeholder.com/256?text=?",
+    kind: selectedSection, // Match current section so placeholders stay visible
+    categories: [],
+    gameId,
+    dependencies: [],
+    isInstalled: true,
+    isEnabled: false,
+    versions: [{
+      version_number: versionStr,
+      download_count: 0,
+      datetime_created: new Date(0).toISOString(),
+      download_url: "",
+      install_url: "",
+    }],
+    readmeHtml: "",
+    lastUpdated: new Date(0).toISOString(),
+  }
+}
+
+// Component for rendering UUID mods in Installed tab (Electron only)
+type InstalledUuidModCardProps = {
+  gameId: string
+  modId: string
+  viewMode: "grid" | "list"
+  section: "mod" | "modpack"
+  installedVersion: string | undefined
+}
+
+function InstalledUuidModCard({ gameId, modId, viewMode, section, installedVersion }: InstalledUuidModCardProps) {
+  const onlinePackageQuery = useOnlinePackage(gameId, modId, true)
+  
+  // While loading or error: render a placeholder
+  if (onlinePackageQuery.isLoading || onlinePackageQuery.isError || !onlinePackageQuery.data) {
+    const placeholderMod = createPlaceholderMod(modId, installedVersion, section, gameId)
+    return viewMode === "grid" ? (
+      <ModTile key={modId} mod={placeholderMod} />
+    ) : (
+      <ModListItem key={modId} mod={placeholderMod} />
+    )
+  }
+  
+  // Data loaded successfully: render the actual mod
+  const mod = onlinePackageQuery.data
+  return viewMode === "grid" ? (
+    <ModTile key={mod.id} mod={mod} />
+  ) : (
+    <ModListItem key={mod.id} mod={mod} />
+  )
+}
+
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -73,9 +149,11 @@ export function ModsLibrary() {
     selectedGameId ? s.activeProfileIdByGame[selectedGameId] ?? null : null
   )
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
+  const installedModVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
   // Use stable fallback to avoid new Set() every render
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
+  const installedVersionsMap = activeProfileId ? installedModVersionsByProfile[activeProfileId] : undefined
   
   // Avoid returning new [] in selector - return undefined and default outside
   const profilesFromStore = useProfileStore((s) =>
@@ -89,6 +167,144 @@ export function ModsLibrary() {
   const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
   const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
+
+  // Helper to apply search filter to a mod
+  const matchesSearch = (mod: Mod, query: string) => {
+    const lowerQuery = query.toLowerCase()
+    return mod.name.toLowerCase().includes(lowerQuery) ||
+           mod.author.toLowerCase().includes(lowerQuery) ||
+           mod.id.toLowerCase().includes(lowerQuery) ||
+           mod.description.toLowerCase().includes(lowerQuery)
+  }
+
+  // Helper to sort mods by the selected sortBy criterion
+  const sortMods = (mods: Mod[], sortBy: string) => {
+    if (sortBy === "downloads") {
+      return mods.sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
+    } else if (sortBy === "updated") {
+      return mods.sort(
+        (a, b) => {
+          const aTime = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0
+          const bTime = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0
+          if (bTime !== aTime) return bTime - aTime
+          // Tie-breaker: modId for deterministic ordering
+          return a.id.localeCompare(b.id)
+        }
+      )
+    } else {
+      return mods.sort((a, b) => {
+        const nameCompare = (a.name || a.id).localeCompare(b.name || b.id)
+        if (nameCompare !== 0) return nameCompare
+        // Tie-breaker: modId
+        return a.id.localeCompare(b.id)
+      })
+    }
+  }
+
+  // Installed mods (built from zustand IDs, not MODS filter)
+  const installedItems = useMemo(() => {
+    if (!selectedGameId || tab !== "installed") return []
+    
+    const installedIds = Array.from(installedModsSetOrEmpty)
+    const items: Mod[] = []
+    
+    for (const modId of installedIds) {
+      const knownMod = MODS_BY_ID.get(modId)
+      const installedVersion = installedVersionsMap?.[modId]
+      
+      if (knownMod) {
+        // Known mock mod: use directly
+        items.push(knownMod)
+      } else if (isThunderstoreUuid(modId)) {
+        // Thunderstore UUID: placeholder (InstalledUuidModCard will fetch in Electron)
+        items.push(createPlaceholderMod(modId, installedVersion, section, selectedGameId))
+      } else {
+        // Unknown ID: placeholder
+        items.push(createPlaceholderMod(modId, installedVersion, section, selectedGameId))
+      }
+    }
+    
+    // Apply filters: section, categories, search
+    let filtered = items.filter(m => m.kind === section)
+    
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(m =>
+        selectedCategories.some(cat => m.categories.includes(cat))
+      )
+    }
+    
+    if (searchQuery) {
+      filtered = filtered.filter(m => matchesSearch(m, searchQuery))
+    }
+    
+    // Sort
+    return sortMods(filtered, sortBy)
+  }, [selectedGameId, tab, installedModsSetOrEmpty, installedVersionsMap, section, selectedCategories, searchQuery, sortBy])
+
+  // Filter and sort mods (for online tab in web mode)
+  const filteredMods = useMemo(() => {
+    if (!selectedGameId || tab === "installed") return [] // Use installedItems instead
+    
+    let mods = MODS.filter((m) => m.gameId === selectedGameId)
+
+    // Section filter (kind)
+    mods = mods.filter((m) => m.kind === section)
+
+    // Category filter (OR matching)
+    if (selectedCategories.length > 0) {
+      mods = mods.filter((m) =>
+        selectedCategories.some((cat) => m.categories.includes(cat))
+      )
+    }
+
+    // Search filter
+    if (searchQuery) {
+      mods = mods.filter((m) => matchesSearch(m, searchQuery))
+    }
+
+    // Sort
+    return sortMods(mods, sortBy)
+  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy])
+
+  // Thunderstore online mods (only when tab === "online" and in Electron)
+  const onlineModsQuery = useOnlineMods({
+    gameId: selectedGameId || "",
+    query: searchQuery || undefined,
+    section: section === "mod" ? "mod" : "modpack",
+    sort: sortBy,
+    limit: 50,
+    enabled: tab === "online" && !!selectedGameId,
+  })
+
+  // Compute category counts (ignoring selectedCategories to show availability)
+  const categoryCounts = useMemo(() => {
+    if (!selectedGameId) return {}
+    
+    let baseMods: Mod[] = []
+    
+    if (tab === "installed") {
+      // For installed tab: count from installed items (only known/fetched mods contribute)
+      baseMods = installedItems.filter(m => m.kind === section)
+    } else if (tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.data) {
+      // For online Electron tab: count from displayed Thunderstore results
+      const pages = onlineModsQuery.data.pages ?? []
+      baseMods = pages.flatMap(page => page.items).filter(m => m.kind === section)
+    } else {
+      // For online web tab: count from filtered MODS
+      baseMods = MODS.filter(
+        (m) => m.gameId === selectedGameId && m.kind === section
+      )
+    }
+
+    const counts: Record<string, number> = {}
+    baseMods.forEach((mod) => {
+      mod.categories.forEach((cat) => {
+        counts[cat] = (counts[cat] || 0) + 1
+      })
+    })
+
+    return counts
+  }, [selectedGameId, tab, installedItems, section, onlineModsQuery.isElectron, onlineModsQuery.data])
   
   // Early return if no game selected
   if (!selectedGameId) {
@@ -100,6 +316,25 @@ export function ModsLibrary() {
         </div>
       </div>
     )
+  }
+
+  // Determine which mods to display based on tab and Electron status
+  let displayMods: Mod[] = []
+  let isLoadingMods = false
+  let hasError = false
+  
+  if (tab === "installed") {
+    // Installed tab: use installedItems (built from zustand IDs)
+    displayMods = installedItems
+  } else if (tab === "online" && onlineModsQuery.isElectron) {
+    // Online tab in Electron: use Thunderstore data
+    const pages = onlineModsQuery.data?.pages ?? []
+    displayMods = pages.flatMap(page => page.items)
+    isLoadingMods = onlineModsQuery.isLoading
+    hasError = onlineModsQuery.isError
+  } else {
+    // Online tab in web mode: use filtered mocks
+    displayMods = filteredMods
   }
 
   const currentGame = ECOSYSTEM_GAMES.find((g) => g.id === selectedGameId)
@@ -124,94 +359,6 @@ export function ModsLibrary() {
   const handleClearCategories = () => {
     setSelectedCategories([])
   }
-
-  // Filter and sort mods (for installed tab or web fallback)
-  const filteredMods = useMemo(() => {
-    let mods = MODS.filter((m) => m.gameId === selectedGameId)
-
-    // Tab filter: Installed vs Online
-    if (tab === "installed") {
-      mods = mods.filter((m) => installedModsSetOrEmpty.has(m.id))
-    }
-    // For "online" tab, show all mods
-
-    // Section filter (kind)
-    mods = mods.filter((m) => m.kind === section)
-
-    // Category filter (OR matching)
-    if (selectedCategories.length > 0) {
-      mods = mods.filter((m) =>
-        selectedCategories.some((cat) => m.categories.includes(cat))
-      )
-    }
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      mods = mods.filter((m) => m.name.toLowerCase().includes(query))
-    }
-
-    // Sort
-    if (sortBy === "downloads") {
-      mods = mods.sort((a, b) => b.downloads - a.downloads)
-    } else if (sortBy === "updated") {
-      mods = mods.sort(
-        (a, b) =>
-          new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
-      )
-    } else {
-      mods = mods.sort((a, b) => a.name.localeCompare(b.name))
-    }
-
-    return mods
-  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy, installedModsSetOrEmpty])
-
-  // Thunderstore online mods (only when tab === "online" and in Electron)
-  const onlineModsQuery = useOnlineMods({
-    gameId: selectedGameId,
-    query: searchQuery || undefined,
-    section: section === "mod" ? "mod" : "modpack",
-    sort: sortBy,
-    limit: 50,
-    enabled: tab === "online",
-  })
-
-  // Determine which mods to display based on tab and Electron status
-  let displayMods: Mod[] = []
-  let isLoadingMods = false
-  let hasError = false
-  
-  if (tab === "online" && onlineModsQuery.isElectron) {
-    // In Electron, use Thunderstore data
-    const pages = onlineModsQuery.data?.pages ?? []
-    displayMods = pages.flatMap(page => page.items)
-    isLoadingMods = onlineModsQuery.isLoading
-    hasError = onlineModsQuery.isError
-  } else {
-    // In web mode or installed tab, use filtered mocks
-    displayMods = filteredMods
-  }
-
-  // Compute category counts (ignoring selectedCategories to show availability)
-  const categoryCounts = useMemo(() => {
-    let baseMods = MODS.filter(
-      (m) => m.gameId === selectedGameId && m.kind === section
-    )
-
-    // Apply tab filter to counts as well
-    if (tab === "installed") {
-      baseMods = baseMods.filter((m) => installedModsSetOrEmpty.has(m.id))
-    }
-
-    const counts: Record<string, number> = {}
-    baseMods.forEach((mod) => {
-      mod.categories.forEach((cat) => {
-        counts[cat] = (counts[cat] || 0) + 1
-      })
-    })
-
-    return counts
-  }, [selectedGameId, section, tab, installedModsSetOrEmpty])
 
   return (
     <>
@@ -474,9 +621,22 @@ export function ModsLibrary() {
               {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "grid" && (
                 <>
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                    {displayMods.map((mod) => (
-                      <ModTile key={mod.id} mod={mod} />
-                    ))}
+                    {displayMods.map((mod) => {
+                      // For installed tab: check if mod is a UUID and we're in Electron
+                      if (tab === "installed" && isThunderstoreUuid(mod.id) && hasElectronTRPC()) {
+                        return (
+                          <InstalledUuidModCard
+                            key={mod.id}
+                            gameId={selectedGameId}
+                            modId={mod.id}
+                            viewMode="grid"
+                            section={section}
+                            installedVersion={installedVersionsMap?.[mod.id]}
+                          />
+                        )
+                      }
+                      return <ModTile key={mod.id} mod={mod} />
+                    })}
                   </div>
                   {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
                     <div className="mt-6 flex justify-center">
@@ -504,9 +664,22 @@ export function ModsLibrary() {
               {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "list" && (
                 <>
                   <div className="flex flex-col gap-2">
-                    {displayMods.map((mod) => (
-                      <ModListItem key={mod.id} mod={mod} />
-                    ))}
+                    {displayMods.map((mod) => {
+                      // For installed tab: check if mod is a UUID and we're in Electron
+                      if (tab === "installed" && isThunderstoreUuid(mod.id) && hasElectronTRPC()) {
+                        return (
+                          <InstalledUuidModCard
+                            key={mod.id}
+                            gameId={selectedGameId}
+                            modId={mod.id}
+                            viewMode="list"
+                            section={section}
+                            installedVersion={installedVersionsMap?.[mod.id]}
+                          />
+                        )
+                      }
+                      return <ModListItem key={mod.id} mod={mod} />
+                    })}
                   </div>
                   {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
                     <div className="mt-6 flex justify-center">

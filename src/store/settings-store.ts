@@ -5,6 +5,8 @@ type GlobalSettings = {
   // Locations
   dataFolder: string
   steamFolder: string
+  modDownloadFolder: string
+  cacheFolder: string
   
   // Downloads
   speedLimitEnabled: boolean
@@ -25,6 +27,9 @@ type GlobalSettings = {
 
 type PerGameSettings = {
   gameInstallFolder: string
+  modDownloadFolder: string
+  cacheFolder: string
+  modCacheFolder: string
   launchParameters: string
   onlineModListCacheDate: number | null
 }
@@ -44,6 +49,8 @@ type SettingsState = {
 const defaultGlobalSettings: GlobalSettings = {
   dataFolder: "E:\\lmao",
   steamFolder: "C:\\Program Files (x86)\\Steam",
+  modDownloadFolder: "",
+  cacheFolder: "",
   speedLimitEnabled: false,
   speedLimitBps: 0,
   speedUnit: "Bps",
@@ -58,6 +65,9 @@ const defaultGlobalSettings: GlobalSettings = {
 
 const defaultPerGameSettings: PerGameSettings = {
   gameInstallFolder: "",
+  modDownloadFolder: "",
+  cacheFolder: "",
+  modCacheFolder: "",
   launchParameters: "",
   onlineModListCacheDate: null,
 }
@@ -103,10 +113,9 @@ export const useSettingsStore = create<SettingsState>()(
       
       deletePerGame: (gameId) =>
         set((state) => {
-          const { [gameId]: _removed, ...remaining } = state.perGame
-          return {
-            perGame: remaining,
-          }
+          const nextPerGame = { ...state.perGame }
+          delete nextPerGame[gameId]
+          return { perGame: nextPerGame }
         }),
     }),
     {

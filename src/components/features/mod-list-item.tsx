@@ -213,7 +213,7 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
 
       {/* Mod Stats */}
       <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
-        <span>{mod.version}</span>
+        <span>{installedVersion ?? mod.version}</span>
         <span>{mod.downloads.toLocaleString()} downloads</span>
         <span>{new Date(mod.lastUpdated).toLocaleDateString()}</span>
       </div>

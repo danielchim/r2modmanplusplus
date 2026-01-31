@@ -1,34 +1,15 @@
 import { useSettingsStore } from "@/store/settings-store"
-import { openFolder, selectFolder } from "@/lib/desktop"
 import { SettingsRow } from "../settings-row"
-import { Button } from "@/components/ui/button"
-import { FolderOpen, Folder } from "lucide-react"
+import { FolderPathControl } from "../folder-path-control"
 
 interface PanelProps {
   searchQuery: string
 }
 
 export function LocationsPanel(_props: PanelProps) {
-  const { dataFolder, steamFolder } = useSettingsStore((s) => s.global)
+  void _props
+  const { dataFolder, steamFolder, modDownloadFolder = "", cacheFolder = "" } = useSettingsStore((s) => s.global)
   const updateGlobal = useSettingsStore((s) => s.updateGlobal)
-
-  const handleBrowseDataFolder = () => {
-    openFolder(dataFolder)
-  }
-
-  const handleChangeDataFolder = async () => {
-    const newPath = await selectFolder()
-    if (newPath) {
-      updateGlobal({ dataFolder: newPath })
-    }
-  }
-
-  const handleChangeSteamFolder = async () => {
-    const newPath = await selectFolder()
-    if (newPath) {
-      updateGlobal({ steamFolder: newPath })
-    }
-  }
 
   return (
     <div>
@@ -43,42 +24,50 @@ export function LocationsPanel(_props: PanelProps) {
         <SettingsRow
           title="Data folder"
           description="The folder where mods are stored for all games and profiles"
-          value={dataFolder}
-          rightContent={
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleBrowseDataFolder}
-              >
-                <FolderOpen className="size-4 mr-2" />
-                Browse
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleChangeDataFolder}
-              >
-                <Folder className="size-4 mr-2" />
-                Change
-              </Button>
-            </div>
+          belowContent={
+            <FolderPathControl
+              value={dataFolder}
+              onChangePath={(nextPath) => updateGlobal({ dataFolder: nextPath })}
+              className="w-full"
+            />
           }
         />
 
         <SettingsRow
           title="Steam folder"
           description="The location of the Steam installation folder"
-          value={steamFolder}
-          rightContent={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleChangeSteamFolder}
-            >
-              <Folder className="size-4 mr-2" />
-              Change
-            </Button>
+          belowContent={
+            <FolderPathControl
+              value={steamFolder}
+              onChangePath={(nextPath) => updateGlobal({ steamFolder: nextPath })}
+              className="w-full"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Global mod download folder"
+          description="Default location for downloaded mod archives across all games. Leave blank to use dataFolder/downloads."
+          belowContent={
+            <FolderPathControl
+              value={modDownloadFolder}
+              placeholder="Not set (uses dataFolder/downloads)"
+              onChangePath={(nextPath) => updateGlobal({ modDownloadFolder: nextPath })}
+              className="w-full"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Global cache folder"
+          description="Location for cached data (Thunderstore packages, metadata). Leave blank to use dataFolder/cache."
+          belowContent={
+            <FolderPathControl
+              value={cacheFolder}
+              placeholder="Not set (uses dataFolder/cache)"
+              onChangePath={(nextPath) => updateGlobal({ cacheFolder: nextPath })}
+              className="w-full"
+            />
           }
         />
       </div>
