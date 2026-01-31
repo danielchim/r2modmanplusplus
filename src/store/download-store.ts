@@ -16,6 +16,8 @@ export type DownloadTask = {
   bytesTotal: number
   speedBps: number // bytes per second
   error?: string
+  archivePath?: string // Full path to downloaded .zip file
+  extractedPath?: string // Full path to extracted mod folder
 }
 
 type DownloadStore = {

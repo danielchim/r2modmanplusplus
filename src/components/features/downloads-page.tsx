@@ -1,11 +1,21 @@
-import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2 } from "lucide-react"
+import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2, FolderOpen, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useDownloadStore, type DownloadTask } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
+import { useModInstaller } from "@/hooks/use-mod-installer"
+import { useModManagementStore } from "@/store/mod-management-store"
+import { useProfileStore } from "@/store/profile-store"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
+import { openFolder } from "@/lib/desktop"
+
+function getDirectoryPath(filePath: string): string {
+  // Get the directory containing the file (works on both Windows and Unix paths)
+  const lastSlash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"))
+  return lastSlash > 0 ? filePath.substring(0, lastSlash) : filePath
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -77,6 +87,10 @@ export function DownloadsPage() {
     resumeAll,
     cancelAll,
   } = useDownloadActions()
+  
+  const { installDownloadedMod, isInstalling } = useModInstaller()
+  const activeProfileIdByGame = useProfileStore((s) => s.activeProfileIdByGame)
+  const isModInstalled = useModManagementStore((s) => s.isModInstalled)
   
   const allTasks = Object.values(tasks)
   const activeTasks = getAllActiveTasks()
@@ -266,8 +280,67 @@ export function DownloadsPage() {
 
                             {/* Completed info */}
                             {task.status === "completed" && (
-                              <div className="text-xs text-muted-foreground">
-                                Downloaded {formatBytes(task.bytesTotal)} successfully
+                              <div className="space-y-2">
+                                <div className="text-xs text-muted-foreground">
+                                  Downloaded {formatBytes(task.bytesTotal)} successfully
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* Install button */}
+                                  {task.extractedPath && (() => {
+                                    const profileId = activeProfileIdByGame[task.gameId]
+                                    const alreadyInstalled = profileId && isModInstalled(profileId, task.modId)
+                                    
+                                    if (!alreadyInstalled && profileId) {
+                                      return (
+                                        <Button
+                                          variant="default"
+                                          size="sm"
+                                          onClick={() => {
+                                            installDownloadedMod({
+                                              gameId: task.gameId,
+                                              profileId,
+                                              modId: task.modId,
+                                              author: task.modAuthor,
+                                              name: task.modName,
+                                              version: task.modVersion,
+                                              extractedPath: task.extractedPath!,
+                                            })
+                                          }}
+                                          disabled={isInstalling}
+                                          className="h-7 text-xs"
+                                        >
+                                          <Download className="size-3 mr-1.5" />
+                                          Install to Profile
+                                        </Button>
+                                      )
+                                    }
+                                    return null
+                                  })()}
+                                  
+                                  {/* Show folder buttons */}
+                                  {task.archivePath && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openFolder(getDirectoryPath(task.archivePath!))}
+                                      className="h-7 text-xs"
+                                    >
+                                      <FolderOpen className="size-3 mr-1.5" />
+                                      Show Archive
+                                    </Button>
+                                  )}
+                                  {task.extractedPath && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => openFolder(task.extractedPath!)}
+                                      className="h-7 text-xs"
+                                    >
+                                      <FolderOpen className="size-3 mr-1.5" />
+                                      Show Extracted
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             )}
                             

@@ -15,6 +15,7 @@ type GlobalSettings = {
   maxConcurrentDownloads: number
   downloadCacheEnabled: boolean
   preferredThunderstoreCdn: string
+  autoInstallMods: boolean // Auto-install mods after download completes
   
   // Mods
   enforceDependencyVersions: boolean
@@ -57,6 +58,7 @@ const defaultGlobalSettings: GlobalSettings = {
   maxConcurrentDownloads: 3,
   downloadCacheEnabled: true,
   preferredThunderstoreCdn: "main",
+  autoInstallMods: true, // Default to auto-install enabled
   enforceDependencyVersions: true,
   cardDisplayType: "collapsed",
   theme: "dark",

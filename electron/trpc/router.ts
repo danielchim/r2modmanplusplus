@@ -6,7 +6,9 @@ import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies } from "../thunderstore/dependencies"
 import { getDownloadManager } from "../downloads/manager"
-import { setPathSettings } from "../downloads/settings-state"
+import { setPathSettings, getPathSettings } from "../downloads/settings-state"
+import { resolveGamePaths } from "../downloads/path-resolver"
+import { installModToProfile, uninstallModFromProfile } from "../profiles/mod-installer"
 
 /**
  * Initialize tRPC with SuperJSON for rich data serialization
@@ -266,6 +268,86 @@ const downloadsRouter = t.router({
         setPathSettings(input.pathSettings)
       }
     }),
+  
+  /**
+   * Get resolved paths for a game
+   * Returns the actual computed paths based on current settings
+   */
+  getResolvedPaths: publicProcedure
+    .input(z.object({ gameId: z.string() }))
+    .query(({ input }) => {
+      const settings = getPathSettings()
+      return resolveGamePaths(input.gameId, settings)
+    }),
+})
+
+/**
+ * Profile mod management procedures
+ * Handles actual file operations for installing/uninstalling mods to profiles
+ */
+const profilesRouter = t.router({
+  /**
+   * Install a mod to a profile
+   * Copies extracted mod files from cache to the profile folder
+   */
+  installMod: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        modId: z.string(),
+        author: z.string(),
+        name: z.string(),
+        version: z.string(),
+        extractedPath: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      
+      const result = await installModToProfile(
+        input.extractedPath,
+        profileRoot,
+        `${input.author}-${input.name}`
+      )
+      
+      return {
+        success: true,
+        ...result,
+      }
+    }),
+  
+  /**
+   * Uninstall a mod from a profile
+   * Removes the mod's plugin folder from the profile
+   */
+  uninstallMod: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        modId: z.string(),
+        author: z.string(),
+        name: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      
+      const filesRemoved = await uninstallModFromProfile(
+        profileRoot,
+        `${input.author}-${input.name}`
+      )
+      
+      return {
+        success: true,
+        filesRemoved,
+      }
+    }),
 })
 
 /**
@@ -276,6 +358,7 @@ export const appRouter = t.router({
   desktop: desktopRouter,
   thunderstore: thunderstoreRouter,
   downloads: downloadsRouter,
+  profiles: profilesRouter,
 })
 
 /**

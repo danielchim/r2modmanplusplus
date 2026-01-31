@@ -35,7 +35,7 @@ function formatSpeed(bps: number, unit: "Bps" | "bps"): string {
 }
 
 export function DownloadsPanel(_props: PanelProps) {
-  const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled } = useSettingsStore((s) => s.global)
+  const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled, autoInstallMods } = useSettingsStore((s) => s.global)
   const updateGlobal = useSettingsStore((s) => s.updateGlobal)
 
   // Logarithmic slider mapping (10 KB/s to 200 MB/s)
@@ -157,6 +157,17 @@ export function DownloadsPanel(_props: PanelProps) {
             <Switch
               checked={downloadCacheEnabled}
               onCheckedChange={(checked) => updateGlobal({ downloadCacheEnabled: checked })}
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Auto-install after download"
+          description="Automatically install mods to the active profile when downloads complete"
+          rightContent={
+            <Switch
+              checked={autoInstallMods}
+              onCheckedChange={(checked) => updateGlobal({ autoInstallMods: checked })}
             />
           }
         />

@@ -110,6 +110,17 @@ export async function removeDir(dirPath: string): Promise<void> {
 }
 
 /**
+ * Copies a single file
+ * 
+ * @param src - Source file path
+ * @param dest - Destination file path
+ */
+export async function copyFile(src: string, dest: string): Promise<void> {
+  await ensureDir(dirname(dest))
+  await fs.copyFile(src, dest)
+}
+
+/**
  * Recursively copies a directory
  * 
  * @param src - Source directory

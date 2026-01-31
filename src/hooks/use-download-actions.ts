@@ -3,6 +3,7 @@
  * No effects here - just actions derived from current state at the moment of user interaction
  */
 import { useCallback } from "react"
+import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
 import { useDownloadStore } from "@/store/download-store"
 import { useSettingsStore } from "@/store/settings-store"
@@ -44,6 +45,11 @@ export function useDownloadActions() {
         bytesDownloaded: 0,
         bytesTotal: 0,
         speedBps: 0,
+      })
+      
+      // Show toast notification
+      toast.info(`Downloading ${params.modName}`, {
+        description: `v${params.modVersion} added to download queue`,
       })
       
       // Enqueue in main process

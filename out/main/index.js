@@ -8,7 +8,7 @@ import { createHash } from "crypto";
 import require$$1$1, { gunzip } from "zlib";
 import require$$1, { promisify } from "util";
 import require$$0, { promises } from "fs";
-import { join, normalize, resolve, dirname, basename } from "path";
+import { join, dirname, normalize, resolve, basename } from "path";
 import require$$4, { EventEmitter } from "events";
 import require$$6 from "stream";
 import require$$0$1 from "buffer";
@@ -382,6 +382,10 @@ async function safeUnlink(filePath) {
       throw error;
     }
   }
+}
+async function copyFile(src, dest) {
+  await ensureDir(dirname(dest));
+  await promises.copyFile(src, dest);
 }
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -2137,9 +2141,9 @@ function ensureGameSubdir(root, gameId) {
 function resolveGamePaths(gameId, settings) {
   const { dataFolder, modDownloadFolder: globalModDownloadFolder, cacheFolder: globalCacheFolder } = settings.global;
   const perGame = settings.perGame[gameId] || {};
-  const modCacheRoot = perGame.modCacheFolder ? perGame.modCacheFolder : join(dataFolder, gameId, "cache");
-  const archiveRoot = perGame.modDownloadFolder ? ensureGameSubdir(perGame.modDownloadFolder, gameId) : globalModDownloadFolder ? ensureGameSubdir(globalModDownloadFolder, gameId) : join(dataFolder, "downloads", gameId);
-  const metadataCache = perGame.cacheFolder ? join(perGame.cacheFolder, "thunderstore") : globalCacheFolder ? join(globalCacheFolder, "thunderstore") : join(dataFolder, "cache", "thunderstore");
+  const modCacheRoot = perGame.modCacheFolder ? ensureGameSubdir(join(perGame.modCacheFolder, "cache"), gameId) : join(dataFolder, gameId, "cache");
+  const archiveRoot = perGame.modDownloadFolder ? ensureGameSubdir(join(perGame.modDownloadFolder, "download"), gameId) : globalModDownloadFolder ? ensureGameSubdir(globalModDownloadFolder, gameId) : join(dataFolder, "downloads", gameId);
+  const metadataCache = perGame.cacheFolder ? join(perGame.cacheFolder, "cache", "thunderstore") : globalCacheFolder ? join(globalCacheFolder, "thunderstore") : join(dataFolder, "cache", "thunderstore");
   const profilesRoot = join(dataFolder, gameId, "profiles");
   return {
     modCacheRoot,
@@ -2369,6 +2373,89 @@ function setPathSettings(next) {
     }
   }
 }
+async function copyDirectory(srcDir, destDir) {
+  await ensureDir(destDir);
+  const entries = await promises.readdir(srcDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(srcDir, entry.name);
+    const destPath = join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(srcPath, destPath);
+    } else {
+      await copyFile(srcPath, destPath);
+    }
+  }
+}
+async function installModToProfile(extractedModPath, profileRoot, modId) {
+  if (!await pathExists(extractedModPath)) {
+    throw new Error(`Extracted mod not found at: ${extractedModPath}`);
+  }
+  await ensureDir(profileRoot);
+  const profileBepInExRoot = join(profileRoot, "BepInEx");
+  const profilePluginsRoot = join(profileBepInExRoot, "plugins");
+  const profileConfigRoot = join(profileBepInExRoot, "config");
+  const modPluginPath = join(profilePluginsRoot, modId);
+  await ensureDir(profilePluginsRoot);
+  await ensureDir(profileConfigRoot);
+  const extractedBepInEx = join(extractedModPath, "BepInEx");
+  const hasBepInExStructure = await pathExists(extractedBepInEx);
+  let filesCopied = 0;
+  if (hasBepInExStructure) {
+    const extractedPlugins = join(extractedBepInEx, "plugins");
+    const extractedConfig = join(extractedBepInEx, "config");
+    if (await pathExists(extractedPlugins)) {
+      await copyDirectory(extractedPlugins, modPluginPath);
+      filesCopied += await countFiles(extractedPlugins);
+    }
+    if (await pathExists(extractedConfig)) {
+      const configEntries = await promises.readdir(extractedConfig, { withFileTypes: true });
+      for (const entry of configEntries) {
+        const srcPath = join(extractedConfig, entry.name);
+        const destPath = join(profileConfigRoot, entry.name);
+        if (entry.isDirectory()) {
+          await copyDirectory(srcPath, destPath);
+        } else {
+          await copyFile(srcPath, destPath);
+        }
+        filesCopied++;
+      }
+    }
+  } else {
+    await copyDirectory(extractedModPath, modPluginPath);
+    filesCopied = await countFiles(extractedModPath);
+  }
+  return {
+    filesCopied,
+    pluginPath: modPluginPath,
+    configPath: profileConfigRoot
+  };
+}
+async function uninstallModFromProfile(profileRoot, modId) {
+  const modPluginPath = join(profileRoot, "BepInEx", "plugins", modId);
+  if (!await pathExists(modPluginPath)) {
+    return 0;
+  }
+  const filesRemoved = await countFiles(modPluginPath);
+  await promises.rm(modPluginPath, { recursive: true, force: true });
+  return filesRemoved;
+}
+async function countFiles(dirPath) {
+  let count = 0;
+  try {
+    const entries = await promises.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        count += await countFiles(fullPath);
+      } else {
+        count++;
+      }
+    }
+  } catch (error) {
+    return 0;
+  }
+  return count;
+}
 const t = initTRPC.context().create({
   isServer: true,
   transformer: superjson
@@ -2564,12 +2651,76 @@ const downloadsRouter = t.router({
     if (input.pathSettings) {
       setPathSettings(input.pathSettings);
     }
+  }),
+  /**
+   * Get resolved paths for a game
+   * Returns the actual computed paths based on current settings
+   */
+  getResolvedPaths: publicProcedure.input(z.object({ gameId: z.string() })).query(({ input }) => {
+    const settings = getPathSettings();
+    return resolveGamePaths(input.gameId, settings);
+  })
+});
+const profilesRouter = t.router({
+  /**
+   * Install a mod to a profile
+   * Copies extracted mod files from cache to the profile folder
+   */
+  installMod: publicProcedure.input(
+    z.object({
+      gameId: z.string(),
+      profileId: z.string(),
+      modId: z.string(),
+      author: z.string(),
+      name: z.string(),
+      version: z.string(),
+      extractedPath: z.string()
+    })
+  ).mutation(async ({ input }) => {
+    const settings = getPathSettings();
+    const paths = resolveGamePaths(input.gameId, settings);
+    const profileRoot = `${paths.profilesRoot}/${input.profileId}`;
+    const result = await installModToProfile(
+      input.extractedPath,
+      profileRoot,
+      `${input.author}-${input.name}`
+    );
+    return {
+      success: true,
+      ...result
+    };
+  }),
+  /**
+   * Uninstall a mod from a profile
+   * Removes the mod's plugin folder from the profile
+   */
+  uninstallMod: publicProcedure.input(
+    z.object({
+      gameId: z.string(),
+      profileId: z.string(),
+      modId: z.string(),
+      author: z.string(),
+      name: z.string()
+    })
+  ).mutation(async ({ input }) => {
+    const settings = getPathSettings();
+    const paths = resolveGamePaths(input.gameId, settings);
+    const profileRoot = `${paths.profilesRoot}/${input.profileId}`;
+    const filesRemoved = await uninstallModFromProfile(
+      profileRoot,
+      `${input.author}-${input.name}`
+    );
+    return {
+      success: true,
+      filesRemoved
+    };
   })
 });
 const appRouter = t.router({
   desktop: desktopRouter,
   thunderstore: thunderstoreRouter,
-  downloads: downloadsRouter
+  downloads: downloadsRouter,
+  profiles: profilesRouter
 });
 async function createContext({ event }) {
   return {
