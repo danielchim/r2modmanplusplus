@@ -37,20 +37,8 @@ export function GameDashboard() {
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
   
-  // Early return if no game selected
-  if (!selectedGameId) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-muted-foreground">No game selected</p>
-          <p className="text-sm text-muted-foreground">Add a game to get started</p>
-        </div>
-      </div>
-    )
-  }
-  
   const activeProfileId = useProfileStore(
-    (s) => s.activeProfileIdByGame[selectedGameId]
+    (s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined
   )
   const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
   const createProfile = useProfileStore((s) => s.createProfile)
@@ -58,7 +46,7 @@ export function GameDashboard() {
   const deleteProfile = useProfileStore((s) => s.deleteProfile)
   const ensureDefaultProfile = useProfileStore((s) => s.ensureDefaultProfile)
   // Avoid returning new [] in selector - return undefined and default outside
-  const profilesFromStore = useProfileStore((s) => s.profilesByGame[selectedGameId])
+  const profilesFromStore = useProfileStore((s) => selectedGameId ? s.profilesByGame[selectedGameId] : undefined)
   const profiles = profilesFromStore ?? EMPTY_PROFILES
   
   const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
@@ -70,7 +58,7 @@ export function GameDashboard() {
   
   // Check if game binary can be found
   const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
-  const installFolder = getPerGameSettings(selectedGameId).gameInstallFolder
+  const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
   // const exeNames = getExeNames(selectedGameId) // Will be used for IPC binary verification later
   
@@ -80,6 +68,18 @@ export function GameDashboard() {
       ensureDefaultProfile(selectedGameId)
     }
   }, [profilesEnabled, selectedGameId, ensureDefaultProfile])
+  
+  // Early return if no game selected - MUST be after all hooks
+  if (!selectedGameId) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground">No game selected</p>
+          <p className="text-sm text-muted-foreground">Add a game to get started</p>
+        </div>
+      </div>
+    )
+  }
   
   // Determine launch button state and tooltip
   let launchDisabled = true

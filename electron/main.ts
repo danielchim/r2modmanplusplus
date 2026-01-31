@@ -5,6 +5,7 @@ import { appRouter } from "./trpc/router"
 import { createContext } from "./trpc/context"
 import { initializeDownloadManager } from "./downloads/manager"
 import { getPathSettings } from "./downloads/settings-state"
+import { closeAllCatalogs } from "./thunderstore/catalog"
 
 // The built directory structure
 //
@@ -62,6 +63,12 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "../renderer/index.html"))
   }
 }
+
+// Clean up resources before app quits
+app.on("before-quit", () => {
+  // Close all SQLite catalog connections
+  closeAllCatalogs()
+})
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

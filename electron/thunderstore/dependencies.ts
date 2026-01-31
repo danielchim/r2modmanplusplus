@@ -2,9 +2,8 @@
  * Thunderstore dependency resolution
  * Resolves dependency strings to actual Thunderstore packages within the same community
  */
-import { ensureCommunityCached } from "./search"
+import { ensureCatalogUpToDate, resolvePackagesByOwnerName } from "./catalog"
 import { transformPackage } from "./transform"
-import type { ThunderstorePackage } from "./types"
 import type { Mod } from "../../src/types/mod"
 
 /**
@@ -150,6 +149,7 @@ function computeDependencyStatus({
 
 /**
  * Resolves dependencies for a mod within the same Thunderstore community
+ * Now uses SQLite catalog for bounded-memory operation
  * 
  * @param params - Resolution parameters
  * @returns Array of dependency info objects with resolved mods and statuses
@@ -163,22 +163,22 @@ export async function resolveDependencies(params: ResolveDependenciesParams): Pr
     enforceVersions,
   } = params
 
-  // Fetch all packages for this community (from cache if available)
-  const packages = await ensureCommunityCached(packageIndexUrl)
+  // Ensure catalog is up-to-date
+  await ensureCatalogUpToDate(packageIndexUrl)
 
-  // Build lookup map: "Owner-Package" -> ThunderstorePackage
-  const packageMap = new Map<string, ThunderstorePackage>()
-  for (const pkg of packages) {
-    const key = `${pkg.owner}-${pkg.name}`
-    packageMap.set(key, pkg)
-  }
+  // Parse all dependencies and collect keys
+  const parsedDeps = dependencies.map(dep => parseDependencyString(dep))
+  const keysToResolve = parsedDeps
+    .filter(p => p.isValid && p.key)
+    .map(p => p.key)
 
-  // Resolve each dependency
+  // Resolve packages via catalog (single DB query)
+  const packageMap = resolvePackagesByOwnerName(packageIndexUrl, keysToResolve)
+
+  // Build results
   const results: DependencyInfo[] = []
 
-  for (const depString of dependencies) {
-    const parsed = parseDependencyString(depString)
-
+  for (const parsed of parsedDeps) {
     // Try to resolve via map
     let resolvedMod: Mod | undefined = undefined
     if (parsed.isValid && parsed.key) {
@@ -198,7 +198,7 @@ export async function resolveDependencies(params: ResolveDependenciesParams): Pr
     })
 
     results.push({
-      raw: depString,
+      raw: parsed.raw,
       parsed,
       resolvedMod,
       status,

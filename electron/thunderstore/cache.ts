@@ -1,6 +1,10 @@
 /**
  * Disk cache for Thunderstore package listings
  * Stores packages per community (packageIndexUrl) under app userData
+ * 
+ * @deprecated This JSON cache layer is deprecated in favor of the SQLite catalog
+ * (see electron/thunderstore/catalog.ts). This module is kept for backward compatibility
+ * but is no longer used by the main search/dependency resolution flow.
  */
 import { app } from "electron"
 import { promises as fs } from "fs"

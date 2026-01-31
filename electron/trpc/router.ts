@@ -7,6 +7,7 @@ import { z } from "zod"
 import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies } from "../thunderstore/dependencies"
+import { clearCatalog, closeAllCatalogs } from "../thunderstore/catalog"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
 import { resolveGamePaths } from "../downloads/path-resolver"
@@ -151,6 +152,21 @@ const thunderstoreRouter = t.router({
     )
     .query(async ({ input }) => {
       return await resolveDependencies(input)
+    }),
+
+  /**
+   * Clear catalog for a community (forces rebuild on next access)
+   * Useful for debugging or when catalog is corrupted
+   */
+  clearCatalog: publicProcedure
+    .input(
+      z.object({
+        packageIndexUrl: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await clearCatalog(input.packageIndexUrl)
+      return { success: true }
     }),
 })
 

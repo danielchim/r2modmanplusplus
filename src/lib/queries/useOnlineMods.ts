@@ -6,6 +6,8 @@
  * violate Rules of Hooks. However, the isElectron check is stable and
  * never changes during the lifetime of the app, so it's safe in this case.
  */
+import { useEffect } from "react"
+
 import { trpc, hasElectronTRPC } from "@/lib/trpc"
 import { getEcosystemEntry } from "@/lib/ecosystem"
 
@@ -71,8 +73,16 @@ export function useOnlineMods(params: UseOnlineModsParams) {
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000, // 5 minutes
+      maxPages: 20, // Cap at 20 pages (20 * limit items) to prevent unbounded memory growth
     }
   )
+
+  useEffect(() => {
+    if (!result.isError) return
+    const error = result.error
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("[OnlineMods] Failed to load mods:", message, error)
+  }, [result.isError, result.error])
 
   return {
     ...result,
