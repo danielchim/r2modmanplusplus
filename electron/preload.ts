@@ -1,6 +1,66 @@
 import { contextBridge, ipcRenderer } from "electron"
-import { exposeElectronTRPC } from "electron-trpc-experimental/preload"
-import { logIpcRenderer, makeLoggable } from "./logger"
+
+const electronTrpcChannel = "electron-trpc"
+const exposeElectronTRPC = () => {
+  const api = {
+    sendMessage: (payload: unknown) => ipcRenderer.send(electronTrpcChannel, payload),
+    onMessage: (callback: (payload: unknown) => void) =>
+      ipcRenderer.on(electronTrpcChannel, (_event, message) => callback(message)),
+  }
+
+  contextBridge.exposeInMainWorld("electronTRPC", api)
+}
+
+const isDevEnvironment = (() => {
+  if (typeof process !== "undefined" && process.env && process.env.NODE_ENV) {
+    return process.env.NODE_ENV !== "production"
+  }
+  return false
+})()
+
+const sanitizePayload = (payload: unknown, depth = 0): unknown => {
+  if (depth > 4) {
+    return "[Truncated]"
+  }
+  if (payload == null) {
+    return payload
+  }
+  if (payload instanceof Error) {
+    return {
+      name: payload.name,
+      message: payload.message,
+      stack: payload.stack,
+    }
+  }
+  if (typeof AbortController !== "undefined" && payload instanceof AbortController) {
+    return "[AbortController]"
+  }
+  if (payload instanceof ArrayBuffer) {
+    return `[ArrayBuffer ${payload.byteLength}]`
+  }
+  if (Array.isArray(payload)) {
+    return payload.map((item) => sanitizePayload(item, depth + 1))
+  }
+  if (typeof payload === "object") {
+    const entries = Object.entries(payload)
+    return entries.reduce<Record<string, unknown>>((acc, [key, value]) => {
+      acc[key] = sanitizePayload(value, depth + 1)
+      return acc
+    }, {})
+  }
+  return payload
+}
+
+const logIpcRenderer = (direction: string, channel: string, payload?: unknown) => {
+  if (!isDevEnvironment) return
+  if (typeof payload === "undefined") {
+    console.debug(`[ipc:${direction}] ${channel}`)
+    return
+  }
+  console.debug(`[ipc:${direction}] ${channel}`, sanitizePayload(payload))
+}
+
+const makeLoggable = (payload: unknown) => sanitizePayload(payload)
 
 // Expose tRPC IPC bridge for type-safe communication
 process.once("loaded", async () => {

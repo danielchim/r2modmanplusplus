@@ -26,4 +26,6 @@ routeTree.gen.ts
 *.sln
 *.sw?
 
-out/renderer/assets/
+out/
+
+release/
