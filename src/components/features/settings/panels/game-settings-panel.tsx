@@ -10,6 +10,7 @@ import { useAppStore } from "@/store/app-store"
 import { openFolder } from "@/lib/desktop"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { toast } from "sonner"
+import { trpc } from "@/lib/trpc"
 
 interface GameSettingsPanelProps {
   searchQuery: string
@@ -22,12 +23,14 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
   const resetGameProfilesToDefault = useProfileStore((s) => s.resetGameProfilesToDefault)
   const removeGameProfiles = useProfileStore((s) => s.removeGameProfiles)
   
+  const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
+  const unmanageGameMutation = trpc.games.unmanageGameCleanup.useMutation()
+  
   const { dataFolder } = useSettingsStore((s) => s.global)
   const getPerGame = useSettingsStore((s) => s.getPerGame)
   const updatePerGame = useSettingsStore((s) => s.updatePerGame)
   const deletePerGame = useSettingsStore((s) => s.deletePerGame)
   
-  const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
   const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
   
   const removeManagedGame = useGameManagementStore((s) => s.removeManagedGame)
@@ -76,54 +79,83 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     }
   }
 
-  const handleResetGameInstallation = () => {
+  const handleResetGameInstallation = async () => {
     const confirmed = confirm(
-      `Are you sure you want to reset the installation for ${game.name}?\n\nThis will:\n- Remove all installed mods\n- Reset profiles to Default only\n- Keep the game install folder and launch parameters`
+      `Are you sure you want to reset the installation for ${game.name}?\n\nThis will:\n- Remove all installed mods (files deleted from disk)\n- Reset profiles to Default only\n- Keep the game install folder and launch parameters`
     )
     if (confirmed) {
-      // Get all profiles for this game
-      const profiles = profilesByGame[gameId] || []
-      
-      // Clear mod state for each profile
-      profiles.forEach((profile) => {
-        uninstallAllMods(profile.id)
-        deleteProfileState(profile.id)
-      })
-      
-      // Reset profiles to Default only
-      resetGameProfilesToDefault(gameId)
-      
-      toast.success(`${game.name} installation has been reset to Default profile`)
+      try {
+        // Get all profiles for this game
+        const profiles = profilesByGame[gameId] || []
+        
+        let totalFilesRemoved = 0
+        
+        // Delete BepInEx folder for each profile
+        for (const profile of profiles) {
+          const result = await resetProfileMutation.mutateAsync({
+            gameId,
+            profileId: profile.id,
+          })
+          totalFilesRemoved += result.filesRemoved
+          deleteProfileState(profile.id)
+        }
+        
+        // Reset profiles to Default only
+        resetGameProfilesToDefault(gameId)
+        
+        toast.success(`${game.name} installation reset`, {
+          description: `${totalFilesRemoved} files removed, reset to Default profile`,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error"
+        toast.error("Failed to reset installation", {
+          description: message,
+        })
+      }
     }
   }
 
-  const handleRemoveManagement = () => {
+  const handleRemoveManagement = async () => {
     const confirmed = confirm(
-      `Are you sure you want to stop managing ${game.name}?\n\nThis will:\n- Remove the game from your managed list\n- Delete all profiles and mods\n- Clear all game settings\n\nYou can add it back later if needed.`
+      `Are you sure you want to stop managing ${game.name}?\n\nThis will:\n- Remove the game from your managed list\n- Delete all profiles and mods (files removed from disk)\n- Delete all downloads and caches\n- Clear all game settings\n\nYou can add it back later if needed.`
     )
     if (confirmed) {
-      // Get all profiles for this game
-      const profiles = profilesByGame[gameId] || []
-      
-      // Clear mod state for each profile
-      profiles.forEach((profile) => {
-        deleteProfileState(profile.id)
-      })
-      
-      // Remove all game data
-      removeGameProfiles(gameId)
-      deletePerGame(gameId)
-      const nextDefaultGameId = removeManagedGame(gameId)
-      
-      // Update selected game
-      selectGame(nextDefaultGameId)
-      
-      // Close settings if no games remain
-      if (!nextDefaultGameId) {
-        setSettingsOpen(false)
+      try {
+        // Delete all game files (profiles + downloads + caches)
+        const result = await unmanageGameMutation.mutateAsync({
+          gameId,
+        })
+        
+        // Get all profiles for this game
+        const profiles = profilesByGame[gameId] || []
+        
+        // Clear state for each profile
+        profiles.forEach((profile) => {
+          deleteProfileState(profile.id)
+        })
+        
+        // Remove all game data from stores
+        removeGameProfiles(gameId)
+        deletePerGame(gameId)
+        const nextDefaultGameId = removeManagedGame(gameId)
+        
+        // Update selected game
+        selectGame(nextDefaultGameId)
+        
+        // Close settings if no games remain
+        if (!nextDefaultGameId) {
+          setSettingsOpen(false)
+        }
+        
+        toast.success(`${game.name} removed`, {
+          description: `${result.totalRemoved} files cleaned up from disk`,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error"
+        toast.error("Failed to remove game", {
+          description: message,
+        })
       }
-      
-      toast.success(`${game.name} has been removed from managed games`)
     }
   }
 

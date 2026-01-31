@@ -2,13 +2,13 @@ import { app, shell, dialog, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { createIPCHandler } from "electron-trpc-experimental/main";
 import { initTRPC } from "@trpc/server";
+import require$$0, { promises } from "fs";
+import { join, dirname, normalize, resolve, basename } from "path";
 import superjson from "superjson";
 import { z } from "zod";
 import { createHash } from "crypto";
 import require$$1$1, { gunzip } from "zlib";
 import require$$1, { promisify } from "util";
-import require$$0, { promises } from "fs";
-import { join, dirname, normalize, resolve, basename } from "path";
 import require$$4, { EventEmitter } from "events";
 import require$$6 from "stream";
 import require$$0$1 from "buffer";
@@ -361,7 +361,7 @@ async function ensureDir(dirPath) {
     }
   }
 }
-async function pathExists(path2) {
+async function pathExists$1(path2) {
   try {
     await promises.access(path2);
     return true;
@@ -377,6 +377,15 @@ function isPathSafe(parentDir, childPath) {
 async function safeUnlink(filePath) {
   try {
     await promises.unlink(filePath);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+async function removeDir$1(dirPath) {
+  try {
+    await promises.rm(dirPath, { recursive: true, force: true });
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code !== "ENOENT") {
       throw error;
@@ -1878,7 +1887,7 @@ async function downloadMod(options2) {
     onProgress,
     abortSignal
   } = options2;
-  if (!ignoreCache && await pathExists(extractPath)) {
+  if (!ignoreCache && await pathExists$1(extractPath)) {
     return {
       extractedPath: extractPath,
       archivePath,
@@ -2387,7 +2396,7 @@ async function copyDirectory(srcDir, destDir) {
   }
 }
 async function installModToProfile(extractedModPath, profileRoot, modId) {
-  if (!await pathExists(extractedModPath)) {
+  if (!await pathExists$1(extractedModPath)) {
     throw new Error(`Extracted mod not found at: ${extractedModPath}`);
   }
   await ensureDir(profileRoot);
@@ -2398,16 +2407,16 @@ async function installModToProfile(extractedModPath, profileRoot, modId) {
   await ensureDir(profilePluginsRoot);
   await ensureDir(profileConfigRoot);
   const extractedBepInEx = join(extractedModPath, "BepInEx");
-  const hasBepInExStructure = await pathExists(extractedBepInEx);
+  const hasBepInExStructure = await pathExists$1(extractedBepInEx);
   let filesCopied = 0;
   if (hasBepInExStructure) {
     const extractedPlugins = join(extractedBepInEx, "plugins");
     const extractedConfig = join(extractedBepInEx, "config");
-    if (await pathExists(extractedPlugins)) {
+    if (await pathExists$1(extractedPlugins)) {
       await copyDirectory(extractedPlugins, modPluginPath);
       filesCopied += await countFiles(extractedPlugins);
     }
-    if (await pathExists(extractedConfig)) {
+    if (await pathExists$1(extractedConfig)) {
       const configEntries = await promises.readdir(extractedConfig, { withFileTypes: true });
       for (const entry of configEntries) {
         const srcPath = join(extractedConfig, entry.name);
@@ -2432,7 +2441,7 @@ async function installModToProfile(extractedModPath, profileRoot, modId) {
 }
 async function uninstallModFromProfile(profileRoot, modId) {
   const modPluginPath = join(profileRoot, "BepInEx", "plugins", modId);
-  if (!await pathExists(modPluginPath)) {
+  if (!await pathExists$1(modPluginPath)) {
     return 0;
   }
   const filesRemoved = await countFiles(modPluginPath);
@@ -2455,6 +2464,32 @@ async function countFiles(dirPath) {
     return 0;
   }
   return count;
+}
+async function resetProfileBepInEx(profileRoot) {
+  const bepInExPath = join(profileRoot, "BepInEx");
+  if (!await pathExists$1(bepInExPath)) {
+    return 0;
+  }
+  const filesRemoved = await countFiles(bepInExPath);
+  await removeDir$1(bepInExPath);
+  return filesRemoved;
+}
+async function deleteGameCaches(gameId, pathSettings2) {
+  const paths = resolveGamePaths(gameId, pathSettings2);
+  let archivesRemoved = 0;
+  let cacheRemoved = 0;
+  if (await pathExists$1(paths.archiveRoot)) {
+    archivesRemoved = await countFiles(paths.archiveRoot);
+    await removeDir$1(paths.archiveRoot);
+  }
+  if (await pathExists$1(paths.modCacheRoot)) {
+    cacheRemoved = await countFiles(paths.modCacheRoot);
+    await removeDir$1(paths.modCacheRoot);
+  }
+  return {
+    archivesRemoved,
+    cacheRemoved
+  };
 }
 const t = initTRPC.context().create({
   isServer: true,
@@ -2714,13 +2749,92 @@ const profilesRouter = t.router({
       success: true,
       filesRemoved
     };
+  }),
+  /**
+   * Reset a profile by deleting its entire BepInEx folder
+   * This removes all installed mods (plugins + config + everything)
+   */
+  resetProfile: publicProcedure.input(
+    z.object({
+      gameId: z.string(),
+      profileId: z.string()
+    })
+  ).mutation(async ({ input }) => {
+    const settings = getPathSettings();
+    const paths = resolveGamePaths(input.gameId, settings);
+    const profileRoot = `${paths.profilesRoot}/${input.profileId}`;
+    const filesRemoved = await resetProfileBepInEx(profileRoot);
+    return {
+      success: true,
+      filesRemoved
+    };
   })
 });
+const gamesRouter = t.router({
+  /**
+   * Cleanup all files when un-managing a game
+   * Deletes profiles, downloads, and caches for the game
+   */
+  unmanageGameCleanup: publicProcedure.input(
+    z.object({
+      gameId: z.string()
+    })
+  ).mutation(async ({ input }) => {
+    const settings = getPathSettings();
+    const paths = resolveGamePaths(input.gameId, settings);
+    let profilesRemoved = 0;
+    let archivesRemoved = 0;
+    let cacheRemoved = 0;
+    if (await pathExists(paths.profilesRoot)) {
+      profilesRemoved = await countFilesInDir(paths.profilesRoot);
+      await removeDir(paths.profilesRoot);
+    }
+    const cacheResult = await deleteGameCaches(input.gameId, settings);
+    archivesRemoved = cacheResult.archivesRemoved;
+    cacheRemoved = cacheResult.cacheRemoved;
+    return {
+      success: true,
+      profilesRemoved,
+      archivesRemoved,
+      cacheRemoved,
+      totalRemoved: profilesRemoved + archivesRemoved + cacheRemoved
+    };
+  })
+});
+async function countFilesInDir(dirPath) {
+  let count = 0;
+  try {
+    const entries = await promises.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        count += await countFilesInDir(fullPath);
+      } else {
+        count++;
+      }
+    }
+  } catch (error) {
+    return 0;
+  }
+  return count;
+}
+async function pathExists(path2) {
+  try {
+    await promises.access(path2);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function removeDir(dirPath) {
+  await promises.rm(dirPath, { recursive: true, force: true });
+}
 const appRouter = t.router({
   desktop: desktopRouter,
   thunderstore: thunderstoreRouter,
   downloads: downloadsRouter,
-  profiles: profilesRouter
+  profiles: profilesRouter,
+  games: gamesRouter
 });
 async function createContext({ event }) {
   return {

@@ -3,8 +3,9 @@
  * Handles copying extracted mod files to profile folders
  */
 import { promises as fs } from "fs"
-import { join, relative } from "path"
-import { ensureDir, copyFile, pathExists } from "../downloads/fs-utils"
+import { join } from "path"
+import { ensureDir, copyFile, pathExists, removeDir } from "../downloads/fs-utils"
+import { resolveGamePaths, type PathSettings } from "../downloads/path-resolver"
 
 /**
  * Recursively copies all files and directories from source to destination
@@ -156,4 +157,59 @@ async function countFiles(dirPath: string): Promise<number> {
   }
   
   return count
+}
+
+/**
+ * Resets a profile by deleting its BepInEx folder
+ * This removes all installed mods (plugins + config + everything under BepInEx)
+ * 
+ * @param profileRoot - Root path for the profile
+ * @returns Number of files removed
+ */
+export async function resetProfileBepInEx(profileRoot: string): Promise<number> {
+  const bepInExPath = join(profileRoot, "BepInEx")
+  
+  if (!(await pathExists(bepInExPath))) {
+    return 0
+  }
+  
+  const filesRemoved = await countFiles(bepInExPath)
+  await removeDir(bepInExPath)
+  
+  return filesRemoved
+}
+
+/**
+ * Deletes all cached downloads and extracted mods for a game
+ * Removes archiveRoot and modCacheRoot
+ * 
+ * @param gameId - Game identifier
+ * @param pathSettings - Path settings from settings store
+ * @returns Object with counts of removed files
+ */
+export async function deleteGameCaches(
+  gameId: string,
+  pathSettings: PathSettings
+): Promise<{ archivesRemoved: number; cacheRemoved: number }> {
+  const paths = resolveGamePaths(gameId, pathSettings)
+  
+  let archivesRemoved = 0
+  let cacheRemoved = 0
+  
+  // Remove archive downloads
+  if (await pathExists(paths.archiveRoot)) {
+    archivesRemoved = await countFiles(paths.archiveRoot)
+    await removeDir(paths.archiveRoot)
+  }
+  
+  // Remove extracted mod cache
+  if (await pathExists(paths.modCacheRoot)) {
+    cacheRemoved = await countFiles(paths.modCacheRoot)
+    await removeDir(paths.modCacheRoot)
+  }
+  
+  return {
+    archivesRemoved,
+    cacheRemoved,
+  }
 }

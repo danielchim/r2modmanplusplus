@@ -1,5 +1,7 @@
 import { initTRPC } from "@trpc/server"
 import { dialog, shell } from "electron"
+import { promises as fs } from "fs"
+import { join } from "path"
 import superjson from "superjson"
 import { z } from "zod"
 import type { AppContext } from "./context"
@@ -8,7 +10,7 @@ import { resolveDependencies } from "../thunderstore/dependencies"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
 import { resolveGamePaths } from "../downloads/path-resolver"
-import { installModToProfile, uninstallModFromProfile } from "../profiles/mod-installer"
+import { installModToProfile, uninstallModFromProfile, resetProfileBepInEx, deleteGameCaches } from "../profiles/mod-installer"
 
 /**
  * Initialize tRPC with SuperJSON for rich data serialization
@@ -348,7 +350,118 @@ const profilesRouter = t.router({
         filesRemoved,
       }
     }),
+  
+  /**
+   * Reset a profile by deleting its entire BepInEx folder
+   * This removes all installed mods (plugins + config + everything)
+   */
+  resetProfile: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      
+      const filesRemoved = await resetProfileBepInEx(profileRoot)
+      
+      return {
+        success: true,
+        filesRemoved,
+      }
+    }),
 })
+
+/**
+ * Game management procedures
+ * Handles game-level operations like unmanaging (cleanup files)
+ */
+const gamesRouter = t.router({
+  /**
+   * Cleanup all files when un-managing a game
+   * Deletes profiles, downloads, and caches for the game
+   */
+  unmanageGameCleanup: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      
+      let profilesRemoved = 0
+      let archivesRemoved = 0
+      let cacheRemoved = 0
+      
+      // Delete all profiles for this game
+      if (await pathExists(paths.profilesRoot)) {
+        profilesRemoved = await countFilesInDir(paths.profilesRoot)
+        await removeDir(paths.profilesRoot)
+      }
+      
+      // Delete download archives and extracted cache
+      const cacheResult = await deleteGameCaches(input.gameId, settings)
+      archivesRemoved = cacheResult.archivesRemoved
+      cacheRemoved = cacheResult.cacheRemoved
+      
+      return {
+        success: true,
+        profilesRemoved,
+        archivesRemoved,
+        cacheRemoved,
+        totalRemoved: profilesRemoved + archivesRemoved + cacheRemoved,
+      }
+    }),
+})
+
+/**
+ * Helper to count files in a directory
+ */
+async function countFilesInDir(dirPath: string): Promise<number> {
+  let count = 0
+  
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true })
+    
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name)
+      if (entry.isDirectory()) {
+        count += await countFilesInDir(fullPath)
+      } else {
+        count++
+      }
+    }
+  } catch (error) {
+    return 0
+  }
+  
+  return count
+}
+
+/**
+ * Check if a path exists
+ */
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await fs.access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Recursively removes a directory
+ */
+async function removeDir(dirPath: string): Promise<void> {
+  await fs.rm(dirPath, { recursive: true, force: true })
+}
 
 /**
  * Main application router
@@ -359,6 +472,7 @@ export const appRouter = t.router({
   thunderstore: thunderstoreRouter,
   downloads: downloadsRouter,
   profiles: profilesRouter,
+  games: gamesRouter,
 })
 
 /**

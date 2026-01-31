@@ -5,6 +5,7 @@ import { useAppStore } from "@/store/app-store"
 import { useProfileStore, type Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useSettingsStore } from "@/store/settings-store"
+import { trpc } from "@/lib/trpc"
 // import { getExeNames } from "@/lib/ecosystem" // Will be used for IPC binary verification later
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -60,9 +61,10 @@ export function GameDashboard() {
   const profilesFromStore = useProfileStore((s) => s.profilesByGame[selectedGameId])
   const profiles = profilesFromStore ?? EMPTY_PROFILES
   
-  const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
   const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
+  
+  const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModCount = installedModsSet?.size ?? 0
   
@@ -101,21 +103,63 @@ export function GameDashboard() {
     toast.success("Profile renamed")
   }
   
-  const handleDeleteProfile = () => {
+  const handleDeleteProfile = async () => {
     if (!activeProfileId) return
+    
     const result = deleteProfile(selectedGameId, activeProfileId)
     if (!result.deleted) {
       toast.error("Cannot delete default profile")
-    } else {
-      deleteProfileState(activeProfileId)
-      toast.success("Profile deleted")
+      setDeleteProfileOpen(false)
+      return
     }
+    
+    try {
+      // Delete profile BepInEx folder from disk
+      const resetResult = await resetProfileMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+      })
+      
+      // Clear state
+      deleteProfileState(activeProfileId)
+      
+      toast.success("Profile deleted", {
+        description: `${resetResult.filesRemoved} files removed from disk`,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Failed to delete profile files", {
+        description: message,
+      })
+    }
+    
     setDeleteProfileOpen(false)
   }
 
-  const handleUninstallAll = () => {
+  const handleUninstallAll = async () => {
     if (!activeProfileId) return
-    uninstallAllMods(activeProfileId)
+    
+    try {
+      // Delete profile BepInEx folder (all installed mods)
+      const result = await resetProfileMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+      })
+      
+      // Clear state
+      deleteProfileState(activeProfileId)
+      
+      toast.success("All mods uninstalled", {
+        description: `${result.filesRemoved} files removed from profile`,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Failed to uninstall mods", {
+        description: message,
+      })
+    }
+    
+    setUninstallAllOpen(false)
   }
 
   const gameProfiles = profiles.map(profile => ({
