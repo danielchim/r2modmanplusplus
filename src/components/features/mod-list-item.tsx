@@ -7,6 +7,7 @@ import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
+import { useModActions } from "@/hooks/use-mod-actions"
 import { useSettingsStore } from "@/store/settings-store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -28,7 +29,7 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   
   const toggleMod = useModManagementStore((s) => s.toggleMod)
-  const uninstallMod = useModManagementStore((s) => s.uninstallMod)
+  const { uninstallMod } = useModActions()
   const getDependencyWarnings = useModManagementStore((s) => s.getDependencyWarnings)
   const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
@@ -114,7 +115,7 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
     if (!activeProfileId) return
     
     if (isInstalled) {
-      uninstallMod(activeProfileId, mod.id)
+      uninstallMod(activeProfileId, mod.id, { author: mod.author, name: mod.name })
     } else {
       // Check if there are any dependencies that need to be installed
       const hasDepsToInstall = depInfos.some(dep => 

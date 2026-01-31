@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
+import { useModActions } from "@/hooks/use-mod-actions"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
@@ -252,7 +253,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const { startDownload, pauseDownload, resumeDownload, cancelDownload } = useDownloadActions()
 
   const toggleMod = useModManagementStore((s) => s.toggleMod)
-  const uninstallMod = useModManagementStore((s) => s.uninstallMod)
+  const { uninstallMod } = useModActions()
   const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
   
@@ -443,7 +444,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   const handleUninstall = () => {
     if (activeProfileId) {
-      uninstallMod(activeProfileId, mod.id)
+      uninstallMod(activeProfileId, mod.id, { author: mod.author, name: mod.name })
     }
   }
 
@@ -977,7 +978,7 @@ export function ModInspector() {
   
   const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
   const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  const uninstallMod = useModManagementStore((s) => s.uninstallMod)
+  const { uninstallMod } = useModActions()
 
   // Check if this is a Thunderstore mod (UUID format: 36 chars with hyphens)
   // Use UUID-based detection, not tab-based
@@ -1084,7 +1085,9 @@ export function ModInspector() {
             size="lg"
             className="w-full gap-2"
             onClick={() => {
-              if (activeProfileId) {
+              if (activeProfileId && selectedModId) {
+                // Can't uninstall with file removal for unknown mods (no author/name)
+                // Fall back to state-only uninstall
                 uninstallMod(activeProfileId, selectedModId)
                 selectMod(null) // Close inspector after uninstall
               }
