@@ -6,6 +6,7 @@ import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies } from "../thunderstore/dependencies"
 import { getDownloadManager } from "../downloads/manager"
+import { setPathSettings } from "../downloads/settings-state"
 
 /**
  * Initialize tRPC with SuperJSON for rich data serialization
@@ -239,6 +240,18 @@ const downloadsRouter = t.router({
       z.object({
         maxConcurrent: z.number().optional(),
         speedLimitBps: z.number().optional(),
+        pathSettings: z.object({
+          global: z.object({
+            dataFolder: z.string(),
+            modDownloadFolder: z.string(),
+            cacheFolder: z.string(),
+          }).optional(),
+          perGame: z.record(z.string(), z.object({
+            modDownloadFolder: z.string(),
+            cacheFolder: z.string(),
+            modCacheFolder: z.string(),
+          })).optional(),
+        }).optional(),
       })
     )
     .mutation(({ input }) => {
@@ -248,6 +261,9 @@ const downloadsRouter = t.router({
       }
       if (input.speedLimitBps !== undefined) {
         manager.setSpeedLimit(input.speedLimitBps)
+      }
+      if (input.pathSettings) {
+        setPathSettings(input.pathSettings)
       }
     }),
 })

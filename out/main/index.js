@@ -8,7 +8,7 @@ import { createHash } from "crypto";
 import require$$1$1, { gunzip } from "zlib";
 import require$$1, { promisify } from "util";
 import require$$0, { promises } from "fs";
-import { join, normalize, resolve, dirname } from "path";
+import { join, normalize, resolve, dirname, basename } from "path";
 import require$$4, { EventEmitter } from "events";
 import require$$6 from "stream";
 import require$$0$1 from "buffer";
@@ -2125,11 +2125,20 @@ class DownloadQueue extends EventEmitter {
 function sanitizePathSegment(segment) {
   return segment.replace(/[/\\:*?"<>|]/g, "_").trim().substring(0, 200);
 }
+function ensureGameSubdir(root, gameId) {
+  if (!root) return "";
+  const normalizedRoot = normalize(root);
+  const base = basename(normalizedRoot);
+  if (base === gameId) {
+    return normalizedRoot;
+  }
+  return join(normalizedRoot, gameId);
+}
 function resolveGamePaths(gameId, settings) {
   const { dataFolder, modDownloadFolder: globalModDownloadFolder, cacheFolder: globalCacheFolder } = settings.global;
   const perGame = settings.perGame[gameId] || {};
   const modCacheRoot = perGame.modCacheFolder ? perGame.modCacheFolder : join(dataFolder, gameId, "cache");
-  const archiveRoot = perGame.modDownloadFolder ? perGame.modDownloadFolder : globalModDownloadFolder ? join(globalModDownloadFolder, gameId) : join(dataFolder, "downloads", gameId);
+  const archiveRoot = perGame.modDownloadFolder ? ensureGameSubdir(perGame.modDownloadFolder, gameId) : globalModDownloadFolder ? ensureGameSubdir(globalModDownloadFolder, gameId) : join(dataFolder, "downloads", gameId);
   const metadataCache = perGame.cacheFolder ? join(perGame.cacheFolder, "thunderstore") : globalCacheFolder ? join(globalCacheFolder, "thunderstore") : join(dataFolder, "cache", "thunderstore");
   const profilesRoot = join(dataFolder, gameId, "profiles");
   return {
@@ -2156,6 +2165,52 @@ function applyThunderstoreCdn(downloadUrl, preferredCdn) {
   const url = new URL(downloadUrl);
   url.searchParams.set("cdn", preferredCdn);
   return url.toString();
+}
+const isDevEnvironment = (() => {
+  if (typeof process !== "undefined" && process.env && process.env.NODE_ENV) {
+    return process.env.NODE_ENV !== "production";
+  }
+  return false;
+})();
+function sanitizePayload(payload, depth = 0) {
+  if (depth > 4) {
+    return "[Truncated]";
+  }
+  if (payload == null) {
+    return payload;
+  }
+  if (payload instanceof Error) {
+    return {
+      name: payload.name,
+      message: payload.message,
+      stack: payload.stack
+    };
+  }
+  if (typeof AbortController !== "undefined" && payload instanceof AbortController) {
+    return "[AbortController]";
+  }
+  if (payload instanceof ArrayBuffer) {
+    return `[ArrayBuffer ${payload.byteLength}]`;
+  }
+  if (Array.isArray(payload)) {
+    return payload.map((item) => sanitizePayload(item, depth + 1));
+  }
+  if (typeof payload === "object") {
+    const entries = Object.entries(payload);
+    return entries.reduce((acc, [key, value]) => {
+      acc[key] = sanitizePayload(value, depth + 1);
+      return acc;
+    }, {});
+  }
+  return payload;
+}
+function logIpcRenderer(direction, channel, payload) {
+  if (!isDevEnvironment) return;
+  if (typeof payload === "undefined") {
+    console.debug(`[ipc:${direction}] ${channel}`);
+    return;
+  }
+  console.debug(`[ipc:${direction}] ${channel}`, sanitizePayload(payload));
 }
 class DownloadManager {
   queue;
@@ -2192,6 +2247,7 @@ class DownloadManager {
    * Broadcasts an event to all registered renderer windows
    */
   broadcastToRenderers(channel, data) {
+    logIpcRenderer("main->renderer", channel, data);
     for (const window of this.windows) {
       if (!window.isDestroyed()) {
         window.webContents.send(channel, data);
@@ -2282,6 +2338,36 @@ function getDownloadManager() {
     throw new Error("Download manager not initialized");
   }
   return instance;
+}
+const pathSettings = {
+  global: {
+    dataFolder: app.getPath("userData"),
+    modDownloadFolder: "",
+    cacheFolder: ""
+  },
+  perGame: {}
+};
+function getPathSettings() {
+  return pathSettings;
+}
+function setPathSettings(next) {
+  if (next.global) {
+    pathSettings.global = {
+      dataFolder: next.global.dataFolder ?? pathSettings.global.dataFolder,
+      modDownloadFolder: next.global.modDownloadFolder ?? "",
+      cacheFolder: next.global.cacheFolder ?? ""
+    };
+  }
+  if (next.perGame) {
+    pathSettings.perGame = {};
+    for (const [gameId, settings] of Object.entries(next.perGame)) {
+      pathSettings.perGame[gameId] = {
+        modDownloadFolder: settings.modDownloadFolder ?? "",
+        cacheFolder: settings.cacheFolder ?? "",
+        modCacheFolder: settings.modCacheFolder ?? ""
+      };
+    }
+  }
 }
 const t = initTRPC.context().create({
   isServer: true,
@@ -2453,7 +2539,19 @@ const downloadsRouter = t.router({
   updateSettings: publicProcedure.input(
     z.object({
       maxConcurrent: z.number().optional(),
-      speedLimitBps: z.number().optional()
+      speedLimitBps: z.number().optional(),
+      pathSettings: z.object({
+        global: z.object({
+          dataFolder: z.string(),
+          modDownloadFolder: z.string(),
+          cacheFolder: z.string()
+        }).optional(),
+        perGame: z.record(z.string(), z.object({
+          modDownloadFolder: z.string(),
+          cacheFolder: z.string(),
+          modCacheFolder: z.string()
+        })).optional()
+      }).optional()
     })
   ).mutation(({ input }) => {
     const manager = getDownloadManager();
@@ -2462,6 +2560,9 @@ const downloadsRouter = t.router({
     }
     if (input.speedLimitBps !== void 0) {
       manager.setSpeedLimit(input.speedLimitBps);
+    }
+    if (input.pathSettings) {
+      setPathSettings(input.pathSettings);
     }
   })
 });
@@ -2520,20 +2621,11 @@ app.on("activate", () => {
 });
 app.whenReady().then(() => {
   const downloadManager = initializeDownloadManager(
-    () => {
-      return {
-        global: {
-          dataFolder: app.getPath("userData"),
-          modDownloadFolder: "",
-          cacheFolder: ""
-        },
-        perGame: {}
-      };
-    },
+    getPathSettings,
     3,
-    // maxConcurrent
+    // Default max concurrent downloads (will be updated via tRPC)
     0
-    // speedLimitBps (0 = unlimited)
+    // Default speed limit (will be updated via tRPC)
   );
   createWindow();
   if (win) {

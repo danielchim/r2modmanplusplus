@@ -152,7 +152,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
 
         <SettingsRow
           title="Mod download location"
-          description="Where downloaded mod archives are stored for this game. Leave blank to use global/app behavior."
+          description="Where downloaded mod archives are stored for this game. A game-specific subfolder will be created automatically. Leave blank to use global/app behavior."
           belowContent={
             <FolderPathControl
               value={perGameSettings.modDownloadFolder}

@@ -39,16 +39,40 @@ export function DownloadBridge() {
   const speedLimitEnabled = useSettingsStore((s) => s.global.speedLimitEnabled)
   const speedLimitBps = useSettingsStore((s) => s.global.speedLimitBps)
   
+  // Get path settings for syncing to main process
+  const dataFolder = useSettingsStore((s) => s.global.dataFolder)
+  const modDownloadFolder = useSettingsStore((s) => s.global.modDownloadFolder)
+  const cacheFolder = useSettingsStore((s) => s.global.cacheFolder)
+  const perGame = useSettingsStore((s) => s.perGame)
+  
   const updateSettingsMutation = trpc.downloads.updateSettings.useMutation()
   
   // Sync settings to main process when they change
   useEffect(() => {
+    // Filter perGame to only include path-related settings
+    const perGamePaths: Record<string, { modDownloadFolder: string; cacheFolder: string; modCacheFolder: string }> = {}
+    for (const [gameId, settings] of Object.entries(perGame)) {
+      perGamePaths[gameId] = {
+        modDownloadFolder: settings.modDownloadFolder || "",
+        cacheFolder: settings.cacheFolder || "",
+        modCacheFolder: settings.modCacheFolder || "",
+      }
+    }
+    
     updateSettingsMutation.mutate({
       maxConcurrent,
       speedLimitBps: speedLimitEnabled ? speedLimitBps : 0,
+      pathSettings: {
+        global: {
+          dataFolder,
+          modDownloadFolder: modDownloadFolder || "",
+          cacheFolder: cacheFolder || "",
+        },
+        perGame: perGamePaths,
+      },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxConcurrent, speedLimitEnabled, speedLimitBps])
+  }, [maxConcurrent, speedLimitEnabled, speedLimitBps, dataFolder, modDownloadFolder, cacheFolder, perGame])
   
   // Single IPC subscription (with StrictMode guard to prevent double-subscription)
   const subscriptionActiveRef = useRef(false)

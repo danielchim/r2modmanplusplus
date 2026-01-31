@@ -4,6 +4,7 @@ import { createIPCHandler } from "electron-trpc-experimental/main"
 import { appRouter } from "./trpc/router"
 import { createContext } from "./trpc/context"
 import { initializeDownloadManager } from "./downloads/manager"
+import { getPathSettings } from "./downloads/settings-state"
 
 // The built directory structure
 //
@@ -82,22 +83,11 @@ app.on("activate", () => {
 
 // Initialize app and download manager
 app.whenReady().then(() => {
-  // Initialize download manager with settings fetcher
+  // Initialize download manager with settings fetcher from shared state
   const downloadManager = initializeDownloadManager(
-    () => {
-      // For now, use app userData as fallback
-      // TODO: Integrate with actual settings store
-      return {
-        global: {
-          dataFolder: app.getPath("userData"),
-          modDownloadFolder: "",
-          cacheFolder: "",
-        },
-        perGame: {},
-      }
-    },
-    3, // maxConcurrent
-    0  // speedLimitBps (0 = unlimited)
+    getPathSettings,
+    3, // Default max concurrent downloads (will be updated via tRPC)
+    0  // Default speed limit (will be updated via tRPC)
   )
   
   createWindow()

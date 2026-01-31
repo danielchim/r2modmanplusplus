@@ -8,7 +8,10 @@ interface PanelProps {
 
 export function LocationsPanel(_props: PanelProps) {
   void _props
-  const { dataFolder, steamFolder, modDownloadFolder = "", cacheFolder = "" } = useSettingsStore((s) => s.global)
+  const dataFolder = useSettingsStore((s) => s.global.dataFolder)
+  const steamFolder = useSettingsStore((s) => s.global.steamFolder)
+  const modDownloadFolder = useSettingsStore((s) => s.global.modDownloadFolder)
+  const cacheFolder = useSettingsStore((s) => s.global.cacheFolder)
   const updateGlobal = useSettingsStore((s) => s.updateGlobal)
 
   return (
@@ -47,7 +50,7 @@ export function LocationsPanel(_props: PanelProps) {
 
         <SettingsRow
           title="Global mod download folder"
-          description="Default location for downloaded mod archives across all games. Leave blank to use dataFolder/downloads."
+          description="Default location for downloaded mod archives across all games. A subfolder for each game will be created automatically. Leave blank to use dataFolder/downloads."
           belowContent={
             <FolderPathControl
               value={modDownloadFolder}

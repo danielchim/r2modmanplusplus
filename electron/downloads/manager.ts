@@ -5,7 +5,7 @@
 import { BrowserWindow } from "electron"
 import { DownloadQueue, type DownloadJob } from "./queue"
 import { resolveGamePaths, getExtractedModPath, getArchivePath, applyThunderstoreCdn, type PathSettings } from "./path-resolver"
-import { logIpcRenderer } from "@/lib/logger"
+import { logIpcRenderer } from "../logger"
 
 /**
  * Settings fetcher function (provided by main process)
