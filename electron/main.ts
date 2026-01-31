@@ -3,6 +3,7 @@ import path from "node:path"
 import { createIPCHandler } from "electron-trpc-experimental/main"
 import { appRouter } from "./trpc/router"
 import { createContext } from "./trpc/context"
+import { initializeDownloadManager } from "./downloads/manager"
 
 // The built directory structure
 //
@@ -79,7 +80,33 @@ app.on("activate", () => {
   }
 })
 
-app.whenReady().then(createWindow)
+// Initialize app and download manager
+app.whenReady().then(() => {
+  // Initialize download manager with settings fetcher
+  const downloadManager = initializeDownloadManager(
+    () => {
+      // For now, use app userData as fallback
+      // TODO: Integrate with actual settings store
+      return {
+        global: {
+          dataFolder: app.getPath("userData"),
+          modDownloadFolder: "",
+          cacheFolder: "",
+        },
+        perGame: {},
+      }
+    },
+    3, // maxConcurrent
+    0  // speedLimitBps (0 = unlimited)
+  )
+  
+  createWindow()
+  
+  // Register window with download manager
+  if (win) {
+    downloadManager.registerWindow(win)
+  }
+})
 
 // IPC Handlers for desktop features
 ipcMain.handle("dialog:selectFolder", async () => {

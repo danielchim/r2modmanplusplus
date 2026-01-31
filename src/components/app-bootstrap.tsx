@@ -3,6 +3,7 @@ import { useAppStore } from "@/store/app-store"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
+import { DownloadBridge } from "@/components/download-bridge"
 
 export function AppBootstrap() {
   const hasInitialized = useRef(false)
@@ -29,5 +30,5 @@ export function AppBootstrap() {
     selectGame(defaultGameId)
   }, [])
   
-  return null
+  return <DownloadBridge />
 }

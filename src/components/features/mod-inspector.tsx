@@ -3,6 +3,7 @@ import { ArrowLeft, Download, Trash2, ExternalLink, AlertCircle, FileText, Histo
 import { useState, useMemo } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
+import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
@@ -248,10 +249,7 @@ function ModInspectorError({ onBack, error }: { onBack: () => void; error?: Erro
 }
 
 export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
-  const startDownload = useDownloadStore((s) => s.startDownload)
-  const pauseDownload = useDownloadStore((s) => s.pauseDownload)
-  const resumeDownload = useDownloadStore((s) => s.resumeDownload)
-  const cancelDownload = useDownloadStore((s) => s.cancelDownload)
+  const { startDownload, pauseDownload, resumeDownload, cancelDownload } = useDownloadActions()
 
   const toggleMod = useModManagementStore((s) => s.toggleMod)
   const uninstallMod = useModManagementStore((s) => s.uninstallMod)
@@ -394,14 +392,18 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       )
       .forEach(dep => {
         if (dep.resolvedMod) {
-          startDownload(
-            dep.resolvedMod.id,
-            dep.resolvedMod.gameId,
-            dep.resolvedMod.name,
-            dep.resolvedMod.version,
-            dep.resolvedMod.author,
-            dep.resolvedMod.iconUrl
-          )
+          const versionData = dep.resolvedMod.versions.find(v => v.version_number === dep.resolvedMod!.version)
+          const downloadUrl = versionData?.download_url || ""
+          
+          startDownload({
+            gameId: dep.resolvedMod.gameId,
+            modId: dep.resolvedMod.id,
+            modName: dep.resolvedMod.name,
+            modVersion: dep.resolvedMod.version,
+            modAuthor: dep.resolvedMod.author,
+            modIconUrl: dep.resolvedMod.iconUrl,
+            downloadUrl
+          })
         }
       })
   }
@@ -424,7 +426,18 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       setShowDownloadDialog(true)
     } else {
       // No dependencies or all are already installed correctly, download directly
-      startDownload(mod.id, mod.gameId, mod.name, selectedVersion, mod.author, mod.iconUrl)
+      const versionData = mod.versions.find(v => v.version_number === selectedVersion)
+      const downloadUrl = versionData?.download_url || ""
+      
+      startDownload({
+        gameId: mod.gameId,
+        modId: mod.id,
+        modName: mod.name,
+        modVersion: selectedVersion,
+        modAuthor: mod.author,
+        modIconUrl: mod.iconUrl,
+        downloadUrl
+      })
     }
   }
 
@@ -442,19 +455,19 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   const handlePause = () => {
     if (downloadTask) {
-      pauseDownload(downloadTask.modId)
+      pauseDownload(downloadTask.downloadId)
     }
   }
 
   const handleResume = () => {
     if (downloadTask) {
-      resumeDownload(downloadTask.modId)
+      resumeDownload(downloadTask.downloadId)
     }
   }
 
   const handleCancel = () => {
     if (downloadTask) {
-      cancelDownload(downloadTask.modId)
+      cancelDownload(downloadTask.downloadId)
     }
   }
 
@@ -916,7 +929,15 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                             className="h-7 px-2 text-xs"
                             onClick={() => {
                               setSelectedVersion(version.version_number)
-                              startDownload(mod.id, mod.gameId, mod.name, version.version_number, mod.author, mod.iconUrl)
+                              startDownload({
+                                gameId: mod.gameId,
+                                modId: mod.id,
+                                modName: mod.name,
+                                modVersion: version.version_number,
+                                modAuthor: mod.author,
+                                modIconUrl: mod.iconUrl,
+                                downloadUrl: version.download_url
+                              })
                             }}
                           >
                             Install

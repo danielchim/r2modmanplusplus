@@ -17,6 +17,28 @@ contextBridge.exposeInMainWorld("electron", {
   // Desktop features (legacy - can migrate to tRPC gradually)
   selectFolder: () => ipcRenderer.invoke("dialog:selectFolder"),
   openFolder: (folderPath: string) => ipcRenderer.invoke("shell:openFolder", folderPath),
+  
+  // Download events
+  onDownloadUpdated: (callback: (data: unknown) => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data)
+    ipcRenderer.on("download:updated", handler)
+    return () => ipcRenderer.removeListener("download:updated", handler)
+  },
+  onDownloadProgress: (callback: (data: unknown) => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data)
+    ipcRenderer.on("download:progress", handler)
+    return () => ipcRenderer.removeListener("download:progress", handler)
+  },
+  onDownloadCompleted: (callback: (data: unknown) => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data)
+    ipcRenderer.on("download:completed", handler)
+    return () => ipcRenderer.removeListener("download:completed", handler)
+  },
+  onDownloadFailed: (callback: (data: unknown) => void) => {
+    const handler = (_event: unknown, data: unknown) => callback(data)
+    ipcRenderer.on("download:failed", handler)
+    return () => ipcRenderer.removeListener("download:failed", handler)
+  },
 })
 
 // Optional: expose app version or other static info

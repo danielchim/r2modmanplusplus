@@ -47,7 +47,7 @@ export function AppShell({ children, showContextPanel = true }: AppShellProps) {
       {showContextPanel && showContextPanelState && <ContextPanel />}
       <SettingsDialog />
       <DownloadManager />
-      <Toaster position="bottom-right" />
+      <Toaster position="bottom-right" toastOptions={{ style: { zIndex: 9999 } }} />
     </div>
   )
 }

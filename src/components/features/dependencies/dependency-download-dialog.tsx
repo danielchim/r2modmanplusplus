@@ -17,7 +17,7 @@ import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
-import { useDownloadStore } from "@/store/download-store"
+import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
@@ -75,7 +75,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
   const setDependencyWarnings = useModManagementStore((s) => s.setDependencyWarnings)
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
-  const startDownload = useDownloadStore((s) => s.startDownload)
+  const { startDownload } = useDownloadActions()
   
   const [selectedDepIds, setSelectedDepIds] = useState<Set<string>>(new Set())
   const [forceRefresh, setForceRefresh] = useState(0)
@@ -175,7 +175,19 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     const isTargetInstalled = installed ? installed.has(mod.id) : false
     
     if (!isTargetInstalled) {
-      startDownload(mod.id, mod.gameId, mod.name, requestedVersion, mod.author, mod.iconUrl)
+      // Find the download URL for the requested version
+      const versionData = mod.versions.find(v => v.version_number === requestedVersion)
+      const downloadUrl = versionData?.download_url || ""
+      
+      startDownload({
+        gameId: mod.gameId,
+        modId: mod.id,
+        modName: mod.name,
+        modVersion: requestedVersion,
+        modAuthor: mod.author,
+        modIconUrl: mod.iconUrl,
+        downloadUrl
+      })
     }
     
     // Store unresolved dependency warnings
@@ -198,7 +210,19 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     
     // Download target mod if not already installed
     if (!isTargetInstalled) {
-      startDownload(mod.id, mod.gameId, mod.name, requestedVersion, mod.author, mod.iconUrl)
+      // Find the download URL for the requested version
+      const versionData = mod.versions.find(v => v.version_number === requestedVersion)
+      const downloadUrl = versionData?.download_url || ""
+      
+      startDownload({
+        gameId: mod.gameId,
+        modId: mod.id,
+        modName: mod.name,
+        modVersion: requestedVersion,
+        modAuthor: mod.author,
+        modIconUrl: mod.iconUrl,
+        downloadUrl
+      })
     }
     
     // Download selected dependencies
@@ -208,7 +232,18 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
         const depMod = depInfo.resolvedMod
         // Use required version from dependency string if specified, otherwise use latest
         const versionToDownload = depInfo.requiredVersion || depMod.version
-        startDownload(depMod.id, depMod.gameId, depMod.name, versionToDownload, depMod.author, depMod.iconUrl)
+        const versionData = depMod.versions.find(v => v.version_number === versionToDownload)
+        const downloadUrl = versionData?.download_url || ""
+        
+        startDownload({
+          gameId: depMod.gameId,
+          modId: depMod.id,
+          modName: depMod.name,
+          modVersion: versionToDownload,
+          modAuthor: depMod.author,
+          modIconUrl: depMod.iconUrl,
+          downloadUrl
+        })
       }
     })
     

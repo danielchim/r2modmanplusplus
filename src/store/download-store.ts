@@ -1,8 +1,9 @@
 import { create } from "zustand"
 
-export type DownloadStatus = "queued" | "downloading" | "paused" | "completed" | "error"
+export type DownloadStatus = "queued" | "downloading" | "paused" | "completed" | "error" | "cancelled"
 
 export type DownloadTask = {
+  downloadId: string // Stable ID: gameId:modId:version
   modId: string
   gameId: string
   modName: string
@@ -15,29 +16,18 @@ export type DownloadTask = {
   bytesTotal: number
   speedBps: number // bytes per second
   error?: string
-  // Internal tracking
-  lastTickAt: number
-  lastBytesDownloaded: number
 }
 
 type DownloadStore = {
   tasks: Record<string, DownloadTask>
   
-  // Actions
-  startDownload: (modId: string, gameId: string, modName: string, modVersion: string, modAuthor: string, modIconUrl: string) => void
-  pauseDownload: (modId: string) => void
-  resumeDownload: (modId: string) => void
-  cancelDownload: (modId: string) => void
-  pauseAll: () => void
-  resumeAll: (maxConcurrentDownloads: number) => void
-  cancelAll: () => void
-  updateProgress: (modId: string, bytesDownloaded: number, speedBps: number) => void
-  completeDownload: (modId: string) => void
-  failDownload: (modId: string, error: string) => void
-  setStatus: (modId: string, status: DownloadStatus) => void
+  // Actions (internal - used by event handlers)
+  _addTask: (task: DownloadTask) => void
+  _updateTask: (downloadId: string, updates: Partial<DownloadTask>) => void
+  _removeTask: (downloadId: string) => void
   
   // Queries
-  getTask: (modId: string) => DownloadTask | undefined
+  getTask: (downloadId: string) => DownloadTask | undefined
   getTasksByGame: (gameId: string) => DownloadTask[]
   getDownloadingTasks: () => DownloadTask[]
   getQueuedTasks: () => DownloadTask[]
@@ -48,235 +38,43 @@ type DownloadStore = {
 export const useDownloadStore = create<DownloadStore>((set, get) => ({
   tasks: {},
   
-  startDownload: (modId, gameId, modName, modVersion, modAuthor, modIconUrl) => {
-    set((state) => {
-      // Generate a random file size between 5MB and 100MB for simulation
-      const bytesTotal = Math.floor(Math.random() * (100 * 1024 * 1024 - 5 * 1024 * 1024) + 5 * 1024 * 1024)
-      
-      return {
-        tasks: {
-          ...state.tasks,
-          [modId]: {
-            modId,
-            gameId,
-            modName,
-            modVersion,
-            modAuthor,
-            modIconUrl,
-            status: "queued",
-            progress: 0,
-            bytesDownloaded: 0,
-            bytesTotal,
-            speedBps: 0,
-            lastTickAt: Date.now(),
-            lastBytesDownloaded: 0,
-          },
-        },
-      }
-    })
+  _addTask: (task) => {
+    set((state) => ({
+      tasks: {
+        ...state.tasks,
+        [task.downloadId]: task,
+      },
+    }))
   },
   
-  pauseDownload: (modId) => {
+  _updateTask: (downloadId, updates) => {
     set((state) => {
-      const task = state.tasks[modId]
-      if (!task || task.status !== "downloading") return state
-      
-      return {
-        tasks: {
-          ...state.tasks,
-          [modId]: {
-            ...task,
-            status: "paused",
-            speedBps: 0,
-          },
-        },
-      }
-    })
-  },
-  
-  resumeDownload: (modId) => {
-    set((state) => {
-      const task = state.tasks[modId]
-      if (!task || task.status !== "paused") return state
-      
-      // Force-start: set to downloading immediately
-      // The DownloadManager will handle popping the last task out if needed
-      return {
-        tasks: {
-          ...state.tasks,
-          [modId]: {
-            ...task,
-            status: "downloading",
-            lastTickAt: Date.now(),
-            lastBytesDownloaded: task.bytesDownloaded,
-          },
-        },
-      }
-    })
-  },
-  
-  cancelDownload: (modId) => {
-    set((state) => {
-      const newTasks = { ...state.tasks }
-      delete newTasks[modId]
-      return { tasks: newTasks }
-    })
-  },
-  
-  pauseAll: () => {
-    set((state) => {
-      const newTasks = { ...state.tasks }
-      Object.keys(newTasks).forEach((modId) => {
-        const task = newTasks[modId]
-        // Pause both downloading and queued tasks
-        if (task.status === "downloading" || task.status === "queued") {
-          newTasks[modId] = {
-            ...task,
-            status: "paused",
-            speedBps: 0,
-          }
-        }
-      })
-      return { tasks: newTasks }
-    })
-  },
-  
-  resumeAll: (maxConcurrentDownloads) => {
-    set((state) => {
-      const newTasks = { ...state.tasks }
-      
-      // Count how many are already downloading (continue those)
-      const currentDownloadingCount = Object.values(newTasks).filter(
-        (t) => t.status === "downloading"
-      ).length
-      
-      // Calculate available slots for paused tasks
-      const availableSlots = maxConcurrentDownloads - currentDownloadingCount
-      
-      // Get all paused tasks
-      const pausedTasks = Object.values(newTasks).filter((t) => t.status === "paused")
-      
-      // Resume up to availableSlots to downloading, set the rest to queued
-      let resumedCount = 0
-      pausedTasks.forEach((task) => {
-        if (resumedCount < availableSlots) {
-          // Resume to downloading (fill available slots)
-          newTasks[task.modId] = {
-            ...task,
-            status: "downloading",
-            lastTickAt: Date.now(),
-            lastBytesDownloaded: task.bytesDownloaded,
-          }
-          resumedCount++
-        } else {
-          // Set remaining paused tasks to queued
-          newTasks[task.modId] = {
-            ...task,
-            status: "queued",
-          }
-        }
-      })
-      
-      return { tasks: newTasks }
-    })
-  },
-  
-  cancelAll: () => {
-    set((state) => {
-      const newTasks = { ...state.tasks }
-      Object.keys(newTasks).forEach((modId) => {
-        const task = newTasks[modId]
-        // Only cancel active tasks (not completed or errored)
-        if (task.status === "downloading" || task.status === "queued" || task.status === "paused") {
-          delete newTasks[modId]
-        }
-      })
-      return { tasks: newTasks }
-    })
-  },
-  
-  updateProgress: (modId, bytesDownloaded, speedBps) => {
-    set((state) => {
-      const task = state.tasks[modId]
-      if (!task) return state
-      
-      const progress = Math.min(100, Math.round((bytesDownloaded / task.bytesTotal) * 100))
-      
-      return {
-        tasks: {
-          ...state.tasks,
-          [modId]: {
-            ...task,
-            bytesDownloaded,
-            progress,
-            speedBps,
-            lastTickAt: Date.now(),
-            lastBytesDownloaded: bytesDownloaded,
-          },
-        },
-      }
-    })
-  },
-  
-  completeDownload: (modId) => {
-    set((state) => {
-      const task = state.tasks[modId]
+      const task = state.tasks[downloadId]
       if (!task) return state
       
       return {
         tasks: {
           ...state.tasks,
-          [modId]: {
+          [downloadId]: {
             ...task,
-            status: "completed",
-            progress: 100,
-            bytesDownloaded: task.bytesTotal,
-            speedBps: 0,
+            ...updates,
           },
         },
       }
     })
   },
   
-  failDownload: (modId, error) => {
+  _removeTask: (downloadId) => {
     set((state) => {
-      const task = state.tasks[modId]
-      if (!task) return state
-      
-      return {
-        tasks: {
-          ...state.tasks,
-          [modId]: {
-            ...task,
-            status: "error",
-            speedBps: 0,
-            error,
-          },
-        },
-      }
-    })
-  },
-  
-  setStatus: (modId, status) => {
-    set((state) => {
-      const task = state.tasks[modId]
-      if (!task) return state
-      
-      return {
-        tasks: {
-          ...state.tasks,
-          [modId]: {
-            ...task,
-            status,
-          },
-        },
-      }
+      const newTasks = { ...state.tasks }
+      delete newTasks[downloadId]
+      return { tasks: newTasks }
     })
   },
   
   // Queries
-  getTask: (modId) => {
-    return get().tasks[modId]
+  getTask: (downloadId) => {
+    return get().tasks[downloadId]
   },
   
   getTasksByGame: (gameId) => {

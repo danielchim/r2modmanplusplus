@@ -1,10 +1,10 @@
-import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2, RotateCcw } from "lucide-react"
+import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useDownloadStore, type DownloadTask } from "@/store/download-store"
-import { useSettingsStore } from "@/store/settings-store"
+import { useDownloadActions } from "@/hooks/use-download-actions"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 
 function formatBytes(bytes: number): string {
@@ -59,22 +59,24 @@ function getStatusLabel(status: DownloadTask["status"]): string {
       return "Failed"
     case "paused":
       return "Paused"
+    case "cancelled":
+      return "Cancelled"
   }
 }
 
 export function DownloadsPage() {
   const tasks = useDownloadStore((s) => s.tasks)
-  const pauseDownload = useDownloadStore((s) => s.pauseDownload)
-  const resumeDownload = useDownloadStore((s) => s.resumeDownload)
-  const cancelDownload = useDownloadStore((s) => s.cancelDownload)
-  const pauseAll = useDownloadStore((s) => s.pauseAll)
-  const resumeAll = useDownloadStore((s) => s.resumeAll)
-  const cancelAll = useDownloadStore((s) => s.cancelAll)
   const getAllActiveTasks = useDownloadStore((s) => s.getAllActiveTasks)
   const getPausedTasks = useDownloadStore((s) => s.getPausedTasks)
-  const startDownload = useDownloadStore((s) => s.startDownload)
   
-  const maxConcurrentDownloads = useSettingsStore((s) => s.global.maxConcurrentDownloads)
+  const {
+    pauseDownload,
+    resumeDownload,
+    cancelDownload,
+    pauseAll,
+    resumeAll,
+    cancelAll,
+  } = useDownloadActions()
   
   const allTasks = Object.values(tasks)
   const activeTasks = getAllActiveTasks()
@@ -152,7 +154,7 @@ export function DownloadsPage() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => resumeAll(maxConcurrentDownloads)}
+                    onClick={resumeAll}
                   >
                     <Play className="size-4 mr-1.5" />
                     Resume All
@@ -280,38 +282,24 @@ export function DownloadsPage() {
                           {/* Actions */}
                           <div className="flex shrink-0 items-center gap-1">
                             {task.status === "downloading" && (
-                              <Button variant="ghost" size="icon" onClick={() => pauseDownload(task.modId)}>
+                              <Button variant="ghost" size="icon" onClick={() => pauseDownload(task.downloadId)}>
                                 <Pause className="size-4" />
                               </Button>
                             )}
                             {task.status === "paused" && (
-                              <Button variant="ghost" size="icon" onClick={() => resumeDownload(task.modId)}>
+                              <Button variant="ghost" size="icon" onClick={() => resumeDownload(task.downloadId)}>
                                 <Play className="size-4" />
                               </Button>
                             )}
                             {task.status === "error" && (
                               <>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  onClick={() => startDownload(
-                                    task.modId, 
-                                    task.gameId, 
-                                    task.modName, 
-                                    task.modVersion, 
-                                    task.modAuthor, 
-                                    task.modIconUrl
-                                  )}
-                                >
-                                  <RotateCcw className="size-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.modId)}>
+                                <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.downloadId)}>
                                   <X className="size-4" />
                                 </Button>
                               </>
                             )}
                             {(task.status === "queued" || task.status === "downloading" || task.status === "paused") && (
-                              <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.modId)}>
+                              <Button variant="ghost" size="icon" onClick={() => cancelDownload(task.downloadId)}>
                                 <X className="size-4" />
                               </Button>
                             )}

@@ -6,6 +6,7 @@ import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useDownloadStore } from "@/store/download-store"
+import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useSettingsStore } from "@/store/settings-store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -34,7 +35,7 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
   
   const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
   
-  const startDownload = useDownloadStore((s) => s.startDownload)
+  const { startDownload } = useDownloadActions()
   
   const [showDependencyDialog, setShowDependencyDialog] = useState(false)
 
@@ -126,7 +127,18 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
         setShowDependencyDialog(true)
       } else {
         // No dependencies or all are already installed correctly, download directly
-        startDownload(mod.id, mod.gameId, mod.name, mod.version, mod.author, mod.iconUrl)
+        const versionData = mod.versions.find(v => v.version_number === mod.version)
+        const downloadUrl = versionData?.download_url || ""
+        
+        startDownload({
+          gameId: mod.gameId,
+          modId: mod.id,
+          modName: mod.name,
+          modVersion: mod.version,
+          modAuthor: mod.author,
+          modIconUrl: mod.iconUrl,
+          downloadUrl
+        })
       }
     }
   }
