@@ -4,6 +4,7 @@
  */
 import { promises as fs } from "fs"
 import { createHash } from "crypto"
+import { dirname } from "path"
 import { pathExists, ensureDir, safeUnlink } from "./fs-utils"
 import { extractZip } from "./zip-extractor"
 
@@ -103,8 +104,7 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
   
   // Ensure parent directories exist
   await ensureDir(extractPath)
-  const archiveDir = archivePath.substring(0, archivePath.lastIndexOf("/"))
-  await ensureDir(archiveDir)
+  await ensureDir(dirname(archivePath))
   
   // Download to temp file
   const tempArchivePath = `${archivePath}.part`
