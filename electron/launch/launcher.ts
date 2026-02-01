@@ -51,13 +51,38 @@ export interface LaunchResult {
 }
 
 /**
+ * Finds the BepInEx Preloader DLL in the profile's BepInEx/core directory
+ */
+async function findPreloaderDll(profileRoot: string): Promise<string> {
+  const coreDir = join(profileRoot, "BepInEx", "core")
+  
+  if (!(await pathExists(coreDir))) {
+    throw new Error(`BepInEx/core directory not found in profile: ${profileRoot}`)
+  }
+  
+  const coreEntries = await fs.readdir(coreDir)
+  const preloaderFile = coreEntries.find(name => 
+    name.toLowerCase().includes("preloader") && name.toLowerCase().endsWith(".dll")
+  )
+  
+  if (!preloaderFile) {
+    throw new Error(`BepInEx Preloader DLL not found in ${coreDir}`)
+  }
+  
+  return join(coreDir, preloaderFile)
+}
+
+/**
  * Updates doorstop_config.ini with the correct paths and settings
  * Supports both common Doorstop formats:
  * - [UnityDoorstop] with enabled= and targetAssembly=
  * - [General] with enabled = and target_assembly=
+ * 
+ * For modded mode, points to the absolute path of the preloader in the profile
  */
 async function updateDoorstopConfig(
   configPath: string,
+  profileRoot: string,
   mode: LaunchMode
 ): Promise<void> {
   let content: string
@@ -70,7 +95,7 @@ async function updateDoorstopConfig(
     if (/^\[General\]/im.test(content)) {
       detectedFormat = "general"
     }
-  } catch (error) {
+  } catch {
     console.warn("[Launcher] Could not read doorstop_config.ini, creating default")
     // Create a default UnityDoorstop format config
     content = `[UnityDoorstop]
@@ -83,24 +108,27 @@ ignoreDisableSwitch=false
   
   // Update the config based on mode and format
   if (mode === "modded") {
+    // Find the absolute path to the preloader DLL in the profile
+    const preloaderPath = await findPreloaderDll(profileRoot)
+    
     if (detectedFormat === "general") {
       // General format uses spaces around = and target_assembly
       content = content.replace(/^enabled\s*=\s*.*/im, "enabled = true")
       
       if (!/^target_assembly\s*=/im.test(content)) {
         // Add target_assembly if missing (under [General] section)
-        content = content.replace(/(\[General\][^\[]*)/i, "$1target_assembly=BepInEx\\core\\BepInEx.Preloader.dll\n")
+        content = content.replace(/(\[General\][^[]*)/i, `$1target_assembly = ${preloaderPath}\n`)
       } else {
-        content = content.replace(/^target_assembly\s*=\s*.*/im, "target_assembly=BepInEx\\core\\BepInEx.Preloader.dll")
+        content = content.replace(/^target_assembly\s*=\s*.*/im, `target_assembly = ${preloaderPath}`)
       }
     } else {
       // UnityDoorstop format
       content = content.replace(/^enabled\s*=/im, "enabled=true")
       
       if (!/^targetAssembly\s*=/im.test(content)) {
-        content += "\ntargetAssembly=BepInEx\\core\\BepInEx.Preloader.dll"
+        content += `\ntargetAssembly=${preloaderPath}`
       } else {
-        content = content.replace(/^targetAssembly\s*=\s*.*/im, "targetAssembly=BepInEx\\core\\BepInEx.Preloader.dll")
+        content = content.replace(/^targetAssembly\s*=\s*.*/im, `targetAssembly=${preloaderPath}`)
       }
     }
   } else {
@@ -178,7 +206,8 @@ async function validateProfileArtifacts(profileRoot: string): Promise<string | n
 
 /**
  * Injects minimal loader files into game install folder
- * Also copies BepInEx folder and updates doorstop_config.ini
+ * Only injects Doorstop files (proxy DLL, config, metadata)
+ * BepInEx itself stays in the profile, referenced via absolute path in doorstop_config
  */
 async function injectLoaderFiles(
   gameId: string,
@@ -198,7 +227,7 @@ async function injectLoaderFiles(
   
   // Update doorstop config in profile root
   const doorstopConfigPath = join(profileRoot, "doorstop_config.ini")
-  await updateDoorstopConfig(doorstopConfigPath, mode)
+  await updateDoorstopConfig(doorstopConfigPath, profileRoot, mode)
   
   const filesToInject: Array<{ src: string; dest: string; isDirectory?: boolean }> = []
   
