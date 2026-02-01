@@ -18,10 +18,23 @@ import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
-import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
+import { useOnlineDependenciesRecursive } from "@/lib/queries/useOnlineMods"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
 import { DependencyModDialog } from "./dependency-mod-dialog"
+
+type DepNode = {
+  id: string
+  name: string
+  author: string
+  version: string
+  requiredVersion?: string
+  status: DependencyStatus
+  installedVersion?: string
+  depth: number
+  children: string[]
+  parents: string[]
+}
 
 type DependencyDownloadDialogProps = {
   mod: Mod | null
@@ -88,8 +101,8 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   // Get installed versions for the active profile
   const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
 
-  // Use online dependency resolution for Thunderstore mods in Electron
-  const onlineDepsQuery = useOnlineDependencies({
+  // Use recursive online dependency resolution for Thunderstore mods in Electron
+  const recursiveDepsQuery = useOnlineDependenciesRecursive({
     gameId: mod?.gameId || "",
     dependencies: mod?.dependencies || [],
     installedVersions: installedVersionsForProfile || {},
@@ -97,34 +110,112 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     enabled: isThunderstoreMod && !!mod && !!activeProfileId,
   })
   
-  // Analyze dependencies when dialog opens (use online for Thunderstore mods if available, otherwise use mock)
-  const depInfos = useMemo(() => {
-    if (!mod || !activeProfileId) return []
+  // Build dependency nodes grouped by depth
+  const { depsByDepth, allSelectableIds, childrenByKey } = useMemo(() => {
+    if (!mod || !activeProfileId) {
+      return { depsByDepth: new Map<number, DepNode[]>(), allSelectableIds: new Set<string>(), childrenByKey: {} }
+    }
     
-    // If we have online dependency data, use it
-    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
-      return onlineDepsQuery.data
+    // If we have recursive online dependency data, use it
+    if (isThunderstoreMod && recursiveDepsQuery.isElectron && recursiveDepsQuery.data) {
+      const { nodes, childrenByKey: childMap, parentsByKey: parentMap } = recursiveDepsQuery.data
+      
+      const byDepth = new Map<number, DepNode[]>()
+      const selectableIds = new Set<string>()
+      
+      for (const node of nodes) {
+        if (!node.resolvedMod) continue
+        
+        const depNode: DepNode = {
+          id: node.resolvedMod.id,
+          name: node.resolvedMod.name,
+          author: node.resolvedMod.author,
+          version: node.resolvedMod.version,
+          requiredVersion: node.requiredVersion,
+          status: node.status,
+          installedVersion: node.installedVersion,
+          depth: node.depth,
+          children: childMap[node.key] || [],
+          parents: parentMap[node.key] || [],
+        }
+        
+        if (!byDepth.has(node.depth)) {
+          byDepth.set(node.depth, [])
+        }
+        byDepth.get(node.depth)!.push(depNode)
+        
+        // Mark as selectable if not installed or wrong version
+        if (node.status === "not_installed" || node.status === "installed_wrong") {
+          selectableIds.add(node.resolvedMod.id)
+        }
+      }
+      
+      return { 
+        depsByDepth: byDepth, 
+        allSelectableIds: selectableIds,
+        childrenByKey: childMap as Record<string, string[]>,
+      }
     }
 
-    // Fallback to mock catalog analysis
+    // Fallback to non-recursive mock catalog analysis
     const installedVersions = installedVersionsByProfile[activeProfileId] || {}
-    return analyzeModDependencies({
+    const depInfos = analyzeModDependencies({
       mod,
       mods: MODS,
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [mod, activeProfileId, isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
+    
+    const byDepth = new Map<number, DepNode[]>()
+    const selectableIds = new Set<string>()
+    
+    for (const depInfo of depInfos) {
+      if (!depInfo.resolvedMod) continue
+      
+      const depNode: DepNode = {
+        id: depInfo.resolvedMod.id,
+        name: depInfo.resolvedMod.name,
+        author: depInfo.resolvedMod.author,
+        version: depInfo.resolvedMod.version,
+        requiredVersion: depInfo.requiredVersion,
+        status: depInfo.status,
+        installedVersion: depInfo.installedVersion,
+        depth: 0,
+        children: [],
+        parents: [],
+      }
+      
+      if (!byDepth.has(0)) {
+        byDepth.set(0, [])
+      }
+      byDepth.get(0)!.push(depNode)
+      
+      if (depInfo.status === "not_installed" || depInfo.status === "installed_wrong") {
+        selectableIds.add(depInfo.resolvedMod.id)
+      }
+    }
+    
+    return { 
+      depsByDepth: byDepth, 
+      allSelectableIds: selectableIds,
+      childrenByKey: {} as Record<string, string[]>,
+    }
+  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
+  
+  // Flatten all deps for easier access
+  const allDeps = useMemo(() => {
+    const deps: DepNode[] = []
+    for (const depList of depsByDepth.values()) {
+      deps.push(...depList)
+    }
+    return deps
+  }, [depsByDepth])
   
   // Get all selectable dependency IDs (not_installed or installed_wrong)
   const selectableDeps = useMemo(() => {
-    return depInfos
-      .filter(dep => 
-        dep.resolvedMod && 
-        (dep.status === "not_installed" || dep.status === "installed_wrong")
-      )
-      .map(dep => dep.resolvedMod!.id)
-  }, [depInfos])
+    return Array.from(allSelectableIds)
+  }, [allSelectableIds])
+
   
   // Initialize selected deps when dialog opens (select all that need downloading by default)
   useEffect(() => {
@@ -139,13 +230,49 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   
   const handleToggleDep = (depId: string) => {
     const newSet = new Set(selectedDepIds)
+    const dep = allDeps.find(d => d.id === depId)
+    if (!dep) return
+    
     if (newSet.has(depId)) {
-      newSet.delete(depId)
+      // Try to deselect - only allow if no selected deps require it
+      const blockedBy: string[] = []
+      for (const parentKey of dep.parents) {
+        const parentDep = allDeps.find(d => d.name === parentKey.split("-")[1] && d.author === parentKey.split("-")[0])
+        if (parentDep && newSet.has(parentDep.id)) {
+          blockedBy.push(parentDep.name)
+        }
+      }
+      
+      if (blockedBy.length === 0) {
+        newSet.delete(depId)
+      }
+      // If blocked, don't deselect (could show a toast here)
     } else {
+      // Select and automatically include all transitive children
       newSet.add(depId)
+      
+      // Recursively add all children
+      const addChildren = (key: string) => {
+        const children = childrenByKey[key] || []
+        for (const childKey of children) {
+          const childDep = allDeps.find(d => {
+            const depKey = `${d.author}-${d.name}`
+            return depKey === childKey
+          })
+          if (childDep && allSelectableIds.has(childDep.id) && !newSet.has(childDep.id)) {
+            newSet.add(childDep.id)
+            addChildren(childKey)
+          }
+        }
+      }
+      
+      const depKey = `${dep.author}-${dep.name}`
+      addChildren(depKey)
     }
+    
     setSelectedDepIds(newSet)
   }
+
   
   const handleSelectAll = () => {
     setSelectedDepIds(new Set(selectableDeps))
@@ -190,10 +317,10 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       })
     }
     
-    // Store unresolved dependency warnings
-    const unresolvedDeps = depInfos
+    // Store unresolved dependency warnings (from the recursive query if available)
+    const unresolvedDeps = allDeps
       .filter(dep => dep.status === "unresolved")
-      .map(dep => dep.parsed.fullString)
+      .map(dep => `${dep.author}-${dep.name}${dep.requiredVersion ? `-${dep.requiredVersion}` : ""}`)
     
     if (unresolvedDeps.length > 0) {
       setDependencyWarnings(activeProfileId, mod.id, unresolvedDeps)
@@ -227,30 +354,34 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     
     // Download selected dependencies
     selectedDepIds.forEach(depId => {
-      const depInfo = depInfos.find(d => d.resolvedMod?.id === depId)
-      if (depInfo && depInfo.resolvedMod) {
-        const depMod = depInfo.resolvedMod
+      const dep = allDeps.find(d => d.id === depId)
+      if (dep) {
         // Use required version from dependency string if specified, otherwise use latest
-        const versionToDownload = depInfo.requiredVersion || depMod.version
-        const versionData = depMod.versions.find(v => v.version_number === versionToDownload)
-        const downloadUrl = versionData?.download_url || ""
+        const versionToDownload = dep.requiredVersion || dep.version
         
-        startDownload({
-          gameId: depMod.gameId,
-          modId: depMod.id,
-          modName: depMod.name,
-          modVersion: versionToDownload,
-          modAuthor: depMod.author,
-          modIconUrl: depMod.iconUrl,
-          downloadUrl
-        })
+        // Find the mod in MODS to get download URL
+        const depMod = MODS.find(m => m.id === dep.id)
+        if (depMod) {
+          const versionData = depMod.versions.find(v => v.version_number === versionToDownload)
+          const downloadUrl = versionData?.download_url || ""
+          
+          startDownload({
+            gameId: depMod.gameId,
+            modId: depMod.id,
+            modName: depMod.name,
+            modVersion: versionToDownload,
+            modAuthor: depMod.author,
+            modIconUrl: depMod.iconUrl,
+            downloadUrl
+          })
+        }
       }
     })
     
     // Store unresolved dependency warnings
-    const unresolvedDeps = depInfos
+    const unresolvedDeps = allDeps
       .filter(dep => dep.status === "unresolved")
-      .map(dep => dep.parsed.fullString)
+      .map(dep => `${dep.author}-${dep.name}${dep.requiredVersion ? `-${dep.requiredVersion}` : ""}`)
     
     if (unresolvedDeps.length > 0) {
       setDependencyWarnings(activeProfileId, mod.id, unresolvedDeps)
@@ -258,6 +389,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     
     onOpenChange(false)
   }
+
   
   const handleCancel = () => {
     onOpenChange(false)
@@ -322,7 +454,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold">
-                  Dependencies ({depInfos.length})
+                  Dependencies ({allDeps.length})
                 </h3>
                 <div className="flex items-center gap-2">
                   {selectableDeps.length > 0 && (
@@ -355,91 +487,124 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                 </div>
               </div>
               
-              {depInfos.length === 0 ? (
+              {allDeps.length === 0 ? (
                 <div className="rounded-md border border-border bg-muted/30 p-6 text-center">
                   <p className="text-sm text-muted-foreground">
                     This mod has no dependencies
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {depInfos.map((depInfo, idx) => {
-                    const canSelect = depInfo.resolvedMod && 
-                      (depInfo.status === "not_installed" || depInfo.status === "installed_wrong")
-                    const isSelected = depInfo.resolvedMod && selectedDepIds.has(depInfo.resolvedMod.id)
-                    
-                    return (
-                      <div
-                        key={idx}
-                        className={`rounded-md border p-3 transition-colors ${
-                          canSelect 
-                            ? "border-border bg-card hover:bg-muted/50" 
-                            : "border-border bg-muted/30"
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <Checkbox 
-                            checked={isSelected}
-                            disabled={!canSelect}
-                            onCheckedChange={() => {
-                              if (canSelect && depInfo.resolvedMod) {
-                                handleToggleDep(depInfo.resolvedMod.id)
+                <div className="space-y-4">
+                  {Array.from(depsByDepth.entries())
+                    .sort(([a], [b]) => a - b)
+                    .map(([depth, deps]) => (
+                      <div key={depth}>
+                        <h4 className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          {depth === 0 ? "Direct Dependencies" : `Level ${depth} (Transitive)`}
+                        </h4>
+                        <div className="space-y-2">
+                          {deps.map((dep) => {
+                            const canSelect = allSelectableIds.has(dep.id)
+                            const isSelected = selectedDepIds.has(dep.id)
+                            
+                            // Check if this dep is required by any selected deps (can't be deselected)
+                            const requiredBy: string[] = []
+                            for (const parentKey of dep.parents) {
+                              const parentDep = allDeps.find(d => {
+                                const depKey = `${d.author}-${d.name}`
+                                return depKey === parentKey
+                              })
+                              if (parentDep && selectedDepIds.has(parentDep.id)) {
+                                requiredBy.push(parentDep.name)
                               }
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-0.5"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {getStatusIcon(depInfo.status)}
-                              <p className="text-sm font-medium truncate">
-                                {depInfo.resolvedMod?.name || depInfo.parsed.fullString}
-                              </p>
-                              <Badge variant={getStatusVariant(depInfo.status)} className="shrink-0">
-                                {getStatusLabel(depInfo.status)}
-                              </Badge>
-                            </div>
+                            }
+                            const isRequired = requiredBy.length > 0
                             
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {depInfo.parsed.version 
-                                ? `Requires v${depInfo.parsed.version}` 
-                                : "Any version"}
-                              {depInfo.installedVersion && ` • Installed: v${depInfo.installedVersion}`}
-                            </p>
-                            
-                            {depInfo.status === "unresolved" && (
-                              <p className="text-xs text-muted-foreground mt-1 italic">
-                                Could not find this dependency in catalog
-                              </p>
-                            )}
-                            
-                            {depInfo.status === "installed_wrong" && (
-                              <p className="text-xs text-yellow-600 mt-1">
-                                {enforceDependencyVersions 
-                                  ? "Will update to required version" 
-                                  : "Version mismatch (enforcement disabled)"}
-                              </p>
-                            )}
-                          </div>
-                          {depInfo.resolvedMod && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewMod(depInfo.resolvedMod!)}
-                              className="h-7 px-2 shrink-0"
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </Button>
-                          )}
+                            return (
+                              <div
+                                key={dep.id}
+                                className={`rounded-md border p-3 transition-colors ${
+                                  canSelect 
+                                    ? "border-border bg-card hover:bg-muted/50" 
+                                    : "border-border bg-muted/30"
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <Checkbox 
+                                    checked={isSelected}
+                                    disabled={!canSelect || (isSelected && isRequired)}
+                                    onCheckedChange={() => {
+                                      if (canSelect) {
+                                        handleToggleDep(dep.id)
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="mt-0.5"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {getStatusIcon(dep.status)}
+                                      <p className="text-sm font-medium truncate">
+                                        {dep.name}
+                                      </p>
+                                      <Badge variant={getStatusVariant(dep.status)} className="shrink-0">
+                                        {getStatusLabel(dep.status)}
+                                      </Badge>
+                                    </div>
+                                    
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {dep.requiredVersion 
+                                        ? `Requires v${dep.requiredVersion}` 
+                                        : "Any version"}
+                                      {dep.installedVersion && ` • Installed: v${dep.installedVersion}`}
+                                    </p>
+                                    
+                                    {dep.status === "unresolved" && (
+                                      <p className="text-xs text-muted-foreground mt-1 italic">
+                                        Could not find this dependency in catalog
+                                      </p>
+                                    )}
+                                    
+                                    {dep.status === "installed_wrong" && (
+                                      <p className="text-xs text-yellow-600 mt-1">
+                                        {enforceDependencyVersions 
+                                          ? "Will update to required version" 
+                                          : "Version mismatch (enforcement disabled)"}
+                                      </p>
+                                    )}
+                                    
+                                    {isSelected && isRequired && (
+                                      <p className="text-xs text-blue-600 mt-1">
+                                        Required by: {requiredBy.join(", ")}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const depMod = MODS.find(m => m.id === dep.id)
+                                      if (depMod) {
+                                        handleViewMod(depMod)
+                                      }
+                                    }}
+                                    className="h-7 px-2 shrink-0"
+                                  >
+                                    <ExternalLink className="size-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
-                    )
-                  })}
+                    ))}
                 </div>
               )}
             </div>
           </div>
         </ScrollArea>
+
         
         <DialogFooter className="px-6 pb-6 pt-4 gap-2 sm:gap-0 border-t border-border">
           <Button variant="outline" onClick={handleCancel}>

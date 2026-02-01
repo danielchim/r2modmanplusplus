@@ -24,8 +24,9 @@ import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-
 import { DependencyModDialog } from "@/components/features/dependencies/dependency-mod-dialog"
 import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { useThunderstoreReadme } from "@/lib/queries/useThunderstoreReadme"
-import { useOnlinePackage, useOnlineDependencies } from "@/lib/queries/useOnlineMods"
+import { useOnlinePackage, useOnlineDependenciesRecursive } from "@/lib/queries/useOnlineMods"
 import { isVersionGreater, compareVersions } from "@/lib/version-utils"
+
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -344,8 +345,8 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
   const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
-  // Use online dependency resolution for Thunderstore mods in Electron
-  const onlineDepsQuery = useOnlineDependencies({
+  // Use recursive online dependency resolution for Thunderstore mods in Electron
+  const recursiveDepsQuery = useOnlineDependenciesRecursive({
     gameId: mod.gameId,
     dependencies: mod.dependencies,
     installedVersions: installedVersionsForProfile || {},
@@ -353,11 +354,11 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
     enabled: isThunderstoreMod,
   })
 
-  // Analyze dependencies (use online for Thunderstore mods if available, otherwise use mock)
+  // Analyze dependencies (use recursive online for Thunderstore mods if available, otherwise use mock)
   const depInfos = useMemo(() => {
-    // If we have online dependency data, use it
-    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
-      return onlineDepsQuery.data
+    // If we have recursive online dependency data, use it (convert to flat list)
+    if (isThunderstoreMod && recursiveDepsQuery.isElectron && recursiveDepsQuery.data) {
+      return recursiveDepsQuery.data.nodes
     }
 
     // Fallback to mock catalog analysis
@@ -368,10 +369,11 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       installedVersions,
       enforceVersions: enforceDependencyVersions,
     })
-  }, [isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
+  }, [isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
 
   // Check if we're loading dependencies for a Thunderstore mod
-  const isLoadingDeps = isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.isLoading && !onlineDepsQuery.data
+  const isLoadingDeps = isThunderstoreMod && recursiveDepsQuery.isElectron && recursiveDepsQuery.isLoading && !recursiveDepsQuery.data
+
 
   const handleBack = () => {
     if (onBack) {

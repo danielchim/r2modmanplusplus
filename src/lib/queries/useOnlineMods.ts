@@ -74,6 +74,8 @@ export function useOnlineMods(params: UseOnlineModsParams) {
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000, // 5 minutes
       maxPages: 20, // Cap at 20 pages (20 * limit items) to prevent unbounded memory growth
+      // Don't show stale data from a different game
+      placeholderData: undefined,
     }
   )
 
@@ -199,6 +201,19 @@ export interface UseOnlineDependenciesParams {
 }
 
 /**
+ * Parameters for recursive dependency resolution
+ */
+export interface UseOnlineDependenciesRecursiveParams {
+  gameId: string
+  dependencies: string[]
+  installedVersions: Record<string, string>
+  enforceVersions: boolean
+  maxDepth?: number
+  maxNodes?: number
+  enabled?: boolean
+}
+
+/**
  * Hook for resolving dependencies for Thunderstore mods
  * Only works in Electron mode - returns empty array in web mode
  * 
@@ -238,6 +253,63 @@ export function useOnlineDependencies(params: UseOnlineDependenciesParams) {
       dependencies,
       installedVersions,
       enforceVersions,
+    },
+    {
+      enabled: shouldFetch,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  )
+
+  return {
+    ...result,
+    isElectron: true,
+  }
+}
+
+/**
+ * Hook for resolving dependencies recursively for Thunderstore mods
+ * Returns full dependency closure with parent/child relationships
+ * Only works in Electron mode - returns empty data in web mode
+ * 
+ * WARNING: This hook conditionally calls tRPC hooks based on isElectron.
+ * This is safe because isElectron never changes during app lifetime.
+ */
+export function useOnlineDependenciesRecursive(params: UseOnlineDependenciesRecursiveParams) {
+  const { gameId, dependencies, installedVersions, enforceVersions, maxDepth, maxNodes, enabled = true } = params
+
+  // Get package index URL from ecosystem
+  const ecosystem = getEcosystemEntry(gameId)
+  const packageIndexUrl = ecosystem?.r2modman?.[0]?.packageIndex
+
+  // Check if we're in Electron mode (stable for app lifetime)
+  const isElectron = hasElectronTRPC()
+
+  // Only use the query if we're in Electron and have a package index URL
+  const shouldFetch = isElectron && enabled && !!packageIndexUrl && dependencies.length > 0
+
+  // Conditional hook call - safe because isElectron is stable
+  if (!isElectron) {
+    return {
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: async () => ({ data: undefined }),
+      isElectron: false,
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const result = trpc.thunderstore.resolveDependenciesRecursive.useQuery(
+    {
+      packageIndexUrl: packageIndexUrl || "",
+      gameId,
+      dependencies,
+      installedVersions,
+      enforceVersions,
+      maxDepth,
+      maxNodes,
     },
     {
       enabled: shouldFetch,
