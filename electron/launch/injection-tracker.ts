@@ -151,7 +151,7 @@ export async function injectFiles(
       console.log(`[InjectionTracker]   Expanding directory ${dest}`)
       const srcAbsolute = src
       const destRelative = dest
-      const destAbsolute = join(installFolder, destRelative)
+      // destAbsolute previously computed for debugging, not needed here
       
       // Collect all files in the source directory
       const files = await collectFilesRecursive(srcAbsolute, destRelative)
@@ -236,7 +236,7 @@ export async function injectFiles(
 /**
  * Recursively copies a directory (kept for backwards compatibility, but not used in injection anymore)
  */
-async function copyDirectoryRecursive(src: string, dest: string): Promise<void> {
+export async function copyDirectoryRecursive(src: string, dest: string): Promise<void> {
   await ensureDir(dest)
   
   const entries = await fs.readdir(src, { withFileTypes: true })
@@ -347,7 +347,7 @@ export async function cleanupInjected(gameId: string): Promise<CleanupResult> {
  * Cleans up empty directories left behind after file removal
  * Best effort - doesn't count toward cleanup stats
  */
-async function cleanupEmptyDirectories(manifest: InjectionManifest, result: CleanupResult): Promise<void> {
+async function cleanupEmptyDirectories(manifest: InjectionManifest, _result: CleanupResult): Promise<void> {
   // Collect all unique parent directories from injected files
   const dirs = new Set<string>()
   

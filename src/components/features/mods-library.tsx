@@ -205,20 +205,23 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
   }, [])
 
   // List virtualizer
+  // Note: we keep both virtualizers in this component, but only let the active
+  // one subscribe to scroll events. Otherwise both will respond to scroll and
+  // trigger redundant re-renders.
   const listVirtualizer = useVirtualizer({
-    count: displayMods.length,
-    getScrollElement: () => scrollParentRef.current,
+    count: viewMode === "list" ? displayMods.length : 0,
+    getScrollElement: () => (viewMode === "list" ? scrollParentRef.current : null),
     estimateSize: () => LIST_ROW_HEIGHT,
-    overscan: 8,
+    overscan: 6,
   })
 
   // Grid virtualizer (row-based)
   const gridRowCount = Math.ceil(displayMods.length / columnCount)
   const gridVirtualizer = useVirtualizer({
-    count: gridRowCount,
-    getScrollElement: () => scrollParentRef.current,
+    count: viewMode === "grid" ? gridRowCount : 0,
+    getScrollElement: () => (viewMode === "grid" ? scrollParentRef.current : null),
     estimateSize: () => GRID_ROW_HEIGHT,
-    overscan: 10,
+    overscan: 4,
   })
 
   // Recalculate grid virtualizer when column count changes
@@ -309,6 +312,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
                       width: "100%",
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
+                      willChange: "transform",
                     }}
                   >
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
@@ -378,6 +382,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
                       width: "100%",
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
+                      willChange: "transform",
                     }}
                   >
                     {/* For installed tab: check if mod is a UUID and we're in Electron */}
@@ -633,7 +638,8 @@ export function ModsLibrary() {
     if (onlineCategoriesQuery.isElectron && onlineCategoriesQuery.data?.categories) {
       return onlineCategoriesQuery.data.categories
     }
-    return MOD_CATEGORIES
+    // ModFilters expects a mutable string[]. Provide a copy.
+    return [...MOD_CATEGORIES]
   }, [onlineCategoriesQuery.isElectron, onlineCategoriesQuery.data])
 
   // Compute category counts (prefer catalog counts, fallback to computed)
@@ -708,6 +714,7 @@ export function ModsLibrary() {
   const currentProfile = gameProfiles.find((p) => p.id === activeProfileId)
 
   const handleCreateProfile = (profileName: string) => {
+    if (!selectedGameId) return
     createProfile(selectedGameId, profileName)
   }
 

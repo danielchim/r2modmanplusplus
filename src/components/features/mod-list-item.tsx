@@ -1,6 +1,6 @@
 import type { Mod } from "@/mocks/mods"
 
-import { useState, useMemo, memo } from "react"
+import { memo } from "react"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -8,15 +8,11 @@ import { useProfileStore } from "@/store/profile-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModActions } from "@/hooks/use-mod-actions"
-import { useSettingsStore } from "@/store/settings-store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { analyzeModDependencies } from "@/lib/dependency-utils"
 import { isVersionGreater } from "@/lib/version-utils"
-import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
-import { MODS } from "@/mocks/mods"
 
 type ModListItemProps = {
   mod: Mod
@@ -32,7 +28,6 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
   const { uninstallMod } = useModActions()
   const getDependencyWarnings = useModManagementStore((s) => s.getDependencyWarnings)
   const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
   
   const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
   
@@ -71,38 +66,6 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
   const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
   const hasUpdate = isInstalled && installedVersion && isVersionGreater(mod.version, installedVersion)
 
-  // Extract primitive dependencies for useMemo (rerender-dependencies)
-  const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
-
-  // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
-  const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
-
-  // Use online dependency resolution for Thunderstore mods in Electron
-  const onlineDepsQuery = useOnlineDependencies({
-    gameId: mod.gameId,
-    dependencies: mod.dependencies,
-    installedVersions: installedVersionsForProfile || {},
-    enforceVersions: enforceDependencyVersions,
-    enabled: isThunderstoreMod,
-  })
-
-  // Analyze dependencies (use online for Thunderstore mods if available, otherwise use mock)
-  const depInfos = useMemo(() => {
-    // If we have online dependency data, use it
-    if (isThunderstoreMod && onlineDepsQuery.isElectron && onlineDepsQuery.data) {
-      return onlineDepsQuery.data
-    }
-
-    // Fallback to mock catalog analysis
-    const installedVersions = installedVersionsForProfile || {}
-    return analyzeModDependencies({
-      mod,
-      mods: MODS,
-      installedVersions,
-      enforceVersions: enforceDependencyVersions,
-    })
-  }, [isThunderstoreMod, onlineDepsQuery.isElectron, onlineDepsQuery.data, mod, installedVersionsForProfile, enforceDependencyVersions])
-
   // Early return if no game selected (shouldn't happen, but type-safe)
   if (!selectedGameId) {
     return null
@@ -115,19 +78,11 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
     if (isInstalled) {
       uninstallMod(activeProfileId, mod.id, { author: mod.author, name: mod.name })
     } else {
-      // Check if there are any dependencies that need to be installed
-      const hasDepsToInstall = depInfos.some(dep => 
-        dep.resolvedMod && 
-        (dep.status === "not_installed" || dep.status === "installed_wrong")
-      )
-      
-      if (hasDepsToInstall) {
-        // Show dialog to let user choose which dependencies to install
-        if (onOpenDependencyDialog) {
-          onOpenDependencyDialog(mod, mod.version)
-        }
+      // Keep list items cheap: only do dependency resolution inside the dependency dialog.
+      // If there are no dependencies, download directly.
+      if (mod.dependencies.length > 0 && onOpenDependencyDialog) {
+        onOpenDependencyDialog(mod, mod.version)
       } else {
-        // No dependencies or all are already installed correctly, download directly
         const versionData = mod.versions.find(v => v.version_number === mod.version)
         const downloadUrl = versionData?.download_url || ""
         

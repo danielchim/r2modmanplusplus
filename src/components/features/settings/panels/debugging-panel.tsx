@@ -8,7 +8,7 @@ interface PanelProps {
   searchQuery?: string
 }
 
-export function DebuggingPanel(props: PanelProps) {
+export function DebuggingPanel(_props: PanelProps) {
   const [isCopyingLogs, setIsCopyingLogs] = useState(false)
   const [isCopyingInfo, setIsCopyingInfo] = useState(false)
 

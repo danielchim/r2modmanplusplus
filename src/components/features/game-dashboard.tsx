@@ -94,7 +94,7 @@ export function GameDashboard() {
   
   // Poll catalog status for build progress
   const catalogStatus = useCatalogStatus(selectedGameId || "", !!selectedGameId)
-  const toastIdRef = useRef<string | number | undefined>()
+  const toastIdRef = useRef<string | number | undefined>(undefined)
   
   // Show toast notification for catalog building progress
   useEffect(() => {

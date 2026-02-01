@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useEffect } from "react"
+import { useState, useMemo, memo } from "react"
 import { CheckCircle2, AlertCircle, AlertTriangle, XCircle, Download, RefreshCw, ExternalLink } from "lucide-react"
 import {
   Dialog,
@@ -25,6 +25,7 @@ import type { Mod } from "@/types/mod"
 import { DependencyModDialog } from "./dependency-mod-dialog"
 
 type DepNode = {
+  key: string
   id: string
   name: string
   author: string
@@ -106,8 +107,8 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
   const { startDownload } = useDownloadActions()
   
-  const [selectedDepIds, setSelectedDepIds] = useState<Set<string>>(new Set())
-  const [forceRefresh, setForceRefresh] = useState(0)
+  // null means "auto-select everything that needs downloading"
+  const [selectedDepIds, setSelectedDepIds] = useState<Set<string> | null>(null)
   const [viewingMod, setViewingMod] = useState<Mod | null>(null)
   const [showModDialog, setShowModDialog] = useState(false)
   
@@ -125,6 +126,26 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     enforceVersions: enforceDependencyVersions,
     enabled: isThunderstoreMod && !!mod && !!activeProfileId,
   })
+
+  const resolvedModsById = useMemo(() => {
+    const map = new Map<string, Mod>()
+
+    if (isThunderstoreMod && recursiveDepsQuery.isElectron && recursiveDepsQuery.data) {
+      for (const node of recursiveDepsQuery.data.nodes) {
+        if (node.resolvedMod) {
+          map.set(node.resolvedMod.id, node.resolvedMod)
+        }
+      }
+      return map
+    }
+
+    // Fallback: resolve from mock catalog
+    for (const m of MODS) {
+      map.set(m.id, m)
+    }
+
+    return map
+  }, [isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.data])
   
   // Build dependency nodes grouped by depth
   const { depsByDepth, allSelectableIds, childrenByKey, isLoadingDeps } = useMemo(() => {
@@ -148,6 +169,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
         if (!node.resolvedMod) continue
         
         const depNode: DepNode = {
+          key: node.key,
           id: node.resolvedMod.id,
           name: node.resolvedMod.name,
           author: node.resolvedMod.author,
@@ -195,6 +217,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       if (!depInfo.resolvedMod) continue
       
       const depNode: DepNode = {
+        key: `${depInfo.resolvedMod.author}-${depInfo.resolvedMod.name}`,
         id: depInfo.resolvedMod.id,
         name: depInfo.resolvedMod.name,
         author: depInfo.resolvedMod.author,
@@ -223,7 +246,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       childrenByKey: {} as Record<string, string[]>,
       isLoadingDeps: false,
     }
-  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.isLoading, recursiveDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
+  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.isLoading, recursiveDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions])
   
   // Flatten all deps for easier access
   const allDeps = useMemo(() => {
@@ -239,20 +262,17 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     return Array.from(allSelectableIds)
   }, [allSelectableIds])
 
-  
-  // Initialize selected deps when dialog opens (select all that need downloading by default)
-  useEffect(() => {
-    if (!mod || !open) return
-    
-    setSelectedDepIds(new Set(selectableDeps))
-  }, [mod, open, selectableDeps])
+  const effectiveSelectedDepIds = useMemo(() => {
+    if (selectedDepIds) return selectedDepIds
+    return new Set(selectableDeps)
+  }, [selectedDepIds, selectableDeps])
   
   if (!mod) {
     return null
   }
   
   const handleToggleDep = (depId: string) => {
-    const newSet = new Set(selectedDepIds)
+    const newSet = new Set(effectiveSelectedDepIds)
     const dep = allDeps.find(d => d.id === depId)
     if (!dep) return
     
@@ -260,7 +280,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       // Try to deselect - only allow if no selected deps require it
       const blockedBy: string[] = []
       for (const parentKey of dep.parents) {
-        const parentDep = allDeps.find(d => d.name === parentKey.split("-")[1] && d.author === parentKey.split("-")[0])
+        const parentDep = allDeps.find(d => d.key === parentKey)
         if (parentDep && newSet.has(parentDep.id)) {
           blockedBy.push(parentDep.name)
         }
@@ -278,10 +298,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       const addChildren = (key: string) => {
         const children = childrenByKey[key] || []
         for (const childKey of children) {
-          const childDep = allDeps.find(d => {
-            const depKey = `${d.author}-${d.name}`
-            return depKey === childKey
-          })
+          const childDep = allDeps.find(d => d.key === childKey)
           if (childDep && allSelectableIds.has(childDep.id) && !newSet.has(childDep.id)) {
             newSet.add(childDep.id)
             addChildren(childKey)
@@ -289,8 +306,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
         }
       }
       
-      const depKey = `${dep.author}-${dep.name}`
-      addChildren(depKey)
+      addChildren(dep.key)
     }
     
     setSelectedDepIds(newSet)
@@ -306,7 +322,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   }
   
   const handleRefresh = () => {
-    setForceRefresh(prev => prev + 1)
+    recursiveDepsQuery.refetch()
   }
   
   const handleViewMod = (depMod: Mod) => {
@@ -314,8 +330,8 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     setShowModDialog(true)
   }
   
-  const isAllSelected = selectableDeps.length > 0 && selectedDepIds.size === selectableDeps.length
-  const isSomeSelected = selectedDepIds.size > 0 && selectedDepIds.size < selectableDeps.length
+  const isAllSelected = selectableDeps.length > 0 && effectiveSelectedDepIds.size === selectableDeps.length
+  const isSomeSelected = effectiveSelectedDepIds.size > 0 && effectiveSelectedDepIds.size < selectableDeps.length
   
   const handleDownloadModOnly = () => {
     if (!activeProfileId) return
@@ -327,7 +343,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     if (!isTargetInstalled) {
       // Find the download URL for the requested version
       const versionData = mod.versions.find(v => v.version_number === requestedVersion)
-      const downloadUrl = versionData?.download_url || ""
+      const downloadUrl = versionData?.download_url || mod.versions[0]?.download_url || ""
       
       startDownload({
         gameId: mod.gameId,
@@ -362,7 +378,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     if (!isTargetInstalled) {
       // Find the download URL for the requested version
       const versionData = mod.versions.find(v => v.version_number === requestedVersion)
-      const downloadUrl = versionData?.download_url || ""
+      const downloadUrl = versionData?.download_url || mod.versions[0]?.download_url || ""
       
       startDownload({
         gameId: mod.gameId,
@@ -376,17 +392,17 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     }
     
     // Download selected dependencies
-    selectedDepIds.forEach(depId => {
+    effectiveSelectedDepIds.forEach(depId => {
       const dep = allDeps.find(d => d.id === depId)
       if (dep) {
         // Use required version from dependency string if specified, otherwise use latest
         const versionToDownload = dep.requiredVersion || dep.version
         
-        // Find the mod in MODS to get download URL
-        const depMod = MODS.find(m => m.id === dep.id)
+        // Use resolved mod info (online) or mock (fallback)
+        const depMod = resolvedModsById.get(dep.id)
         if (depMod) {
           const versionData = depMod.versions.find(v => v.version_number === versionToDownload)
-          const downloadUrl = versionData?.download_url || ""
+          const downloadUrl = versionData?.download_url || depMod.versions[0]?.download_url || ""
           
           startDownload({
             gameId: depMod.gameId,
@@ -419,6 +435,16 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   }
   
   const targetInstalled = activeProfileId ? (installedModsByProfile[activeProfileId]?.has(mod.id) || false) : false
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    onOpenChange(nextOpen)
+    if (!nextOpen) {
+      // Reset to default selection next time the dialog opens
+      setSelectedDepIds(null)
+      setViewingMod(null)
+      setShowModDialog(false)
+    }
+  }
   
   return (
     <>
@@ -427,7 +453,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
         open={showModDialog} 
         onOpenChange={setShowModDialog}
       />
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4">
             <DialogTitle>Download Dependencies</DialogTitle>
@@ -534,16 +560,13 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                         <div className="space-y-2">
                           {deps.map((dep) => {
                             const canSelect = allSelectableIds.has(dep.id)
-                            const isSelected = selectedDepIds.has(dep.id)
+                            const isSelected = effectiveSelectedDepIds.has(dep.id)
                             
                             // Check if this dep is required by any selected deps (can't be deselected)
                             const requiredBy: string[] = []
                             for (const parentKey of dep.parents) {
-                              const parentDep = allDeps.find(d => {
-                                const depKey = `${d.author}-${d.name}`
-                                return depKey === parentKey
-                              })
-                              if (parentDep && selectedDepIds.has(parentDep.id)) {
+                              const parentDep = allDeps.find(d => d.key === parentKey)
+                              if (parentDep && effectiveSelectedDepIds.has(parentDep.id)) {
                                 requiredBy.push(parentDep.name)
                               }
                             }
@@ -608,17 +631,17 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                                       </p>
                                     )}
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      const depMod = MODS.find(m => m.id === dep.id)
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                      const depMod = resolvedModsById.get(dep.id)
                                       if (depMod) {
                                         handleViewMod(depMod)
                                       }
-                                    }}
-                                    className="h-7 px-2 shrink-0"
-                                  >
+                                      }}
+                                      className="h-7 px-2 shrink-0"
+                                    >
                                     <ExternalLink className="size-3.5" />
                                   </Button>
                                 </div>
@@ -644,7 +667,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
           </Button>
           <Button onClick={handleDownloadSelected}>
             <Download className="size-4 mr-2" />
-            Download selected ({targetInstalled ? selectedDepIds.size : selectedDepIds.size + 1})
+            Download selected ({targetInstalled ? effectiveSelectedDepIds.size : effectiveSelectedDepIds.size + 1})
           </Button>
         </DialogFooter>
       </DialogContent>
