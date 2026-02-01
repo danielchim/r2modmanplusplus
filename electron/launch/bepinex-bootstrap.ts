@@ -10,6 +10,28 @@ import { ensureCatalogUpToDate, resolvePackagesByOwnerName } from "../thundersto
 import { downloadMod } from "../downloads/downloader"
 import { getExtractedModPath, getArchivePath, resolveGamePaths } from "../downloads/path-resolver"
 
+// Known BepInEx Preloader DLL filenames (Mono and IL2CPP variants)
+const KNOWN_PRELOADER_DLLS = [
+  "BepInEx.Preloader.dll",           // Mono
+  "BepInEx.IL2CPP.dll",              // IL2CPP
+  "BepInEx.Preloader.Core.dll",     // Core variant
+] as const
+
+/**
+ * Checks if a filename is a known BepInEx Preloader DLL
+ */
+function isPreloaderDll(name: string): boolean {
+  const normalized = name.toLowerCase()
+  
+  // First check against known filenames
+  if (KNOWN_PRELOADER_DLLS.some(known => normalized === known.toLowerCase())) {
+    return true
+  }
+  
+  // Fallback: substring scan for "preloader" (for unknown variants)
+  return normalized.includes("preloader") && normalized.endsWith(".dll")
+}
+
 /**
  * Result of ensuring BepInEx is available
  */
@@ -140,9 +162,7 @@ async function validateBepInExBootstrap(bootstrapRoot: string): Promise<{ valid:
     }
     
     const coreEntries = await fs.readdir(coreDir)
-    const hasPreloader = coreEntries.some(name => 
-      name.toLowerCase().includes("preloader") && name.toLowerCase().endsWith(".dll")
-    )
+    const hasPreloader = coreEntries.some(name => isPreloaderDll(name))
     
     if (!hasPreloader) {
       console.log(`[BepInExBootstrap] Missing BepInEx Preloader DLL in ${coreDir}`)

@@ -14,12 +14,34 @@ import { getLogger } from "../file-logger"
 const DOORSTOP_PROXY_DLLS = ["winhttp.dll", "version.dll", "winmm.dll"] as const
 const DOORSTOP_METADATA_PREFIXES = ["doorstop", ".doorstop"]
 
+// Known BepInEx Preloader DLL filenames (Mono and IL2CPP variants)
+const KNOWN_PRELOADER_DLLS = [
+  "BepInEx.Preloader.dll",           // Mono
+  "BepInEx.IL2CPP.dll",              // IL2CPP
+  "BepInEx.Preloader.Core.dll",     // Core variant
+] as const
+
 function isDoorstopMetadataFile(name: string): boolean {
   const normalized = name.toLowerCase()
   if (normalized === "doorstop_config.ini") {
     return false
   }
   return DOORSTOP_METADATA_PREFIXES.some(prefix => normalized.startsWith(prefix))
+}
+
+/**
+ * Checks if a filename is a known BepInEx Preloader DLL
+ */
+function isPreloaderDll(name: string): boolean {
+  const normalized = name.toLowerCase()
+  
+  // First check against known filenames
+  if (KNOWN_PRELOADER_DLLS.some(known => normalized === known.toLowerCase())) {
+    return true
+  }
+  
+  // Fallback: substring scan for "preloader" (for unknown variants)
+  return normalized.includes("preloader") && normalized.endsWith(".dll")
 }
 
 /**
@@ -66,9 +88,7 @@ async function findPreloaderDll(profileRoot: string): Promise<string> {
   }
   
   const coreEntries = await fs.readdir(coreDir)
-  const preloaderFile = coreEntries.find(name => 
-    name.toLowerCase().includes("preloader") && name.toLowerCase().endsWith(".dll")
-  )
+  const preloaderFile = coreEntries.find(name => isPreloaderDll(name))
   
   if (!preloaderFile) {
     throw new Error(`BepInEx Preloader DLL not found in ${coreDir}`)
@@ -198,9 +218,7 @@ async function validateProfileArtifacts(profileRoot: string): Promise<string | n
   }
   
   const coreEntries = await fs.readdir(coreDir)
-  const hasPreloader = coreEntries.some(name => 
-    name.toLowerCase().includes("preloader") && name.toLowerCase().endsWith(".dll")
-  )
+  const hasPreloader = coreEntries.some(name => isPreloaderDll(name))
   
   if (!hasPreloader) {
     return "Profile is missing BepInEx Preloader DLL in BepInEx/core/"
