@@ -683,7 +683,16 @@ export function ModsLibrary() {
   } else if (tab === "online" && onlineModsQuery.isElectron) {
     // Online tab in Electron: use Thunderstore data
     const pages = onlineModsQuery.data?.pages ?? []
-    displayMods = pages.flatMap(page => page.items)
+    let mods = pages.flatMap(page => page.items)
+    
+    // Apply client-side category filtering (backend doesn't support this)
+    if (selectedCategories.length > 0) {
+      mods = mods.filter((m) =>
+        selectedCategories.some((cat) => m.categories.includes(cat))
+      )
+    }
+    
+    displayMods = mods
     isLoadingMods = onlineModsQuery.isLoading
     hasError = onlineModsQuery.isError
   } else {
