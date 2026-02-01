@@ -4,6 +4,7 @@ export interface ElectronAPI {
   onMainProcessMessage: (callback: (message: string) => void) => void
   selectFolder: () => Promise<string | null>
   openFolder: (folderPath: string) => Promise<void>
+  openExternal: (url: string) => Promise<void>
   
   // Download events
   onDownloadUpdated: (callback: (data: unknown) => void) => () => void

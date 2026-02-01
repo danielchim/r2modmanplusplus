@@ -344,7 +344,6 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   // Check if this is a Thunderstore online mod (UUID format: 36 chars with hyphens)
   const isThunderstoreMod = mod.id.length === 36 && mod.id.includes("-")
-
   // Use online dependency resolution for Thunderstore mods in Electron
   const onlineDepsQuery = useOnlineDependencies({
     gameId: mod.gameId,
@@ -957,14 +956,39 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
       {/* Footer Actions */}
       <div className="shrink-0 border-t border-border p-4">
         <div className="space-y-2">
-          <Button variant="outline" size="sm" className="w-full justify-start gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={() => {
+              const thunderstoreUrl = `https://thunderstore.io/c/${mod.gameId}/p/${mod.author}/${mod.name}/`
+              if (window.electron?.openExternal) {
+                window.electron.openExternal(thunderstoreUrl)
+              } else {
+                window.open(thunderstoreUrl, "_blank", "noopener,noreferrer")
+              }
+            }}
+          >
             <ExternalLink className="size-4" />
             <span>View on Thunderstore</span>
           </Button>
-          <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-            <ExternalLink className="size-4" />
-            <span>Report Issue</span>
-          </Button>
+          {mod.websiteUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={() => {
+                if (window.electron?.openExternal) {
+                  window.electron.openExternal(mod.websiteUrl!)
+                } else {
+                  window.open(mod.websiteUrl, "_blank", "noopener,noreferrer")
+                }
+              }}
+            >
+              <ExternalLink className="size-4" />
+              <span>Report Issue</span>
+            </Button>
+          )}
         </div>
       </div>
     </div>

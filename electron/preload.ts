@@ -95,6 +95,13 @@ contextBridge.exposeInMainWorld("electron", {
       return result
     })
   },
+  openExternal: (url: string) => {
+    logIpcRenderer("renderer->main", "shell:openExternal", { url })
+    return ipcRenderer.invoke("shell:openExternal", url).then((result) => {
+      logIpcRenderer("main->renderer", "shell:openExternal", result)
+      return result
+    })
+  },
   
   // Download events
   onDownloadUpdated: (callback: (data: unknown) => void) => {

@@ -156,13 +156,6 @@ export const useModManagementStore = create<ModManagementState>()(
           },
         })
         
-        // Show success toast
-        if (modCount > 0) {
-          toast.success(`Uninstalled ${modCount} mod${modCount === 1 ? '' : 's'} successfully`)
-        } else {
-          toast.info("No mods to uninstall")
-        }
-        
         return modCount
       },
 

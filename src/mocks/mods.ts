@@ -27,6 +27,8 @@ export type Mod = {
   categories: string[]
   readmeHtml: string
   versions: ModVersion[]
+  packageUrl?: string
+  websiteUrl?: string
 }
 
 const generateMods = (gameId: string, count: number, kind: "mod" | "modpack" = "mod"): Mod[] => {

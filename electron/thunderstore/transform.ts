@@ -54,6 +54,8 @@ export function transformPackage(pkg: ThunderstorePackage, gameId: string): Mod 
     categories: pkg.categories,
     readmeHtml: "", // Fetched separately via getReadme
     versions: pkg.versions.map(transformVersion),
+    packageUrl: pkg.package_url,
+    websiteUrl: latestVersion.website_url || undefined,
   }
 }
 

@@ -50,6 +50,7 @@ export function GameDashboard() {
   const profiles = profilesFromStore ?? EMPTY_PROFILES
   
   const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
+  const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
   
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
@@ -251,8 +252,8 @@ export function GameDashboard() {
         profileId: activeProfileId,
       })
       
-      // Clear state
-      deleteProfileState(activeProfileId)
+      // Clear mod state for this profile (but keep the profile itself)
+      uninstallAllMods(activeProfileId)
       
       toast.success("All mods uninstalled", {
         description: `${result.filesRemoved} files removed from profile`,

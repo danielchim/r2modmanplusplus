@@ -128,3 +128,7 @@ ipcMain.handle("dialog:selectFolder", async () => {
 ipcMain.handle("shell:openFolder", async (_event, folderPath: string) => {
   await shell.openPath(folderPath)
 })
+
+ipcMain.handle("shell:openExternal", async (_event, url: string) => {
+  await shell.openExternal(url)
+})
