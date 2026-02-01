@@ -6,7 +6,7 @@ import superjson from "superjson"
 import { z } from "zod"
 import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
-import { resolveDependencies } from "../thunderstore/dependencies"
+import { resolveDependencies, resolveDependenciesRecursive } from "../thunderstore/dependencies"
 import { clearCatalog, getCategories, getCatalogStatus } from "../thunderstore/catalog"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
@@ -187,6 +187,26 @@ const thunderstoreRouter = t.router({
     )
     .query(async ({ input }) => {
       return await resolveDependencies(input)
+    }),
+
+  /**
+   * Recursively resolve dependencies with full dependency graph
+   * Returns complete closure with parent/child relationships for enforcement
+   */
+  resolveDependenciesRecursive: publicProcedure
+    .input(
+      z.object({
+        packageIndexUrl: z.string(),
+        gameId: z.string(),
+        dependencies: z.array(z.string()),
+        installedVersions: z.record(z.string(), z.string()),
+        enforceVersions: z.boolean(),
+        maxDepth: z.number().optional(),
+        maxNodes: z.number().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await resolveDependenciesRecursive(input)
     }),
 
   /**

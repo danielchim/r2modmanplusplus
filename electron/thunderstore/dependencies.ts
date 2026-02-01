@@ -49,6 +49,41 @@ export interface ResolveDependenciesParams {
 }
 
 /**
+ * Node in the dependency graph
+ */
+export type DependencyNode = DependencyInfo & {
+  key: string
+  depth: number
+}
+
+/**
+ * Recursive dependency resolution result with graph metadata
+ */
+export interface RecursiveDependencyResult {
+  nodes: DependencyNode[]
+  parentsByKey: Record<string, string[]>
+  childrenByKey: Record<string, string[]>
+  rootKeys: string[]
+  conflicts: Array<{
+    key: string
+    versions: string[]
+  }>
+}
+
+/**
+ * Parameters for recursive dependency resolution
+ */
+export interface ResolveDependenciesRecursiveParams {
+  packageIndexUrl: string
+  gameId: string
+  dependencies: string[]
+  installedVersions: Record<string, string>
+  enforceVersions: boolean
+  maxDepth?: number
+  maxNodes?: number
+}
+
+/**
  * Parses a Thunderstore dependency string
  * Supports formats:
  * - "Owner-Package-Version" (e.g., "BepInEx-BepInExPack-5.4.21")
@@ -208,4 +243,188 @@ export async function resolveDependencies(params: ResolveDependenciesParams): Pr
   }
 
   return results
+}
+
+/**
+ * Resolves dependencies recursively with BFS traversal and cycle protection
+ * Returns a complete dependency graph with parent/child relationships
+ * 
+ * @param params - Recursive resolution parameters
+ * @returns Dependency graph with metadata for enforcing closure
+ */
+export async function resolveDependenciesRecursive(
+  params: ResolveDependenciesRecursiveParams
+): Promise<RecursiveDependencyResult> {
+  const {
+    packageIndexUrl,
+    gameId,
+    dependencies,
+    installedVersions,
+    enforceVersions,
+    maxDepth = 10,
+    maxNodes = 500,
+  } = params
+
+  // Ensure catalog is up-to-date
+  await ensureCatalogUpToDate(packageIndexUrl)
+
+  // Track visited keys to prevent cycles
+  const visitedKeys = new Set<string>()
+  
+  // Graph metadata
+  const nodes: DependencyNode[] = []
+  const parentsByKey: Record<string, string[]> = {}
+  const childrenByKey: Record<string, string[]> = {}
+  const rootKeys: string[] = []
+  const versionsByKey: Record<string, Set<string>> = {}
+
+  // BFS queue: [depString, depth, parentKey?]
+  type QueueItem = { depString: string; depth: number; parentKey?: string }
+  const queue: QueueItem[] = dependencies.map(dep => ({ depString: dep, depth: 0 }))
+
+  while (queue.length > 0) {
+    const { depString, depth, parentKey } = queue.shift()!
+
+    // Safety limits
+    if (depth > maxDepth) continue
+    if (nodes.length >= maxNodes) break
+
+    // Parse dependency
+    const parsed = parseDependencyString(depString)
+    if (!parsed.isValid || !parsed.key) continue
+
+    // Check if already visited (cycle detection)
+    if (visitedKeys.has(parsed.key)) {
+      // Still record parent relationship if provided
+      if (parentKey) {
+        if (!parentsByKey[parsed.key]) {
+          parentsByKey[parsed.key] = []
+        }
+        if (!parentsByKey[parsed.key].includes(parentKey)) {
+          parentsByKey[parsed.key].push(parentKey)
+        }
+        if (!childrenByKey[parentKey]) {
+          childrenByKey[parentKey] = []
+        }
+        if (!childrenByKey[parentKey].includes(parsed.key)) {
+          childrenByKey[parentKey].push(parsed.key)
+        }
+      }
+      continue
+    }
+
+    visitedKeys.add(parsed.key)
+
+    // Track root keys (depth 0)
+    if (depth === 0) {
+      rootKeys.push(parsed.key)
+    }
+
+    // Resolve package from catalog
+    const packageMap = resolvePackagesByOwnerName(packageIndexUrl, [parsed.key])
+    const pkg = packageMap.get(parsed.key)
+
+    let resolvedMod: Mod | undefined = undefined
+    let versionToUse: string | undefined = undefined
+    let childDeps: string[] = []
+
+    if (pkg && pkg.versions.length > 0) {
+      // Choose version: required version if specified and exists, else latest
+      if (parsed.requiredVersion) {
+        const versionEntry = pkg.versions.find(v => v.version_number === parsed.requiredVersion)
+        if (versionEntry) {
+          versionToUse = parsed.requiredVersion
+          childDeps = versionEntry.dependencies
+        }
+      }
+      
+      if (!versionToUse) {
+        // Use latest version (first in array, as versions are sorted newest first)
+        const latestVersion = pkg.versions[0]
+        versionToUse = latestVersion.version_number
+        childDeps = latestVersion.dependencies
+      }
+
+      resolvedMod = transformPackage(pkg, gameId)
+    }
+
+    // Compute status
+    const installedVersion = resolvedMod ? installedVersions[resolvedMod.id] : undefined
+    const status = computeDependencyStatus({
+      parsed,
+      resolvedMod: resolvedMod || null,
+      installedVersion,
+      enforceVersions,
+    })
+
+    // Add node
+    const node: DependencyNode = {
+      raw: parsed.raw,
+      parsed,
+      resolvedMod,
+      status,
+      installedVersion,
+      requiredVersion: parsed.requiredVersion,
+      key: parsed.key,
+      depth,
+    }
+    nodes.push(node)
+
+    // Track version conflicts
+    if (parsed.requiredVersion) {
+      if (!versionsByKey[parsed.key]) {
+        versionsByKey[parsed.key] = new Set()
+      }
+      versionsByKey[parsed.key].add(parsed.requiredVersion)
+    }
+
+    // Record parent relationship
+    if (parentKey) {
+      if (!parentsByKey[parsed.key]) {
+        parentsByKey[parsed.key] = []
+      }
+      if (!parentsByKey[parsed.key].includes(parentKey)) {
+        parentsByKey[parsed.key].push(parentKey)
+      }
+      if (!childrenByKey[parentKey]) {
+        childrenByKey[parentKey] = []
+      }
+      if (!childrenByKey[parentKey].includes(parsed.key)) {
+        childrenByKey[parentKey].push(parsed.key)
+      }
+    }
+
+    // Initialize children array for this node
+    if (!childrenByKey[parsed.key]) {
+      childrenByKey[parsed.key] = []
+    }
+
+    // Enqueue children
+    for (const childDep of childDeps) {
+      queue.push({
+        depString: childDep,
+        depth: depth + 1,
+        parentKey: parsed.key,
+      })
+    }
+  }
+
+  // Detect conflicts (same package required at different versions)
+  const conflicts: Array<{ key: string; versions: string[] }> = []
+  for (const [key, versions] of Object.entries(versionsByKey)) {
+    if (versions.size > 1) {
+      conflicts.push({
+        key,
+        versions: Array.from(versions),
+      })
+    }
+  }
+
+  return {
+    nodes,
+    parentsByKey,
+    childrenByKey,
+    rootKeys,
+    conflicts,
+  }
 }
