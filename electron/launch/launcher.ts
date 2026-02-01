@@ -9,6 +9,7 @@ import { pathExists } from "../downloads/fs-utils"
 import { ensureBepInExPack, copyBepInExToProfile } from "./bepinex-bootstrap"
 import { injectFiles } from "./injection-tracker"
 import { trackProcess } from "./process-tracker"
+import { getLogger } from "../file-logger"
 
 /**
  * Doorstop configuration style
@@ -327,9 +328,10 @@ async function copyDirectory(src: string, dest: string): Promise<void> {
  * Launches the game
  */
 export async function launchGame(options: LaunchOptions): Promise<LaunchResult> {
-  const { gameId, mode, installFolder, exePath, profileRoot, packageIndexUrl } = options
+  const { gameId, profileId, mode, installFolder, exePath, profileRoot, packageIndexUrl } = options
   
-  console.log(`[Launcher] Launching ${gameId} in ${mode} mode`)
+  const logger = getLogger()
+  logger.info(`Launching game ${gameId} in ${mode} mode`, { profileId, exePath })
   
   try {
     // Step 1: Ensure BepInEx pack is available (Windows only)
@@ -337,11 +339,14 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
       const bepInExResult = await ensureBepInExPack(gameId, packageIndexUrl)
       
       if (!bepInExResult.available) {
+        logger.error(`BepInEx preparation failed for ${gameId}: ${bepInExResult.error}`)
         return {
           success: false,
           error: bepInExResult.error || "Failed to prepare BepInEx",
         }
       }
+      
+      logger.debug(`BepInEx pack ready at ${bepInExResult.bootstrapRoot}`)
       
       // Step 2: Copy BepInEx to profile root (idempotent)
       await copyBepInExToProfile(bepInExResult.bootstrapRoot!, profileRoot)
@@ -349,6 +354,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
       // Step 3: Inject loader files into game install folder
       await injectLoaderFiles(gameId, installFolder, profileRoot, mode)
     } else {
+      logger.warn("Launch attempted on non-Windows platform")
       return {
         success: false,
         error: "Launch is only supported on Windows",
@@ -358,7 +364,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
     // Step 4: Build launch arguments
     const args = await buildLaunchArgs(options.launchParameters)
     
-    console.log(`[Launcher] Spawning: ${exePath} ${args.join(" ")}`)
+    logger.debug(`Spawning game process: ${exePath}`, { args })
     
     // Step 5: Spawn the game process
     const child = spawn(exePath, args, {
@@ -373,6 +379,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
     const pid = child.pid
     
     if (!pid) {
+      logger.error("Failed to get process ID after spawn")
       return {
         success: false,
         error: "Failed to get process ID",
@@ -382,7 +389,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
     // Step 6: Track the process
     trackProcess(gameId, pid)
     
-    console.log(`[Launcher] Game launched successfully: pid=${pid}`)
+    logger.info(`Game launched successfully: ${gameId}`, { pid })
     
     return {
       success: true,
@@ -390,7 +397,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[Launcher] Launch failed:`, error)
+    logger.error(`Launch failed for ${gameId}: ${message}`, { error })
     
     return {
       success: false,

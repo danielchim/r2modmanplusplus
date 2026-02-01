@@ -9,6 +9,7 @@ import { promises as fs } from "fs"
 import { createHash } from "crypto"
 import { fetchGzipJson } from "./blob"
 import type { ThunderstorePackage, PackageListingIndex, PackageListingChunk } from "./types"
+import { getLogger } from "../file-logger"
 
 /**
  * Search parameters for catalog queries
@@ -97,7 +98,7 @@ function getDb(packageIndexUrl: string): Database.Database {
     db = new Database(dbPath)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[Catalog] Failed to open SQLite DB at ${dbPath}: ${message}`)
+    getLogger().error(`[Catalog] Failed to open SQLite DB at ${dbPath}: ${message}`)
     throw error
   }
   
@@ -221,6 +222,7 @@ function updatePackageCount(db: Database.Database): void {
  * Fetches chunks with concurrency limit to bound peak memory
  */
 async function fetchChunksIteratively(chunkUrls: string[]): Promise<ThunderstorePackage[]> {
+  const logger = getLogger()
   const allPackages: ThunderstorePackage[] = []
   const startTime = Date.now()
   
@@ -231,7 +233,7 @@ async function fetchChunksIteratively(chunkUrls: string[]): Promise<Thunderstore
     const totalBatches = Math.ceil(chunkUrls.length / MAX_CHUNK_CONCURRENCY)
     
     const batchStartTime = Date.now()
-    console.log(`[Catalog] Fetching chunk batch ${batchNumber}/${totalBatches} (${batch.length} chunks)`)
+    logger.debug(`[Catalog] Fetching chunk batch ${batchNumber}/${totalBatches} (${batch.length} chunks)`)
     
     const batchPromises = batch.map(url => fetchGzipJson<PackageListingChunk>(url))
     const batchResults = await Promise.all(batchPromises)
@@ -244,11 +246,11 @@ async function fetchChunksIteratively(chunkUrls: string[]): Promise<Thunderstore
     
     const batchElapsedMs = Date.now() - batchStartTime
     const batchElapsedSec = (batchElapsedMs / 1000).toFixed(1)
-    console.log(`[Catalog]   ✓ Batch ${batchNumber} complete: +${batchPackageCount} packages (${batchElapsedSec}s) | Total: ${allPackages.length}`)
+    logger.debug(`[Catalog]   ✓ Batch ${batchNumber} complete: +${batchPackageCount} packages (${batchElapsedSec}s) | Total: ${allPackages.length}`)
   }
   
   const totalElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
-  console.log(`[Catalog] All chunks fetched in ${totalElapsedSec}s: ${allPackages.length} packages total`)
+  logger.info(`[Catalog] All chunks fetched in ${totalElapsedSec}s: ${allPackages.length} packages total`)
   
   return allPackages
 }
@@ -256,19 +258,20 @@ async function fetchChunksIteratively(chunkUrls: string[]): Promise<Thunderstore
 /**
  * Builds catalog from Thunderstore chunks
  */
-async function buildCatalog(db: Database.Database, packageIndexUrl: string, indexHash: string): Promise<void> {
-  console.log(`[Catalog] Building catalog for ${packageIndexUrl}`)
+async function buildCatalog(db: Database.Database, packageIndexUrl: string): Promise<void> {
+  const logger = getLogger()
+  logger.info(`[Catalog] Building catalog for ${packageIndexUrl}`)
   
   // Fetch the package index to get chunk URLs
   const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
   const chunkUrls = indexResult.content
   
-  console.log(`[Catalog] Found ${chunkUrls.length} chunks to process with concurrency limit of ${MAX_CHUNK_CONCURRENCY}`)
+  logger.info(`[Catalog] Found ${chunkUrls.length} chunks to process with concurrency limit of ${MAX_CHUNK_CONCURRENCY}`)
   
   // Fetch chunks with bounded concurrency
   const packages = await fetchChunksIteratively(chunkUrls)
   
-  console.log(`[Catalog] Fetched ${packages.length} packages total, inserting into SQLite DB...`)
+  logger.info(`[Catalog] Fetched ${packages.length} packages total, inserting into SQLite DB...`)
   
   // Insert packages in a transaction for speed
   const insertTx = db.transaction((packages: ThunderstorePackage[]) => {
@@ -277,7 +280,7 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string, inde
       upsertPackage(db, pkg)
       inserted++
       if (inserted % 5000 === 0) {
-        console.log(`[Catalog]   Inserted ${inserted}/${packages.length} packages...`)
+        logger.debug(`[Catalog]   Inserted ${inserted}/${packages.length} packages...`)
       }
     }
     updatePackageCount(db)
@@ -286,7 +289,7 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string, inde
   insertTx(packages)
   
   const finalMeta = getMetadata(db)
-  console.log(`[Catalog] Build complete! ${finalMeta?.packageCount || packages.length} packages indexed.`)
+  logger.info(`[Catalog] Build complete! ${finalMeta?.packageCount || packages.length} packages indexed.`)
 }
 
 /**
@@ -294,7 +297,8 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string, inde
  * Rebuilds if index hash has changed or catalog doesn't exist
  */
 export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<void> {
-  console.log(`[Catalog] Ensuring catalog up-to-date for ${packageIndexUrl}`)
+  const logger = getLogger()
+  logger.debug(`[Catalog] Ensuring catalog up-to-date for ${packageIndexUrl}`)
 
   try {
     await ensureCatalogDir()
@@ -302,7 +306,7 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
     const db = getDb(packageIndexUrl)
 
     // Fetch current index hash
-    console.log(`[Catalog] Fetching package index to check for updates...`)
+    logger.debug(`[Catalog] Fetching package index to check for updates...`)
     const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
     const currentIndexHash = indexResult.hash
 
@@ -310,15 +314,15 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
     const metadata = getMetadata(db)
 
     if (metadata && metadata.indexHash === currentIndexHash) {
-      console.log(`[Catalog] Catalog up-to-date (${metadata.packageCount} packages, hash: ${currentIndexHash.substring(0, 8)})`)
+      logger.debug(`[Catalog] Catalog up-to-date (${metadata.packageCount} packages, hash: ${currentIndexHash.substring(0, 8)})`)
       return
     }
 
     // Catalog is stale or missing - rebuild
     if (metadata) {
-      console.log(`[Catalog] Catalog stale (old hash: ${metadata.indexHash.substring(0, 8)}, new hash: ${currentIndexHash.substring(0, 8)}), rebuilding...`)
+      logger.info(`[Catalog] Catalog stale (old hash: ${metadata.indexHash.substring(0, 8)}, new hash: ${currentIndexHash.substring(0, 8)}), rebuilding...`)
     } else {
-      console.log(`[Catalog] No catalog found, building from scratch...`)
+      logger.info(`[Catalog] No catalog found, building from scratch...`)
     }
 
     // Clear existing data
@@ -332,12 +336,12 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
     })
 
     // Build catalog
-    await buildCatalog(db, packageIndexUrl, currentIndexHash)
+    await buildCatalog(db, packageIndexUrl)
 
-    console.log(`[Catalog] Catalog ready!`)
+    logger.info(`[Catalog] Catalog ready!`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[Catalog] Failed to ensure catalog: ${message}`)
+    logger.error(`[Catalog] Failed to ensure catalog: ${message}`)
     throw error
   }
 }
@@ -346,11 +350,12 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
  * Searches packages in the catalog
  */
 export function searchPackages(packageIndexUrl: string, params: CatalogSearchParams): CatalogSearchResult {
+  const logger = getLogger()
   const startTime = Date.now()
   const db = getDb(packageIndexUrl)
   const { query, section = "all", sort = "updated", offset = 0, limit = 20 } = params
   
-  console.log(`[Catalog] Search query: "${query || "(none)"}", section: ${section}, sort: ${sort}, offset: ${offset}, limit: ${limit}`)
+  logger.debug(`[Catalog] Search query: "${query || "(none)"}", section: ${section}, sort: ${sort}, offset: ${offset}, limit: ${limit}`)
   
   // Build WHERE clause
   const conditions: string[] = ["is_deprecated = 0"]
@@ -444,7 +449,7 @@ export function searchPackages(packageIndexUrl: string, params: CatalogSearchPar
   const hasMore = offset + limit < total
   
   const elapsedMs = Date.now() - startTime
-  console.log(`[Catalog] Search complete in ${elapsedMs}ms: ${packages.length} results (${total} total matches)`)
+  logger.debug(`[Catalog] Search complete in ${elapsedMs}ms: ${packages.length} results (${total} total matches)`)
   
   return {
     packages,
@@ -457,8 +462,9 @@ export function searchPackages(packageIndexUrl: string, params: CatalogSearchPar
  * Gets a single package by UUID
  */
 export function getPackageByUuid(packageIndexUrl: string, uuid4: string): ThunderstorePackage | null {
+  const logger = getLogger()
   const startTime = Date.now()
-  console.log(`[Catalog] Looking up package by UUID: ${uuid4}`)
+  logger.debug(`[Catalog] Looking up package by UUID: ${uuid4}`)
   const db = getDb(packageIndexUrl)
   
   const stmt = db.prepare(`
@@ -491,11 +497,11 @@ export function getPackageByUuid(packageIndexUrl: string, uuid4: string): Thunde
   const elapsedMs = Date.now() - startTime
   
   if (!row) {
-    console.log(`[Catalog] Package not found (${elapsedMs}ms): ${uuid4}`)
+    logger.debug(`[Catalog] Package not found (${elapsedMs}ms): ${uuid4}`)
     return null
   }
   
-  console.log(`[Catalog] Package found (${elapsedMs}ms): ${row.name} by ${row.owner}`)
+  logger.debug(`[Catalog] Package found (${elapsedMs}ms): ${row.name} by ${row.owner}`)
   
   return {
     uuid4: row.uuid4,
@@ -523,13 +529,14 @@ export function resolvePackagesByOwnerName(
   packageIndexUrl: string,
   keys: string[]
 ): Map<string, ThunderstorePackage> {
+  const logger = getLogger()
   const startTime = Date.now()
-  console.log(`[Catalog] Resolving ${keys.length} dependencies by owner-name`)
+  logger.debug(`[Catalog] Resolving ${keys.length} dependencies by owner-name`)
   const db = getDb(packageIndexUrl)
   const result = new Map<string, ThunderstorePackage>()
   
   if (keys.length === 0) {
-    console.log(`[Catalog] No dependencies to resolve`)
+    logger.debug(`[Catalog] No dependencies to resolve`)
     return result
   }
   
@@ -585,7 +592,7 @@ export function resolvePackagesByOwnerName(
   }
   
   const elapsedMs = Date.now() - startTime
-  console.log(`[Catalog] Resolved ${result.size}/${keys.length} dependencies in ${elapsedMs}ms`)
+  logger.debug(`[Catalog] Resolved ${result.size}/${keys.length} dependencies in ${elapsedMs}ms`)
   
   return result
 }
@@ -603,10 +610,11 @@ export interface CategoriesResult {
  * Uses SQLite JSON functions to efficiently extract categories without full-table scan
  */
 export function getCategories(packageIndexUrl: string, section: "all" | "mod" | "modpack" = "all"): CategoriesResult {
+  const logger = getLogger()
   const startTime = Date.now()
   const db = getDb(packageIndexUrl)
   
-  console.log(`[Catalog] Fetching categories for section: ${section}`)
+  logger.debug(`[Catalog] Fetching categories for section: ${section}`)
   
   // Build WHERE clause for section filtering
   const conditions: string[] = ["is_deprecated = 0"]
@@ -642,7 +650,7 @@ export function getCategories(packageIndexUrl: string, section: "all" | "mod" | 
   }
   
   const elapsedMs = Date.now() - startTime
-  console.log(`[Catalog] Found ${categories.length} categories in ${elapsedMs}ms`)
+  logger.debug(`[Catalog] Found ${categories.length} categories in ${elapsedMs}ms`)
   
   return {
     categories,
@@ -665,7 +673,7 @@ export async function clearCatalog(packageIndexUrl: string): Promise<void> {
     await fs.unlink(dbPath)
     await fs.unlink(dbPath + "-wal")
     await fs.unlink(dbPath + "-shm")
-  } catch (error) {
+  } catch {
     // Files might not exist, ignore
   }
 }

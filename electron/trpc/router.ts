@@ -7,7 +7,7 @@ import { z } from "zod"
 import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies } from "../thunderstore/dependencies"
-import { clearCatalog, closeAllCatalogs, getCategories } from "../thunderstore/catalog"
+import { clearCatalog, getCategories } from "../thunderstore/catalog"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
 import { resolveGamePaths } from "../downloads/path-resolver"
@@ -16,6 +16,7 @@ import { verifyBinary } from "../launch/binary-verifier"
 import { getProcessStatus } from "../launch/process-tracker"
 import { launchGame, type LaunchMode } from "../launch/launcher"
 import { cleanupInjected } from "../launch/injection-tracker"
+import { getLogger } from "../file-logger"
 
 /**
  * Initialize tRPC with SuperJSON for rich data serialization
@@ -567,6 +568,70 @@ const launchRouter = t.router({
 })
 
 /**
+ * Logging procedures
+ * Handles application logging and diagnostics
+ */
+const logsRouter = t.router({
+  /**
+   * Get recent log entries
+   * Returns the last N lines from the log file
+   */
+  getRecentLogs: publicProcedure
+    .input(
+      z.object({
+        lineCount: z.number().optional().default(100),
+      })
+    )
+    .query(async ({ input }) => {
+      const logger = getLogger()
+      return await logger.getRecentLogs(input.lineCount)
+    }),
+  
+  /**
+   * Get full log contents
+   * Returns the entire log file contents
+   */
+  getFullLogs: publicProcedure
+    .query(async () => {
+      const logger = getLogger()
+      return await logger.getLogContents()
+    }),
+  
+  /**
+   * Get log file path
+   * Returns the absolute path to the log file
+   */
+  getLogFilePath: publicProcedure
+    .query(() => {
+      const logger = getLogger()
+      return logger.getLogFilePath()
+    }),
+  
+  /**
+   * Get troubleshooting information
+   * Returns system info, app version, and other diagnostic data
+   */
+  getTroubleshootingInfo: publicProcedure
+    .query(() => {
+      const logger = getLogger()
+      const info = {
+        appVersion: app.getVersion(),
+        appName: app.getName(),
+        platform: process.platform,
+        arch: process.arch,
+        electronVersion: process.versions.electron,
+        chromeVersion: process.versions.chrome,
+        nodeVersion: process.versions.node,
+        userDataPath: app.getPath("userData"),
+        logsPath: logger.getLogFilePath(),
+        timestamp: new Date().toISOString(),
+      }
+      
+      return info
+    }),
+})
+
+/**
  * Helper to count files in a directory
  */
 async function countFilesInDir(dirPath: string): Promise<number> {
@@ -583,7 +648,7 @@ async function countFilesInDir(dirPath: string): Promise<number> {
         count++
       }
     }
-  } catch (error) {
+  } catch {
     return 0
   }
   
@@ -620,6 +685,7 @@ export const appRouter = t.router({
   profiles: profilesRouter,
   games: gamesRouter,
   launch: launchRouter,
+  logs: logsRouter,
 })
 
 /**

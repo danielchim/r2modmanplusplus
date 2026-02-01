@@ -7,6 +7,7 @@ import { createHash } from "crypto"
 import { dirname } from "path"
 import { pathExists, ensureDir, safeUnlink } from "./fs-utils"
 import { extractZip } from "./zip-extractor"
+import { getLogger } from "../file-logger"
 
 /**
  * Download options
@@ -83,6 +84,9 @@ class TokenBucket {
  */
 export async function downloadMod(options: DownloadOptions): Promise<DownloadResult> {
   const {
+    author,
+    name,
+    version,
     archivePath,
     extractPath,
     ignoreCache,
@@ -92,8 +96,12 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
     abortSignal,
   } = options
   
+  const logger = getLogger()
+  const modId = `${author}-${name}@${version}`
+  
   // Check cache hit (if not ignoring cache)
   if (!ignoreCache && await pathExists(extractPath)) {
+    logger.info(`Download cache hit for ${modId}`)
     return {
       extractedPath: extractPath,
       archivePath: archivePath,
@@ -101,6 +109,8 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
       fromCache: true,
     }
   }
+  
+  logger.info(`Starting download for ${modId}`, { downloadUrl, archivePath })
   
   // Ensure parent directories exist
   await ensureDir(extractPath)
@@ -124,6 +134,7 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
     })
     
     if (!response.ok) {
+      logger.error(`Download failed for ${modId}: HTTP ${response.status}`)
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
@@ -175,8 +186,12 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
       // Atomically rename to final path
       await fs.rename(tempArchivePath, archivePath)
       
+      logger.info(`Download completed for ${modId}, extracting...`, { bytesDownloaded })
+      
       // Extract zip
       await extractZip(archivePath, extractPath)
+      
+      logger.info(`Extraction completed for ${modId}`, { extractPath })
       
       return {
         extractedPath: extractPath,
@@ -197,8 +212,10 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
     
     if (error instanceof Error) {
       if (error.name === "AbortError" || error.message.includes("aborted")) {
+        logger.warn(`Download cancelled for ${modId}`)
         throw new Error("Download was cancelled")
       }
+      logger.error(`Download failed for ${modId}: ${error.message}`)
       throw new Error(`Download failed: ${error.message}`)
     }
     throw error

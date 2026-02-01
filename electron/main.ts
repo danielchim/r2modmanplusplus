@@ -6,6 +6,7 @@ import { createContext } from "./trpc/context"
 import { initializeDownloadManager } from "./downloads/manager"
 import { getPathSettings } from "./downloads/settings-state"
 import { closeAllCatalogs } from "./thunderstore/catalog"
+import { initializeLogger, destroyLogger } from "./file-logger"
 
 // The built directory structure
 //
@@ -68,6 +69,8 @@ function createWindow() {
 app.on("before-quit", () => {
   // Close all SQLite catalog connections
   closeAllCatalogs()
+  // Flush and close logger
+  destroyLogger()
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -90,6 +93,10 @@ app.on("activate", () => {
 
 // Initialize app and download manager
 app.whenReady().then(() => {
+  // Initialize file logger
+  const logger = initializeLogger()
+  logger.info("Application started", { version: app.getVersion(), platform: process.platform })
+  
   // Initialize download manager with settings fetcher from shared state
   const downloadManager = initializeDownloadManager(
     getPathSettings,

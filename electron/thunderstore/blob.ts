@@ -4,6 +4,7 @@
 import { createHash } from "crypto"
 import { gunzip } from "zlib"
 import { promisify } from "util"
+import { getLogger } from "../file-logger"
 
 const gunzipAsync = promisify(gunzip)
 
@@ -63,13 +64,14 @@ export async function fetchGzipJson<T = unknown>(
   // Validate URL for security
   validateThunderstoreUrl(url)
 
+  const logger = getLogger()
   const fetchedAt = new Date()
   const startTime = Date.now()
   
   // Shorten URL for logging
   const shortUrl = url.length > 80 ? url.substring(0, 77) + "..." : url
 
-  console.log(`[Fetch] Starting: ${shortUrl}`)
+  logger.debug(`[Fetch] Starting: ${shortUrl}`)
 
   // Create abort controller for timeout
   const controller = new AbortController()
@@ -85,7 +87,7 @@ export async function fetchGzipJson<T = unknown>(
     })
 
     if (!response.ok) {
-      console.error(`[Fetch] HTTP error ${response.status}: ${shortUrl}`)
+      logger.error(`[Fetch] HTTP error ${response.status}: ${shortUrl}`)
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
@@ -94,7 +96,7 @@ export async function fetchGzipJson<T = unknown>(
     const buffer = Buffer.from(arrayBuffer)
     const compressedSizeMB = (buffer.length / 1024 / 1024).toFixed(2)
 
-    console.log(`[Fetch] Downloaded ${compressedSizeMB}MB (compressed): ${shortUrl}`)
+    logger.debug(`[Fetch] Downloaded ${compressedSizeMB}MB (compressed): ${shortUrl}`)
 
     // Compute hash of compressed data
     const hash = computeHash(buffer)
@@ -104,13 +106,13 @@ export async function fetchGzipJson<T = unknown>(
     const jsonString = decompressed.toString("utf-8")
     const decompressedSizeMB = (decompressed.length / 1024 / 1024).toFixed(2)
 
-    console.log(`[Fetch] Decompressed to ${decompressedSizeMB}MB, parsing JSON...`)
+    logger.debug(`[Fetch] Decompressed to ${decompressedSizeMB}MB, parsing JSON...`)
 
     // Parse JSON
     const content = JSON.parse(jsonString) as T
 
     const elapsedMs = Date.now() - startTime
-    console.log(`[Fetch] Complete in ${elapsedMs}ms (hash: ${hash.substring(0, 8)}): ${shortUrl}`)
+    logger.debug(`[Fetch] Complete in ${elapsedMs}ms (hash: ${hash.substring(0, 8)}): ${shortUrl}`)
 
     return {
       content,
@@ -121,10 +123,10 @@ export async function fetchGzipJson<T = unknown>(
     const elapsedMs = Date.now() - startTime
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        console.error(`[Fetch] Timeout after ${timeoutMs}ms: ${shortUrl}`)
+        logger.error(`[Fetch] Timeout after ${timeoutMs}ms: ${shortUrl}`)
         throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`)
       }
-      console.error(`[Fetch] Failed after ${elapsedMs}ms: ${error.message}`)
+      logger.error(`[Fetch] Failed after ${elapsedMs}ms: ${error.message}`)
       throw new Error(`Failed to fetch gzip blob from ${url}: ${error.message}`)
     }
     throw error
