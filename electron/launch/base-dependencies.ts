@@ -112,30 +112,48 @@ export async function installBaseDependencies(
     rootFolder: string
   }
 ): Promise<InstallBaseDependenciesResult> {
-  console.log(`[BaseDependencies] Installing base dependencies for ${gameId} to ${profileRoot}`)
+  const packageName = modloaderPackage 
+    ? `${modloaderPackage.owner}-${modloaderPackage.name}` 
+    : "BepInEx-BepInExPack"
+  
+  console.log(`[BaseDependencies] Installing ${packageName} for ${gameId}`)
+  console.log(`[BaseDependencies] Profile root: ${profileRoot}`)
+  console.log(`[BaseDependencies] Package index: ${packageIndexUrl}`)
   
   try {
     // Ensure BepInEx pack is available (download if needed)
+    console.log(`[BaseDependencies] Fetching ${packageName} from catalog...`)
     const bepInExResult = await ensureBepInExPack(gameId, packageIndexUrl, modloaderPackage)
     
     if (!bepInExResult.available) {
-      console.error(`[BaseDependencies] Failed to prepare BepInEx: ${bepInExResult.error}`)
+      const errorMsg = bepInExResult.error || "Failed to prepare BepInEx"
+      console.error(`[BaseDependencies] Failed to prepare ${packageName}: ${errorMsg}`)
       return {
         success: false,
-        error: bepInExResult.error || "Failed to prepare BepInEx",
+        error: errorMsg,
       }
     }
     
-    console.log(`[BaseDependencies] BepInEx pack ready at ${bepInExResult.bootstrapRoot}`)
+    console.log(`[BaseDependencies] ${packageName} v${bepInExResult.version} ready at ${bepInExResult.bootstrapRoot}`)
     
     // Copy BepInEx to profile root
+    console.log(`[BaseDependencies] Copying ${packageName} files to profile...`)
     await copyBepInExToProfile(bepInExResult.bootstrapRoot!, profileRoot)
+    console.log(`[BaseDependencies] Files copied successfully`)
     
-    // Count files installed
+    // Verify installation
     const checkResult = await checkBaseDependencies(profileRoot)
-    const filesInstalled = 3 - checkResult.missing.length // Rough estimate
     
-    console.log(`[BaseDependencies] Installation complete, ${filesInstalled} components installed`)
+    if (checkResult.needsInstall) {
+      console.error(`[BaseDependencies] Installation verification failed - still missing components:`, checkResult.missing)
+      return {
+        success: false,
+        error: `Installation incomplete: ${checkResult.missing.join(", ")}`,
+      }
+    }
+    
+    const filesInstalled = 3 // Doorstop proxy, doorstop_config.ini, BepInEx/core
+    console.log(`[BaseDependencies] Installation complete and verified - ${filesInstalled} components installed`)
     
     return {
       success: true,
@@ -143,7 +161,11 @@ export async function installBaseDependencies(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const stack = error instanceof Error ? error.stack : undefined
     console.error(`[BaseDependencies] Installation failed:`, error)
+    if (stack) {
+      console.error(`[BaseDependencies] Stack trace:`, stack)
+    }
     
     return {
       success: false,

@@ -33,16 +33,28 @@ export function InstallBaseDependenciesDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Install Base Dependencies?</AlertDialogTitle>
           <AlertDialogDescription>
-            This profile is missing required mod loader files. The following components need to be installed:
+            {isInstalling 
+              ? "Downloading and installing mod loader files. This may take a moment..." 
+              : "This profile is missing required mod loader files. The following components need to be installed:"
+            }
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="rounded-md border border-primary/20 bg-primary/10 p-3">
-          <ul className="list-disc list-inside space-y-1 text-sm">
-            {missing.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-        </div>
+        {!isInstalling && (
+          <div className="rounded-md border border-primary/20 bg-primary/10 p-3">
+            <ul className="list-disc list-inside space-y-1 text-sm">
+              {missing.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {isInstalling && (
+          <div className="rounded-md border border-blue-500/20 bg-blue-500/10 p-4 text-center">
+            <div className="animate-pulse text-sm text-blue-700 dark:text-blue-300">
+              Downloading BepInEx package from Thunderstore...
+            </div>
+          </div>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isInstalling}>Cancel</AlertDialogCancel>
           <Button

@@ -250,6 +250,15 @@ export function GameDashboard() {
       setIsInstallingDeps(true)
       const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
       
+      // Show progress toast
+      const packageName = modloaderPackage 
+        ? `${modloaderPackage.owner}-${modloaderPackage.name}` 
+        : "BepInEx-BepInExPack"
+      
+      toast.info("Downloading mod loader", {
+        description: `Fetching ${packageName} from Thunderstore...`,
+      })
+      
       // Install base dependencies
       const installResult = await installDepsMutation.mutateAsync({
         gameId: selectedGameId,
@@ -268,13 +277,17 @@ export function GameDashboard() {
       }
       
       toast.success("Base dependencies installed", {
-        description: `${installResult.filesInstalled || 0} components installed`,
+        description: `${installResult.filesInstalled || 0} components installed successfully`,
       })
       
       setIsInstallingDeps(false)
       setInstallDepsOpen(false)
       
       // Now launch the game
+      toast.info("Launching game", {
+        description: "Starting game in modded mode...",
+      })
+      
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
