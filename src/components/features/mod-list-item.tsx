@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { analyzeModDependencies } from "@/lib/dependency-utils"
 import { isVersionGreater } from "@/lib/version-utils"
 import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
@@ -21,9 +20,10 @@ import { MODS } from "@/mocks/mods"
 
 type ModListItemProps = {
   mod: Mod
+  onOpenDependencyDialog?: (mod: Mod, version: string) => void
 }
 
-export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) {
+export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDialog }: ModListItemProps) {
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
@@ -37,8 +37,6 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
   const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
   
   const { startDownload } = useDownloadActions()
-  
-  const [showDependencyDialog, setShowDependencyDialog] = useState(false)
 
   const isSelected = selectedModId === mod.id
   
@@ -125,7 +123,9 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
       
       if (hasDepsToInstall) {
         // Show dialog to let user choose which dependencies to install
-        setShowDependencyDialog(true)
+        if (onOpenDependencyDialog) {
+          onOpenDependencyDialog(mod, mod.version)
+        }
       } else {
         // No dependencies or all are already installed correctly, download directly
         const versionData = mod.versions.find(v => v.version_number === mod.version)
@@ -145,17 +145,10 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
   }
 
   return (
-    <>
-      <DependencyDownloadDialog 
-        mod={mod} 
-        requestedVersion={mod.version}
-        open={showDependencyDialog} 
-        onOpenChange={setShowDependencyDialog}
-      />
       <div
       onClick={() => selectMod(mod.id)}
       className={cn(
-        "group flex w-full items-center gap-4 rounded-md border bg-card p-3 text-left transition-colors cursor-pointer",
+        "group flex w-full items-center gap-4 rounded-md border bg-card p-3 text-left transition-colors cursor-pointer h-[80px]",
         "hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isSelected ? "border-ring" : "border-border"
       )}
@@ -278,6 +271,5 @@ export const ModListItem = memo(function ModListItem({ mod }: ModListItemProps) 
         )}
       />
     </div>
-    </>
   )
 })

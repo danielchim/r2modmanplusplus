@@ -7,7 +7,7 @@ import { z } from "zod"
 import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies } from "../thunderstore/dependencies"
-import { clearCatalog, getCategories } from "../thunderstore/catalog"
+import { clearCatalog, getCategories, getCatalogStatus } from "../thunderstore/catalog"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
 import { resolveGamePaths } from "../downloads/path-resolver"
@@ -217,6 +217,20 @@ const thunderstoreRouter = t.router({
     )
     .query(({ input }) => {
       return getCategories(input.packageIndexUrl, input.section)
+    }),
+
+  /**
+   * Get catalog build status
+   * Returns current build progress for showing toast notifications
+   */
+  getCatalogStatus: publicProcedure
+    .input(
+      z.object({
+        packageIndexUrl: z.string(),
+      })
+    )
+    .query(({ input }) => {
+      return getCatalogStatus(input.packageIndexUrl)
     }),
 })
 

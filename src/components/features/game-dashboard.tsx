@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Plus, Upload, Download as DownloadIcon, ChevronDown, Settings, FolderOpen, FileCode, FileDown, Edit, Trash2 } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
@@ -7,6 +7,7 @@ import { useModManagementStore } from "@/store/mod-management-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { trpc } from "@/lib/trpc"
 import { getExeNames, getEcosystemEntry } from "@/lib/ecosystem"
+import { useCatalogStatus } from "@/lib/queries/useOnlineMods"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
@@ -90,6 +91,58 @@ export function GameDashboard() {
       refetchOnWindowFocus: true,
     }
   )
+  
+  // Poll catalog status for build progress
+  const catalogStatus = useCatalogStatus(selectedGameId || "", !!selectedGameId)
+  const toastIdRef = useRef<string | number | undefined>()
+  
+  // Show toast notification for catalog building progress
+  useEffect(() => {
+    if (!catalogStatus.data) return
+    
+    const { status, packagesIndexed, totalPackages, errorMessage } = catalogStatus.data
+    
+    if (status === "building") {
+      const progress = totalPackages > 0 ? Math.round((packagesIndexed / totalPackages) * 100) : 0
+      const message = `Building package index... ${packagesIndexed.toLocaleString()}/${totalPackages.toLocaleString()} (${progress}%)`
+      
+      if (toastIdRef.current) {
+        // Update existing toast
+        toast.loading(message, {
+          id: toastIdRef.current,
+          duration: Infinity,
+        })
+      } else {
+        // Create new toast
+        toastIdRef.current = toast.loading(message, {
+          duration: Infinity,
+        })
+      }
+    } else if (status === "ready" && toastIdRef.current) {
+      // Build complete - dismiss loading toast and show success
+      toast.dismiss(toastIdRef.current)
+      toast.success("Package index ready!", {
+        duration: 3000,
+      })
+      toastIdRef.current = undefined
+    } else if (status === "error" && toastIdRef.current) {
+      // Build failed - dismiss loading toast and show error
+      toast.dismiss(toastIdRef.current)
+      toast.error(`Failed to build package index: ${errorMessage || "Unknown error"}`, {
+        duration: 5000,
+      })
+      toastIdRef.current = undefined
+    }
+  }, [catalogStatus.data])
+  
+  // Cleanup toast on unmount
+  useEffect(() => {
+    return () => {
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current)
+      }
+    }
+  }, [])
   
   // Auto-ensure default profile when install folder becomes valid
   useEffect(() => {

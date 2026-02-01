@@ -77,6 +77,7 @@ export function useOnlineMods(params: UseOnlineModsParams) {
     }
   )
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!result.isError) return
     const error = result.error
@@ -291,6 +292,62 @@ export function useOnlineCategories(gameId: string, section: "all" | "mod" | "mo
       enabled: shouldFetch,
       refetchOnWindowFocus: false,
       staleTime: 10 * 60 * 1000, // 10 minutes - categories don't change often
+    }
+  )
+
+  return {
+    ...result,
+    isElectron: true,
+  }
+}
+
+/**
+ * Hook for fetching catalog build status
+ * Only works in Electron mode - returns null in web mode
+ * 
+ * WARNING: This hook conditionally calls tRPC hooks based on isElectron.
+ * This is safe because isElectron never changes during app lifetime.
+ */
+export function useCatalogStatus(gameId: string, enabled = true) {
+  // Get package index URL from ecosystem
+  const ecosystem = getEcosystemEntry(gameId)
+  const packageIndexUrl = ecosystem?.r2modman?.[0]?.packageIndex
+
+  // Check if we're in Electron mode (stable for app lifetime)
+  const isElectron = hasElectronTRPC()
+
+  // Only use the query if we're in Electron and have a package index URL
+  const shouldFetch = isElectron && enabled && !!packageIndexUrl
+
+  // Conditional hook call - safe because isElectron is stable
+  if (!isElectron) {
+    return {
+      data: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: async () => ({ data: null }),
+      isElectron: false,
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const result = trpc.thunderstore.getCatalogStatus.useQuery(
+    {
+      packageIndexUrl: packageIndexUrl || "",
+    },
+    {
+      enabled: shouldFetch,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      refetchInterval: (data: any) => {
+        // Poll every 2 seconds while building, stop when ready/error
+        if (data?.status === "building") {
+          return 2000
+        }
+        return false
+      },
+      refetchOnWindowFocus: false,
+      staleTime: 0, // Always fetch fresh status
     }
   )
 

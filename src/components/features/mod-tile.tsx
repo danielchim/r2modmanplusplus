@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { DependencyDownloadDialog } from "@/components/features/dependencies/dependency-download-dialog"
 import { analyzeModDependencies } from "@/lib/dependency-utils"
 import { isVersionGreater } from "@/lib/version-utils"
 import { useOnlineDependencies } from "@/lib/queries/useOnlineMods"
@@ -21,9 +20,10 @@ import { MODS } from "@/mocks/mods"
 
 type ModTileProps = {
   mod: Mod
+  onOpenDependencyDialog?: (mod: Mod, version: string) => void
 }
 
-export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
+export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: ModTileProps) {
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
@@ -37,8 +37,6 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
   
   const { startDownload } = useDownloadActions()
-  
-  const [showDependencyDialog, setShowDependencyDialog] = useState(false)
 
   const isSelected = selectedModId === mod.id
   
@@ -120,7 +118,9 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
       
       if (hasDepsToInstall) {
         // Show dialog to let user choose which dependencies to install
-        setShowDependencyDialog(true)
+        if (onOpenDependencyDialog) {
+          onOpenDependencyDialog(mod, mod.version)
+        }
       } else {
         // No dependencies or all are already installed correctly, download directly
         const versionData = mod.versions.find(v => v.version_number === mod.version)
@@ -140,16 +140,9 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
   }
 
   return (
-    <>
-      <DependencyDownloadDialog 
-        mod={mod} 
-        requestedVersion={mod.version}
-        open={showDependencyDialog} 
-        onOpenChange={setShowDependencyDialog}
-      />
       <div
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-md border bg-card text-left transition-colors cursor-pointer",
+        "group relative flex flex-col overflow-hidden rounded-md border bg-card text-left transition-colors cursor-pointer h-[340px]",
         "hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isSelected ? "border-ring" : "border-border"
       )}
@@ -280,6 +273,5 @@ export const ModTile = memo(function ModTile({ mod }: ModTileProps) {
         </div>
       ) : null}
     </div>
-    </>
   )
 })

@@ -1,5 +1,6 @@
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect } from "react"
 import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2 } from "lucide-react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
 import { useProfileStore, type Profile } from "@/store/profile-store"
@@ -112,6 +113,315 @@ import { ModTile } from "./mod-tile"
 import { ModListItem } from "./mod-list-item"
 import { CreateProfileDialog } from "./create-profile-dialog"
 import { ModFilters } from "./mod-filters"
+import { DependencyDownloadDialog } from "./dependencies/dependency-download-dialog"
+
+// Shared dependency dialog state
+type DependencyDialogState = {
+  mod: Mod | null
+  version: string
+  open: boolean
+}
+
+// Virtualized results component to isolate scroll-driven re-renders
+type ModsResultsVirtualizedProps = {
+  displayMods: Mod[]
+  viewMode: "grid" | "list"
+  tab: "installed" | "online"
+  section: "mod" | "modpack"
+  selectedGameId: string
+  installedVersionsMap: Record<string, string> | undefined
+  isLoadingMods: boolean
+  hasError: boolean
+  searchQuery: string
+  selectedCategories: string[]
+  onlineModsQuery: {
+    isElectron: boolean
+    hasNextPage: boolean | undefined
+    isFetchingNextPage: boolean
+    fetchNextPage: () => void
+    refetch: () => void
+  }
+}
+
+function ModsResultsVirtualized({
+  displayMods,
+  viewMode,
+  tab,
+  section,
+  selectedGameId,
+  installedVersionsMap,
+  isLoadingMods,
+  hasError,
+  searchQuery,
+  selectedCategories,
+  onlineModsQuery,
+}: ModsResultsVirtualizedProps) {
+  // Shared dependency dialog state (one dialog for all mods)
+  const [dependencyDialog, setDependencyDialog] = useState<DependencyDialogState>({
+    mod: null,
+    version: "",
+    open: false,
+  })
+
+  const handleOpenDependencyDialog = useCallback((mod: Mod, version: string) => {
+    setDependencyDialog({ mod, version, open: true })
+  }, [])
+
+  const handleCloseDependencyDialog = useCallback((open: boolean) => {
+    if (!open) {
+      setDependencyDialog(prev => ({ ...prev, open: false }))
+    }
+  }, [])
+
+  // Virtualization setup
+  const scrollParentRef = useRef<HTMLDivElement>(null)
+  const gridMeasureRef = useRef<HTMLDivElement>(null)
+  const [gridWidth, setGridWidth] = useState(0)
+
+  // Constants for virtualization
+  const LIST_ROW_HEIGHT = 80
+  const GRID_ROW_HEIGHT = 340
+  const MIN_TILE_WIDTH = 200
+  const GAP = 16
+
+  // Compute column count for grid virtualization
+  const columnCount = useMemo(() => {
+    if (gridWidth === 0) return 4 // Default
+    return Math.max(1, Math.floor((gridWidth + GAP) / (MIN_TILE_WIDTH + GAP)))
+  }, [gridWidth])
+
+  // Measure grid width on mount and resize
+  useLayoutEffect(() => {
+    if (!gridMeasureRef.current) return
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setGridWidth(entry.contentRect.width)
+      }
+    })
+
+    observer.observe(gridMeasureRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  // List virtualizer
+  const listVirtualizer = useVirtualizer({
+    count: displayMods.length,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => LIST_ROW_HEIGHT,
+    overscan: 8,
+  })
+
+  // Grid virtualizer (row-based)
+  const gridRowCount = Math.ceil(displayMods.length / columnCount)
+  const gridVirtualizer = useVirtualizer({
+    count: gridRowCount,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => GRID_ROW_HEIGHT,
+    overscan: 10,
+  })
+
+  // Recalculate grid virtualizer when column count changes
+  useLayoutEffect(() => {
+    if (viewMode === "grid") {
+      gridVirtualizer.measure()
+    }
+  }, [columnCount, viewMode, gridVirtualizer])
+
+  return (
+    <>
+      <DependencyDownloadDialog
+        mod={dependencyDialog.mod}
+        requestedVersion={dependencyDialog.version}
+        open={dependencyDialog.open}
+        onOpenChange={handleCloseDependencyDialog}
+      />
+      <div ref={scrollParentRef} className="flex-1 overflow-y-auto" style={{ contain: "strict" }}>
+        <div ref={gridMeasureRef} className="p-4 lg:p-6">
+        <h2 className="mb-4 text-lg font-semibold">
+          {tab === "installed"
+            ? (section === "mod" ? "Installed Mods" : "Installed Modpacks")
+            : (section === "mod" ? "All Mods" : "All Modpacks")
+          }
+        </h2>
+        
+        {/* Loading State */}
+        {isLoadingMods && (
+          <div className="flex h-[400px] items-center justify-center">
+            <div className="text-center space-y-2">
+              <Loader2 className="size-8 animate-spin text-muted-foreground mx-auto" />
+              <p className="text-muted-foreground">Loading {section === "mod" ? "mods" : "modpacks"}...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {hasError && !isLoadingMods && (
+          <div className="flex h-[400px] items-center justify-center">
+            <div className="text-center space-y-2">
+              <p className="text-destructive">Failed to load {section === "mod" ? "mods" : "modpacks"}</p>
+              <p className="text-sm text-muted-foreground">Please check your connection and try again</p>
+              <Button variant="outline" size="sm" onClick={() => onlineModsQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoadingMods && !hasError && displayMods.length === 0 && (
+          <div className="flex h-[400px] items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground">No {section === "mod" ? "mods" : "modpacks"} found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {searchQuery || selectedCategories.length > 0
+                  ? "Try clearing filters or adjusting your search"
+                  : tab === "installed"
+                    ? `No ${section === "mod" ? "mods" : "modpacks"} installed yet`
+                    : `No ${section === "mod" ? "mods" : "modpacks"} available`}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Grid View */}
+        {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "grid" && (
+          <>
+            <div
+              style={{
+                height: `${gridVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {gridVirtualizer.getVirtualItems().map((virtualRow) => {
+                const startIndex = virtualRow.index * columnCount
+                const endIndex = Math.min(startIndex + columnCount, displayMods.length)
+                const rowMods = displayMods.slice(startIndex, endIndex)
+
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+                      {rowMods.map((mod) => {
+                        // For installed tab: check if mod is a UUID and we're in Electron
+                        if (tab === "installed" && isThunderstoreUuid(mod.id) && hasElectronTRPC()) {
+                          return (
+                            <InstalledUuidModCard
+                              key={mod.id}
+                              gameId={selectedGameId}
+                              modId={mod.id}
+                              viewMode="grid"
+                              section={section}
+                              installedVersion={installedVersionsMap?.[mod.id]}
+                            />
+                          )
+                        }
+                              return <ModTile key={mod.id} mod={mod} onOpenDependencyDialog={handleOpenDependencyDialog} />
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+            {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => onlineModsQuery.fetchNextPage()}
+                  disabled={onlineModsQuery.isFetchingNextPage}
+                >
+                  {onlineModsQuery.isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    "Load More"
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* List View */}
+        {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "list" && (
+          <>
+            <div
+              style={{
+                height: `${listVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {listVirtualizer.getVirtualItems().map((virtualRow) => {
+                const mod = displayMods[virtualRow.index]
+                
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {/* For installed tab: check if mod is a UUID and we're in Electron */}
+                    {tab === "installed" && isThunderstoreUuid(mod.id) && hasElectronTRPC() ? (
+                      <InstalledUuidModCard
+                        gameId={selectedGameId}
+                        modId={mod.id}
+                        viewMode="list"
+                        section={section}
+                        installedVersion={installedVersionsMap?.[mod.id]}
+                      />
+                          ) : (
+                            <ModListItem mod={mod} onOpenDependencyDialog={handleOpenDependencyDialog} />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+            {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => onlineModsQuery.fetchNextPage()}
+                  disabled={onlineModsQuery.isFetchingNextPage}
+                >
+                  {onlineModsQuery.isFetchingNextPage ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    "Load More"
+                  )}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+    </>
+  )
+}
 
 export function ModsLibrary() {
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
@@ -404,17 +714,17 @@ export function ModsLibrary() {
     createProfile(selectedGameId, profileName)
   }
 
-  const handleToggleCategory = (category: string) => {
+  const handleToggleCategory = useCallback((category: string) => {
     setSelectedCategories((prev) =>
       prev.includes(category)
         ? prev.filter((c) => c !== category)
         : [...prev, category]
     )
-  }
+  }, [])
 
-  const handleClearCategories = () => {
+  const handleClearCategories = useCallback(() => {
     setSelectedCategories([])
-  }
+  }, [])
 
   const handleOpenGameFolder = async () => {
     if (!installFolder) return
@@ -786,141 +1096,25 @@ export function ModsLibrary() {
           )}
 
           {/* Results Area */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-4 lg:p-6">
-              <h2 className="mb-4 text-lg font-semibold">
-                {tab === "installed"
-                  ? (section === "mod" ? "Installed Mods" : "Installed Modpacks")
-                  : (section === "mod" ? "All Mods" : "All Modpacks")
-                }
-              </h2>
-              
-              {/* Loading State */}
-              {isLoadingMods && (
-                <div className="flex h-[400px] items-center justify-center">
-                  <div className="text-center space-y-2">
-                    <Loader2 className="size-8 animate-spin text-muted-foreground mx-auto" />
-                    <p className="text-muted-foreground">Loading {section === "mod" ? "mods" : "modpacks"}...</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Error State */}
-              {hasError && !isLoadingMods && (
-                <div className="flex h-[400px] items-center justify-center">
-                  <div className="text-center space-y-2">
-                    <p className="text-destructive">Failed to load {section === "mod" ? "mods" : "modpacks"}</p>
-                    <p className="text-sm text-muted-foreground">Please check your connection and try again</p>
-                    <Button variant="outline" size="sm" onClick={() => onlineModsQuery.refetch()}>
-                      Retry
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Empty State */}
-              {!isLoadingMods && !hasError && displayMods.length === 0 && (
-                <div className="flex h-[400px] items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-muted-foreground">No {section === "mod" ? "mods" : "modpacks"} found</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {searchQuery || selectedCategories.length > 0
-                        ? "Try clearing filters or adjusting your search"
-                        : tab === "installed"
-                          ? `No ${section === "mod" ? "mods" : "modpacks"} installed yet`
-                          : `No ${section === "mod" ? "mods" : "modpacks"} available`}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Grid View */}
-              {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "grid" && (
-                <>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                    {displayMods.map((mod) => {
-                      // For installed tab: check if mod is a UUID and we're in Electron
-                      if (tab === "installed" && isThunderstoreUuid(mod.id) && hasElectronTRPC()) {
-                        return (
-                          <InstalledUuidModCard
-                            key={mod.id}
-                            gameId={selectedGameId}
-                            modId={mod.id}
-                            viewMode="grid"
-                            section={section}
-                            installedVersion={installedVersionsMap?.[mod.id]}
-                          />
-                        )
-                      }
-                      return <ModTile key={mod.id} mod={mod} />
-                    })}
-                  </div>
-                  {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
-                    <div className="mt-6 flex justify-center">
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={() => onlineModsQuery.fetchNextPage()}
-                        disabled={onlineModsQuery.isFetchingNextPage}
-                      >
-                        {onlineModsQuery.isFetchingNextPage ? (
-                          <>
-                            <Loader2 className="mr-2 size-4 animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          "Load More"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* List View */}
-              {!isLoadingMods && !hasError && displayMods.length > 0 && viewMode === "list" && (
-                <>
-                  <div className="flex flex-col gap-2">
-                    {displayMods.map((mod) => {
-                      // For installed tab: check if mod is a UUID and we're in Electron
-                      if (tab === "installed" && isThunderstoreUuid(mod.id) && hasElectronTRPC()) {
-                        return (
-                          <InstalledUuidModCard
-                            key={mod.id}
-                            gameId={selectedGameId}
-                            modId={mod.id}
-                            viewMode="list"
-                            section={section}
-                            installedVersion={installedVersionsMap?.[mod.id]}
-                          />
-                        )
-                      }
-                      return <ModListItem key={mod.id} mod={mod} />
-                    })}
-                  </div>
-                  {tab === "online" && onlineModsQuery.isElectron && onlineModsQuery.hasNextPage && (
-                    <div className="mt-6 flex justify-center">
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={() => onlineModsQuery.fetchNextPage()}
-                        disabled={onlineModsQuery.isFetchingNextPage}
-                      >
-                        {onlineModsQuery.isFetchingNextPage ? (
-                          <>
-                            <Loader2 className="mr-2 size-4 animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          "Load More"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+          <ModsResultsVirtualized
+            displayMods={displayMods}
+            viewMode={viewMode}
+            tab={tab}
+            section={section}
+            selectedGameId={selectedGameId}
+            installedVersionsMap={installedVersionsMap}
+            isLoadingMods={isLoadingMods}
+            hasError={hasError}
+            searchQuery={searchQuery}
+            selectedCategories={selectedCategories}
+            onlineModsQuery={{
+              isElectron: onlineModsQuery.isElectron,
+              hasNextPage: onlineModsQuery.hasNextPage,
+              isFetchingNextPage: onlineModsQuery.isFetchingNextPage,
+              fetchNextPage: onlineModsQuery.fetchNextPage,
+              refetch: onlineModsQuery.refetch,
+            }}
+          />
         </div>
       </div>
     </>

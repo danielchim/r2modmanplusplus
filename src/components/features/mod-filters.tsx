@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, memo } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ type ModFiltersProps = {
   categoryCounts?: Record<string, number>
 }
 
-export function ModFilters({
+export const ModFilters = memo(function ModFilters({
   section,
   onSectionChange,
   categories,
@@ -158,4 +158,4 @@ export function ModFilters({
       )}
     </div>
   )
-}
+})

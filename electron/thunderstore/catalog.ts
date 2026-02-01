@@ -32,6 +32,11 @@ export interface CatalogSearchResult {
 }
 
 /**
+ * Catalog build status
+ */
+export type CatalogStatus = "ready" | "building" | "stale" | "error"
+
+/**
  * Catalog metadata
  */
 interface CatalogMetadata {
@@ -39,6 +44,10 @@ interface CatalogMetadata {
   indexHash: string
   packageCount: number
   updatedAt: string
+  status: CatalogStatus
+  packagesIndexed: number
+  totalPackages: number
+  errorMessage?: string
 }
 
 /**
@@ -46,6 +55,18 @@ interface CatalogMetadata {
  * Prevents OOM by limiting peak memory during catalog builds
  */
 const MAX_CHUNK_CONCURRENCY = 3
+
+/**
+ * Batch size for incremental inserts during catalog build
+ * Smaller batches = more frequent commits = queries can run sooner
+ */
+const BATCH_INSERT_SIZE = 500
+
+/**
+ * Background build state tracker
+ * Maps packageIndexUrl -> build promise
+ */
+const activeBuildPromises = new Map<string, Promise<void>>()
 
 /**
  * Gets the catalog directory path
@@ -113,7 +134,15 @@ function getDb(packageIndexUrl: string): Database.Database {
 }
 
 /**
- * Initializes the database schema
+ * Checks if a column exists in a table
+ */
+function columnExists(db: Database.Database, tableName: string, columnName: string): boolean {
+  const result = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+  return result.some(col => col.name === columnName)
+}
+
+/**
+ * Initializes the database schema and applies migrations
  */
 function initSchema(db: Database.Database): void {
   db.exec(`
@@ -154,25 +183,78 @@ function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_packages_downloads ON packages(latest_downloads DESC, uuid4);
     CREATE INDEX IF NOT EXISTS idx_packages_deprecated ON packages(is_deprecated);
   `)
+  
+  // Migration: Add new status tracking columns if they don't exist
+  if (!columnExists(db, "metadata", "status")) {
+    db.exec(`
+      ALTER TABLE metadata ADD COLUMN status TEXT NOT NULL DEFAULT 'ready';
+      ALTER TABLE metadata ADD COLUMN packages_indexed INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE metadata ADD COLUMN total_packages INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE metadata ADD COLUMN error_message TEXT;
+    `)
+    getLogger().info("[Catalog] Applied schema migration: added status tracking columns")
+  }
+  
+  // Apply performance optimizations
+  db.pragma("synchronous = NORMAL") // Faster writes (safe with WAL)
+  db.pragma("cache_size = -64000") // 64MB cache
+  db.pragma("temp_store = MEMORY") // Temp tables in RAM
+  db.pragma("mmap_size = 268435456") // 256MB memory-mapped I/O
 }
 
 /**
  * Gets catalog metadata
  */
 function getMetadata(db: Database.Database): CatalogMetadata | null {
-  const stmt = db.prepare<[], CatalogMetadata>("SELECT package_index_url as packageIndexUrl, index_hash as indexHash, package_count as packageCount, updated_at as updatedAt FROM metadata WHERE id = 1")
+  const stmt = db.prepare<[], CatalogMetadata>(`
+    SELECT 
+      package_index_url as packageIndexUrl, 
+      index_hash as indexHash, 
+      package_count as packageCount, 
+      updated_at as updatedAt,
+      status,
+      packages_indexed as packagesIndexed,
+      total_packages as totalPackages,
+      error_message as errorMessage
+    FROM metadata 
+    WHERE id = 1
+  `)
   return stmt.get() || null
 }
 
 /**
  * Sets catalog metadata
  */
-function setMetadata(db: Database.Database, metadata: Omit<CatalogMetadata, "packageCount">): void {
+function setMetadata(db: Database.Database, metadata: Partial<CatalogMetadata> & { packageIndexUrl: string }): void {
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO metadata (id, package_index_url, index_hash, package_count, updated_at)
-    VALUES (1, ?, ?, 0, ?)
+    INSERT OR REPLACE INTO metadata (
+      id, package_index_url, index_hash, package_count, updated_at,
+      status, packages_indexed, total_packages, error_message
+    )
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  stmt.run(metadata.packageIndexUrl, metadata.indexHash, metadata.updatedAt)
+  stmt.run(
+    metadata.packageIndexUrl,
+    metadata.indexHash || "",
+    metadata.packageCount || 0,
+    metadata.updatedAt || new Date().toISOString(),
+    metadata.status || "ready",
+    metadata.packagesIndexed || 0,
+    metadata.totalPackages || 0,
+    metadata.errorMessage || null
+  )
+}
+
+/**
+ * Updates catalog build progress
+ */
+function updateBuildProgress(db: Database.Database, packagesIndexed: number, status: CatalogStatus): void {
+  const stmt = db.prepare(`
+    UPDATE metadata 
+    SET packages_indexed = ?, status = ?, updated_at = ?
+    WHERE id = 1
+  `)
+  stmt.run(packagesIndexed, status, new Date().toISOString())
 }
 
 /**
@@ -218,83 +300,112 @@ function updatePackageCount(db: Database.Database): void {
   db.prepare("UPDATE metadata SET package_count = (SELECT COUNT(*) FROM packages) WHERE id = 1").run()
 }
 
-/**
- * Fetches chunks with concurrency limit to bound peak memory
- */
-async function fetchChunksIteratively(chunkUrls: string[]): Promise<ThunderstorePackage[]> {
-  const logger = getLogger()
-  const allPackages: ThunderstorePackage[] = []
-  const startTime = Date.now()
-  
-  // Process chunks in batches of MAX_CHUNK_CONCURRENCY
-  for (let i = 0; i < chunkUrls.length; i += MAX_CHUNK_CONCURRENCY) {
-    const batch = chunkUrls.slice(i, i + MAX_CHUNK_CONCURRENCY)
-    const batchNumber = Math.floor(i / MAX_CHUNK_CONCURRENCY) + 1
-    const totalBatches = Math.ceil(chunkUrls.length / MAX_CHUNK_CONCURRENCY)
-    
-    const batchStartTime = Date.now()
-    logger.debug(`[Catalog] Fetching chunk batch ${batchNumber}/${totalBatches} (${batch.length} chunks)`)
-    
-    const batchPromises = batch.map(url => fetchGzipJson<PackageListingChunk>(url))
-    const batchResults = await Promise.all(batchPromises)
-    
-    let batchPackageCount = 0
-    for (const result of batchResults) {
-      batchPackageCount += result.content.length
-      allPackages.push(...result.content)
-    }
-    
-    const batchElapsedMs = Date.now() - batchStartTime
-    const batchElapsedSec = (batchElapsedMs / 1000).toFixed(1)
-    logger.debug(`[Catalog]   ✓ Batch ${batchNumber} complete: +${batchPackageCount} packages (${batchElapsedSec}s) | Total: ${allPackages.length}`)
-  }
-  
-  const totalElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
-  logger.info(`[Catalog] All chunks fetched in ${totalElapsedSec}s: ${allPackages.length} packages total`)
-  
-  return allPackages
-}
 
 /**
- * Builds catalog from Thunderstore chunks
+ * Builds catalog from Thunderstore chunks with progressive loading
+ * Inserts packages in batches and commits between batches so queries can run during build
  */
 async function buildCatalog(db: Database.Database, packageIndexUrl: string): Promise<void> {
   const logger = getLogger()
   logger.info(`[Catalog] Building catalog for ${packageIndexUrl}`)
   
-  // Fetch the package index to get chunk URLs
-  const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
-  const chunkUrls = indexResult.content
-  
-  logger.info(`[Catalog] Found ${chunkUrls.length} chunks to process with concurrency limit of ${MAX_CHUNK_CONCURRENCY}`)
-  
-  // Fetch chunks with bounded concurrency
-  const packages = await fetchChunksIteratively(chunkUrls)
-  
-  logger.info(`[Catalog] Fetched ${packages.length} packages total, inserting into SQLite DB...`)
-  
-  // Insert packages in a transaction for speed
-  const insertTx = db.transaction((packages: ThunderstorePackage[]) => {
-    let inserted = 0
-    for (const pkg of packages) {
-      upsertPackage(db, pkg)
-      inserted++
-      if (inserted % 5000 === 0) {
-        logger.debug(`[Catalog]   Inserted ${inserted}/${packages.length} packages...`)
+  try {
+    // Fetch the package index to get chunk URLs
+    const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
+    const chunkUrls = indexResult.content
+    
+    logger.info(`[Catalog] Found ${chunkUrls.length} chunks to process with concurrency limit of ${MAX_CHUNK_CONCURRENCY}`)
+    
+    // Set initial status to building
+    updateBuildProgress(db, 0, "building")
+    
+    // Fetch and insert chunks progressively
+    let totalInserted = 0
+    const allPackages: ThunderstorePackage[] = []
+    
+    // Process chunks in batches
+    for (let i = 0; i < chunkUrls.length; i += MAX_CHUNK_CONCURRENCY) {
+      const batch = chunkUrls.slice(i, i + MAX_CHUNK_CONCURRENCY)
+      const batchNumber = Math.floor(i / MAX_CHUNK_CONCURRENCY) + 1
+      const totalBatches = Math.ceil(chunkUrls.length / MAX_CHUNK_CONCURRENCY)
+      
+      const batchStartTime = Date.now()
+      logger.debug(`[Catalog] Fetching chunk batch ${batchNumber}/${totalBatches} (${batch.length} chunks)`)
+      
+      const batchPromises = batch.map(url => fetchGzipJson<PackageListingChunk>(url))
+      const batchResults = await Promise.all(batchPromises)
+      
+      const batchPackages: ThunderstorePackage[] = []
+      for (const result of batchResults) {
+        batchPackages.push(...result.content)
       }
+      
+      allPackages.push(...batchPackages)
+      
+      // Insert this batch of packages with batch commits
+      await insertPackagesBatch(db, batchPackages, totalInserted)
+      totalInserted += batchPackages.length
+      
+      // Update progress
+      updateBuildProgress(db, totalInserted, "building")
+      
+      const batchElapsedMs = Date.now() - batchStartTime
+      const batchElapsedSec = (batchElapsedMs / 1000).toFixed(1)
+      logger.debug(`[Catalog]   ✓ Batch ${batchNumber} complete: +${batchPackages.length} packages (${batchElapsedSec}s) | Total indexed: ${totalInserted}`)
     }
+    
+    // Final update
     updatePackageCount(db)
-  })
+    updateBuildProgress(db, totalInserted, "ready")
+    
+    const finalMeta = getMetadata(db)
+    logger.info(`[Catalog] Build complete! ${finalMeta?.packageCount || totalInserted} packages indexed.`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error(`[Catalog] Build failed: ${message}`)
+    
+    // Mark as error in metadata
+    const stmt = db.prepare(`
+      UPDATE metadata 
+      SET status = 'error', error_message = ?, updated_at = ?
+      WHERE id = 1
+    `)
+    stmt.run(message, new Date().toISOString())
+    
+    throw error
+  }
+}
+
+/**
+ * Inserts packages in small batches with commits between batches
+ * This allows queries to run against partial data during build
+ */
+function insertPackagesBatch(db: Database.Database, packages: ThunderstorePackage[], startIndex: number): void {
+  const logger = getLogger()
   
-  insertTx(packages)
-  
-  const finalMeta = getMetadata(db)
-  logger.info(`[Catalog] Build complete! ${finalMeta?.packageCount || packages.length} packages indexed.`)
+  for (let i = 0; i < packages.length; i += BATCH_INSERT_SIZE) {
+    const batch = packages.slice(i, i + BATCH_INSERT_SIZE)
+    
+    // Insert this batch in a transaction
+    const insertTx = db.transaction((pkgs: ThunderstorePackage[]) => {
+      for (const pkg of pkgs) {
+        upsertPackage(db, pkg)
+      }
+    })
+    
+    insertTx(batch)
+    
+    const totalProcessed = startIndex + i + batch.length
+    if (totalProcessed % 1000 === 0) {
+      logger.debug(`[Catalog]     Inserted ${totalProcessed} packages...`)
+    }
+  }
 }
 
 /**
  * Ensures catalog is up-to-date for a community
- * Rebuilds if index hash has changed or catalog doesn't exist
+ * Starts background build if needed and returns immediately
+ * Queries can run against partial data during build
  */
 export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<void> {
   const logger = getLogger()
@@ -305,40 +416,69 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
 
     const db = getDb(packageIndexUrl)
 
-    // Fetch current index hash
-    logger.debug(`[Catalog] Fetching package index to check for updates...`)
-    const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
-    const currentIndexHash = indexResult.hash
+    // Check if there's already a build in progress
+    const existingBuild = activeBuildPromises.get(packageIndexUrl)
+    if (existingBuild) {
+      logger.debug(`[Catalog] Build already in progress, skipping check`)
+      return
+    }
 
     // Check existing metadata
     const metadata = getMetadata(db)
+    
+    // If catalog is building, just return (queries can run against partial data)
+    if (metadata?.status === "building") {
+      logger.debug(`[Catalog] Catalog is building (${metadata.packagesIndexed}/${metadata.totalPackages} packages indexed)`)
+      return
+    }
 
-    if (metadata && metadata.indexHash === currentIndexHash) {
+    // Fetch current index hash to check if update needed
+    logger.debug(`[Catalog] Fetching package index to check for updates...`)
+    const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
+    const currentIndexHash = indexResult.hash
+    const totalPackages = indexResult.content.length
+
+    // If catalog is up-to-date, return
+    if (metadata && metadata.indexHash === currentIndexHash && metadata.status === "ready") {
       logger.debug(`[Catalog] Catalog up-to-date (${metadata.packageCount} packages, hash: ${currentIndexHash.substring(0, 8)})`)
       return
     }
 
-    // Catalog is stale or missing - rebuild
+    // Catalog is stale or missing - start background rebuild
     if (metadata) {
-      logger.info(`[Catalog] Catalog stale (old hash: ${metadata.indexHash.substring(0, 8)}, new hash: ${currentIndexHash.substring(0, 8)}), rebuilding...`)
+      logger.info(`[Catalog] Catalog stale (old hash: ${metadata.indexHash.substring(0, 8)}, new hash: ${currentIndexHash.substring(0, 8)}), starting background rebuild...`)
     } else {
-      logger.info(`[Catalog] No catalog found, building from scratch...`)
+      logger.info(`[Catalog] No catalog found, starting background build...`)
     }
 
     // Clear existing data
     db.exec("DELETE FROM packages")
 
-    // Set metadata
+    // Set initial metadata with building status
     setMetadata(db, {
       packageIndexUrl,
       indexHash: currentIndexHash,
       updatedAt: new Date().toISOString(),
+      status: "building",
+      packagesIndexed: 0,
+      totalPackages: totalPackages,
+      packageCount: 0,
     })
 
-    // Build catalog
-    await buildCatalog(db, packageIndexUrl)
+    // Start background build (don't await)
+    const buildPromise = buildCatalog(db, packageIndexUrl)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        logger.error(`[Catalog] Background build failed: ${message}`)
+      })
+      .finally(() => {
+        // Remove from active builds when done
+        activeBuildPromises.delete(packageIndexUrl)
+      })
+    
+    activeBuildPromises.set(packageIndexUrl, buildPromise)
 
-    logger.info(`[Catalog] Catalog ready!`)
+    logger.info(`[Catalog] Background build started, queries can run against partial data`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error(`[Catalog] Failed to ensure catalog: ${message}`)
@@ -606,6 +746,42 @@ export interface CategoriesResult {
 }
 
 /**
+ * Catalog status information for frontend
+ */
+export interface CatalogStatusInfo {
+  status: CatalogStatus
+  packagesIndexed: number
+  totalPackages: number
+  packageCount: number
+  errorMessage?: string
+}
+
+/**
+ * Gets catalog status information
+ * Used by frontend to show build progress
+ */
+export function getCatalogStatus(packageIndexUrl: string): CatalogStatusInfo | null {
+  try {
+    const db = getDb(packageIndexUrl)
+    const metadata = getMetadata(db)
+    
+    if (!metadata) {
+      return null
+    }
+    
+    return {
+      status: metadata.status,
+      packagesIndexed: metadata.packagesIndexed,
+      totalPackages: metadata.totalPackages,
+      packageCount: metadata.packageCount,
+      errorMessage: metadata.errorMessage,
+    }
+  } catch (error) {
+    return null
+  }
+}
+
+/**
  * Gets unique categories from the catalog with counts
  * Uses SQLite JSON functions to efficiently extract categories without full-table scan
  */
@@ -667,6 +843,9 @@ export async function clearCatalog(packageIndexUrl: string): Promise<void> {
     db.close()
     dbCache.delete(packageIndexUrl)
   }
+  
+  // Remove from active builds
+  activeBuildPromises.delete(packageIndexUrl)
   
   const dbPath = getDbPath(packageIndexUrl)
   try {
