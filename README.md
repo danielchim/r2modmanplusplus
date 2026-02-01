@@ -2,6 +2,8 @@
 
 # r2modmanPlusPlus
 
+![r2modmanPlusPlus App screenshot](docs/assets/app_screenshot.png)
+
 A modern mod manager desktop application built with Electron, React, and TypeScript. Features a full-stack architecture with tRPC for type-safe IPC, Zustand for state management, and shadcn/ui components for a polished interface.
 
 Huge shoutout to [ebkr's r2modmanPlus](https://github.com/ebkr/r2modmanPlus/) for inspiration!
