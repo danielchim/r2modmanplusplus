@@ -183,7 +183,7 @@ async function validateBepInExBootstrap(bootstrapRoot: string): Promise<{ valid:
         }
       }
     }
-  } catch (error) {
+  } catch {
     // Ignore readdir errors
   }
   
