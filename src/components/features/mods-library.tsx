@@ -477,6 +477,7 @@ export function ModsLibrary() {
   )
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
   const installedModVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
+  const installMod = useModManagementStore((s) => s.installMod)
   // Use stable fallback to avoid new Set() every render
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
@@ -889,6 +890,11 @@ export function ModsLibrary() {
         return
       }
       
+      // Register the BepInEx package as installed in the mod store
+      if (installResult.packageId && installResult.version) {
+        installMod(activeProfileId, installResult.packageId, installResult.version)
+      }
+      
       toast.success("Base dependencies installed", {
         description: `${installResult.filesInstalled || 0} components installed successfully`,
       })
@@ -949,6 +955,11 @@ export function ModsLibrary() {
           description: installResult.error,
         })
       } else {
+        // Register the BepInEx package as installed in the mod store
+        if (installResult.packageId && installResult.version) {
+          installMod(activeProfileId, installResult.packageId, installResult.version)
+        }
+        
         toast.success("Base dependencies installed")
       }
     } catch (error) {

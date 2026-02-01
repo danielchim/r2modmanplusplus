@@ -22,6 +22,8 @@ export interface InstallBaseDependenciesResult {
   success: boolean
   error?: string
   filesInstalled?: number
+  packageId?: string
+  version?: string
 }
 
 const DOORSTOP_PROXY_DLLS = ["winhttp.dll", "version.dll", "winmm.dll"] as const
@@ -112,32 +114,33 @@ export async function installBaseDependencies(
     rootFolder: string
   }
 ): Promise<InstallBaseDependenciesResult> {
-  const packageName = modloaderPackage 
-    ? `${modloaderPackage.owner}-${modloaderPackage.name}` 
-    : "BepInEx-BepInExPack"
+  const packageOwner = modloaderPackage?.owner || "BepInEx"
+  const packageName = modloaderPackage?.name || "BepInExPack"
+  const packageId = `${packageOwner}-${packageName}`
   
-  console.log(`[BaseDependencies] Installing ${packageName} for ${gameId}`)
+  console.log(`[BaseDependencies] Installing ${packageId} for ${gameId}`)
   console.log(`[BaseDependencies] Profile root: ${profileRoot}`)
   console.log(`[BaseDependencies] Package index: ${packageIndexUrl}`)
   
   try {
     // Ensure BepInEx pack is available (download if needed)
-    console.log(`[BaseDependencies] Fetching ${packageName} from catalog...`)
+    console.log(`[BaseDependencies] Fetching ${packageId} from catalog...`)
     const bepInExResult = await ensureBepInExPack(gameId, packageIndexUrl, modloaderPackage)
     
     if (!bepInExResult.available) {
       const errorMsg = bepInExResult.error || "Failed to prepare BepInEx"
-      console.error(`[BaseDependencies] Failed to prepare ${packageName}: ${errorMsg}`)
+      console.error(`[BaseDependencies] Failed to prepare ${packageId}: ${errorMsg}`)
       return {
         success: false,
         error: errorMsg,
       }
     }
     
-    console.log(`[BaseDependencies] ${packageName} v${bepInExResult.version} ready at ${bepInExResult.bootstrapRoot}`)
+    const installedVersion = bepInExResult.version!
+    console.log(`[BaseDependencies] ${packageId} v${installedVersion} ready at ${bepInExResult.bootstrapRoot}`)
     
     // Copy BepInEx to profile root
-    console.log(`[BaseDependencies] Copying ${packageName} files to profile...`)
+    console.log(`[BaseDependencies] Copying ${packageId} files to profile...`)
     await copyBepInExToProfile(bepInExResult.bootstrapRoot!, profileRoot)
     console.log(`[BaseDependencies] Files copied successfully`)
     
@@ -158,6 +161,8 @@ export async function installBaseDependencies(
     return {
       success: true,
       filesInstalled,
+      packageId,
+      version: installedVersion,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

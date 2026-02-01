@@ -57,6 +57,7 @@ export function GameDashboard() {
   const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
   const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
+  const installMod = useModManagementStore((s) => s.installMod)
   
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
   const launchMutation = trpc.launch.start.useMutation()
@@ -276,6 +277,11 @@ export function GameDashboard() {
         return
       }
       
+      // Register the BepInEx package as installed in the mod store
+      if (installResult.packageId && installResult.version) {
+        installMod(activeProfileId, installResult.packageId, installResult.version)
+      }
+      
       toast.success("Base dependencies installed", {
         description: `${installResult.filesInstalled || 0} components installed successfully`,
       })
@@ -337,6 +343,11 @@ export function GameDashboard() {
           description: installResult.error,
         })
       } else {
+        // Register the BepInEx package as installed in the mod store
+        if (installResult.packageId && installResult.version) {
+          installMod(activeProfileId, installResult.packageId, installResult.version)
+        }
+        
         toast.success("Base dependencies installed", {
           description: `${installResult.filesInstalled || 0} components installed`,
         })
