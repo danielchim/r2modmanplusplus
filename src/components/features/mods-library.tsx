@@ -13,6 +13,7 @@ import { useOnlineMods, useOnlinePackage, useOnlineCategories } from "@/lib/quer
 import { trpc, hasElectronTRPC } from "@/lib/trpc"
 import { openFolder } from "@/lib/desktop"
 import { getExeNames, getEcosystemEntry } from "@/lib/ecosystem"
+import { parseModSearch } from "@/lib/mod-search"
 import type { Mod } from "@/types/mod"
 import { toast } from "sonner"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -509,6 +510,12 @@ export function ModsLibrary() {
     }
   )
   
+  // Parse search query into text and author components
+  const { textQuery, authorQuery } = useMemo(
+    () => parseModSearch(searchQuery),
+    [searchQuery]
+  )
+  
   // Poll launch status
   const launchStatus = trpc.launch.getStatus.useQuery(
     {
@@ -522,8 +529,21 @@ export function ModsLibrary() {
   )
 
   // Helper to apply search filter to a mod
-  const matchesSearch = (mod: Mod, query: string) => {
-    const lowerQuery = query.toLowerCase()
+  const matchesSearch = (mod: Mod, textQuery: string, authorQuery: string | null) => {
+    // Check author filter first (exact substring match, case-insensitive)
+    if (authorQuery) {
+      const authorLower = mod.author.toLowerCase()
+      const authorQueryLower = authorQuery.toLowerCase()
+      if (!authorLower.includes(authorQueryLower)) {
+        return false
+      }
+    }
+    
+    // If no text query remains, author filter alone is sufficient
+    if (!textQuery) return true
+    
+    // Apply text query (substring match across name/author/id/description)
+    const lowerQuery = textQuery.toLowerCase()
     return mod.name.toLowerCase().includes(lowerQuery) ||
            mod.author.toLowerCase().includes(lowerQuery) ||
            mod.id.toLowerCase().includes(lowerQuery) ||
@@ -606,12 +626,12 @@ export function ModsLibrary() {
     }
     
     if (searchQuery) {
-      filtered = filtered.filter(m => matchesSearch(m, searchQuery))
+      filtered = filtered.filter(m => matchesSearch(m, textQuery, authorQuery))
     }
     
     // Sort
     return sortMods(filtered, sortKey, sortDir)
-  }, [selectedGameId, tab, installedModsSetOrEmpty, installedVersionsMap, section, selectedCategories, searchQuery, sortKey, sortDir])
+  }, [selectedGameId, tab, installedModsSetOrEmpty, installedVersionsMap, section, selectedCategories, searchQuery, textQuery, authorQuery, sortKey, sortDir])
 
   // Filter and sort mods (for online tab in web mode)
   const filteredMods = useMemo(() => {
@@ -631,12 +651,12 @@ export function ModsLibrary() {
 
     // Search filter
     if (searchQuery) {
-      mods = mods.filter((m) => matchesSearch(m, searchQuery))
+      mods = mods.filter((m) => matchesSearch(m, textQuery, authorQuery))
     }
 
     // Sort
     return sortMods(mods, sortKey, sortDir)
-  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortKey, sortDir])
+  }, [selectedGameId, tab, section, selectedCategories, searchQuery, textQuery, authorQuery, sortKey, sortDir])
 
   // Thunderstore online mods (only when tab === "online" and in Electron)
   const onlineModsQuery = useOnlineMods({
