@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react"
-import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2 } from "lucide-react"
+import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
@@ -434,6 +434,7 @@ export function ModsLibrary() {
   const [section, setSection] = useState<"mod" | "modpack">("mod")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [filtersOpen, setFiltersOpen] = useState(true)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Reset filters to open when viewport becomes desktop-sized
   useEffect(() => {
@@ -758,6 +759,11 @@ export function ModsLibrary() {
     setSelectedCategories([])
   }, [])
 
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("")
+    searchInputRef.current?.focus()
+  }, [setSearchQuery])
+
   const handleOpenGameFolder = async () => {
     if (!installFolder) return
     
@@ -1060,11 +1066,22 @@ export function ModsLibrary() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 placeholder="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 pr-9"
               />
+              {searchQuery.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
             {/* View Mode Toggle */}
             <div className="flex gap-1 border border-border rounded-md">
