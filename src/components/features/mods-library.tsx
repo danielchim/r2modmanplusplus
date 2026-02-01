@@ -661,7 +661,7 @@ export function ModsLibrary() {
   // Thunderstore online mods (only when tab === "online" and in Electron)
   const onlineModsQuery = useOnlineMods({
     gameId: selectedGameId || "",
-    query: searchQuery || undefined,
+    query: textQuery || undefined,
     section: section === "mod" ? "mod" : "modpack",
     sort: sortKey,
     limit: 50,
@@ -732,6 +732,12 @@ export function ModsLibrary() {
     // Online tab in Electron: use Thunderstore data
     const pages = onlineModsQuery.data?.pages ?? []
     let mods = pages.flatMap(page => page.items)
+    
+    // Apply client-side author filtering (backend doesn't support semantic search)
+    if (authorQuery) {
+      const authorQueryLower = authorQuery.toLowerCase()
+      mods = mods.filter((m) => m.author.toLowerCase().includes(authorQueryLower))
+    }
     
     // Apply client-side category filtering (backend doesn't support this)
     if (selectedCategories.length > 0) {
