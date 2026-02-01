@@ -456,7 +456,8 @@ export function ModsLibrary() {
 
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const searchQuery = useAppStore((s) => s.searchQuery)
-  const sortBy = useAppStore((s) => s.sortBy)
+  const sortKey = useAppStore((s) => s.sortKey)
+  const sortDir = useAppStore((s) => s.sortDir)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setShowContextPanel = useAppStore((s) => s.setShowContextPanel)
   const selectMod = useAppStore((s) => s.selectMod)
@@ -527,28 +528,47 @@ export function ModsLibrary() {
            mod.description.toLowerCase().includes(lowerQuery)
   }
 
-  // Helper to sort mods by the selected sortBy criterion
-  const sortMods = (mods: Mod[], sortBy: string) => {
-    if (sortBy === "downloads") {
-      return mods.sort((a, b) => (b.downloads || 0) - (a.downloads || 0))
-    } else if (sortBy === "updated") {
-      return mods.sort(
-        (a, b) => {
-          const aTime = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0
-          const bTime = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0
-          if (bTime !== aTime) return bTime - aTime
-          // Tie-breaker: modId for deterministic ordering
-          return a.id.localeCompare(b.id)
-        }
-      )
-    } else {
-      return mods.sort((a, b) => {
+  // Helper to sort mods by the selected sortKey and sortDir
+  const sortMods = (
+    mods: Mod[], 
+    sortKey: "updated" | "name" | "downloads", 
+    sortDir: "asc" | "desc"
+  ) => {
+    const sorted = [...mods]
+    
+    if (sortKey === "downloads") {
+      sorted.sort((a, b) => {
+        const cmp = (b.downloads || 0) - (a.downloads || 0)
+        if (cmp !== 0) return cmp
+        // Tie-breaker: modId for stable ordering
+        return a.id.localeCompare(b.id)
+      })
+    } else if (sortKey === "updated") {
+      sorted.sort((a, b) => {
+        const aTime = a.lastUpdated ? Date.parse(a.lastUpdated) : 0
+        const bTime = b.lastUpdated ? Date.parse(b.lastUpdated) : 0
+        if (bTime !== aTime) return bTime - aTime
+        // Tie-breaker: modId for stable ordering
+        return a.id.localeCompare(b.id)
+      })
+    } else { // name
+      sorted.sort((a, b) => {
         const nameCompare = (a.name || a.id).localeCompare(b.name || b.id)
         if (nameCompare !== 0) return nameCompare
-        // Tie-breaker: modId
+        // Tie-breaker: modId for stable ordering
         return a.id.localeCompare(b.id)
       })
     }
+    
+    // Apply direction: default sort is desc for downloads/updated, asc for name
+    // If sortDir doesn't match the natural order, reverse
+    if (sortKey === "name" && sortDir === "desc") {
+      return sorted.reverse()
+    } else if ((sortKey === "downloads" || sortKey === "updated") && sortDir === "asc") {
+      return sorted.reverse()
+    }
+    
+    return sorted
   }
 
   // Installed mods (built from zustand IDs, not MODS filter)
@@ -588,8 +608,8 @@ export function ModsLibrary() {
     }
     
     // Sort
-    return sortMods(filtered, sortBy)
-  }, [selectedGameId, tab, installedModsSetOrEmpty, installedVersionsMap, section, selectedCategories, searchQuery, sortBy])
+    return sortMods(filtered, sortKey, sortDir)
+  }, [selectedGameId, tab, installedModsSetOrEmpty, installedVersionsMap, section, selectedCategories, searchQuery, sortKey, sortDir])
 
   // Filter and sort mods (for online tab in web mode)
   const filteredMods = useMemo(() => {
@@ -613,15 +633,15 @@ export function ModsLibrary() {
     }
 
     // Sort
-    return sortMods(mods, sortBy)
-  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortBy])
+    return sortMods(mods, sortKey, sortDir)
+  }, [selectedGameId, tab, section, selectedCategories, searchQuery, sortKey, sortDir])
 
   // Thunderstore online mods (only when tab === "online" and in Electron)
   const onlineModsQuery = useOnlineMods({
     gameId: selectedGameId || "",
     query: searchQuery || undefined,
     section: section === "mod" ? "mod" : "modpack",
-    sort: sortBy,
+    sort: sortKey,
     limit: 50,
     enabled: tab === "online" && !!selectedGameId,
   })
@@ -696,6 +716,13 @@ export function ModsLibrary() {
       mods = mods.filter((m) =>
         selectedCategories.some((cat) => m.categories.includes(cat))
       )
+    }
+    
+    // Apply client-side sortDir (backend only sorts by key, not direction)
+    // Backend returns results sorted by sortKey in descending order by default
+    // If we need ascending, reverse the results
+    if (sortDir === "asc") {
+      mods = mods.reverse()
     }
     
     displayMods = mods
