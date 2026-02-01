@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-utils"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useProfileStore } from "@/store/profile-store"
@@ -54,6 +55,21 @@ function getStatusIcon(status: DependencyStatus) {
     case "unresolved":
       return <AlertCircle className="size-4 text-muted-foreground" />
   }
+}
+
+function SkeletonDependencyRow() {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border bg-card p-3">
+      <Skeleton className="size-4 rounded-full" />
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-5 w-20" />
+        </div>
+        <Skeleton className="h-3 w-48" />
+      </div>
+    </div>
+  )
 }
 
 function getStatusLabel(status: DependencyStatus) {
@@ -111,9 +127,14 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   })
   
   // Build dependency nodes grouped by depth
-  const { depsByDepth, allSelectableIds, childrenByKey } = useMemo(() => {
+  const { depsByDepth, allSelectableIds, childrenByKey, isLoadingDeps } = useMemo(() => {
     if (!mod || !activeProfileId) {
-      return { depsByDepth: new Map<number, DepNode[]>(), allSelectableIds: new Set<string>(), childrenByKey: {} }
+      return { depsByDepth: new Map<number, DepNode[]>(), allSelectableIds: new Set<string>(), childrenByKey: {}, isLoadingDeps: false }
+    }
+    
+    // If we're using recursive query and it's still loading, return loading state
+    if (isThunderstoreMod && recursiveDepsQuery.isElectron && recursiveDepsQuery.isLoading && !recursiveDepsQuery.data) {
+      return { depsByDepth: new Map<number, DepNode[]>(), allSelectableIds: new Set<string>(), childrenByKey: {}, isLoadingDeps: true }
     }
     
     // If we have recursive online dependency data, use it
@@ -154,6 +175,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
         depsByDepth: byDepth, 
         allSelectableIds: selectableIds,
         childrenByKey: childMap as Record<string, string[]>,
+        isLoadingDeps: false,
       }
     }
 
@@ -199,8 +221,9 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       depsByDepth: byDepth, 
       allSelectableIds: selectableIds,
       childrenByKey: {} as Record<string, string[]>,
+      isLoadingDeps: false,
     }
-  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
+  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.isLoading, recursiveDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions, forceRefresh])
   
   // Flatten all deps for easier access
   const allDeps = useMemo(() => {
@@ -487,7 +510,13 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                 </div>
               </div>
               
-              {allDeps.length === 0 ? (
+              {isLoadingDeps ? (
+                <div className="space-y-2">
+                  <SkeletonDependencyRow />
+                  <SkeletonDependencyRow />
+                  <SkeletonDependencyRow />
+                </div>
+              ) : allDeps.length === 0 ? (
                 <div className="rounded-md border border-border bg-muted/30 p-6 text-center">
                   <p className="text-sm text-muted-foreground">
                     This mod has no dependencies
