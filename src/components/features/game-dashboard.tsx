@@ -277,10 +277,12 @@ export function GameDashboard() {
         return
       }
       
-      // Register the BepInEx package as installed in the mod store
-      if (installResult.packageId && installResult.version) {
-        installMod(activeProfileId, installResult.packageId, installResult.version)
-      }
+       // Register the modloader package as installed in the mod store.
+       // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
+       const installedId = installResult.packageUuid4 || installResult.packageId
+       if (installedId && installResult.version) {
+         installMod(activeProfileId, installedId, installResult.version)
+       }
       
       toast.success("Base dependencies installed", {
         description: `${installResult.filesInstalled || 0} components installed successfully`,
@@ -343,10 +345,12 @@ export function GameDashboard() {
           description: installResult.error,
         })
       } else {
-        // Register the BepInEx package as installed in the mod store
-        if (installResult.packageId && installResult.version) {
-          installMod(activeProfileId, installResult.packageId, installResult.version)
-        }
+         // Register the modloader package as installed in the mod store.
+         // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
+         const installedId = installResult.packageUuid4 || installResult.packageId
+         if (installedId && installResult.version) {
+           installMod(activeProfileId, installedId, installResult.version)
+         }
         
         toast.success("Base dependencies installed", {
           description: `${installResult.filesInstalled || 0} components installed`,

@@ -22,6 +22,7 @@ export interface InstallBaseDependenciesResult {
   success: boolean
   error?: string
   filesInstalled?: number
+  packageUuid4?: string
   packageId?: string
   version?: string
 }
@@ -161,6 +162,7 @@ export async function installBaseDependencies(
     return {
       success: true,
       filesInstalled,
+      packageUuid4: bepInExResult.uuid4,
       packageId,
       version: installedVersion,
     }

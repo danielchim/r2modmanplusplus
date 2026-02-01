@@ -41,7 +41,7 @@ function createPlaceholderMod(
   
   return {
     id: modId,
-    name: isThunderstoreUuid(modId) ? "Thunderstore package" : "Unknown installed mod",
+    name: isThunderstoreUuid(modId) ? "Loading package..." : "Unknown installed mod",
     author: "Unknown",
     description: `ID: ${modId}${installedVersion ? ` • Installed: v${installedVersion}` : ""}`,
     version: versionStr,
@@ -627,13 +627,20 @@ export function ModsLibrary() {
     let filtered = items.filter(m => m.kind === section)
     
     if (selectedCategories.length > 0) {
-      filtered = filtered.filter(m =>
-        selectedCategories.some(cat => m.categories.includes(cat))
+      // Installed UUID mods start as placeholders until we fetch metadata.
+      // If we filter placeholders by categories, they can disappear entirely.
+      // Keep UUID mods visible; the card will resolve real metadata in Electron.
+      filtered = filtered.filter((m) =>
+        isThunderstoreUuid(m.id) || selectedCategories.some(cat => m.categories.includes(cat))
       )
     }
     
     if (searchQuery) {
-      filtered = filtered.filter(m => matchesSearch(m, textQuery, authorQuery))
+      // Same rationale as category filtering: allow UUID mods through so they can
+      // load metadata and be discoverable even when a search is active.
+      filtered = filtered.filter((m) =>
+        isThunderstoreUuid(m.id) || matchesSearch(m, textQuery, authorQuery)
+      )
     }
     
     // Sort
@@ -890,9 +897,11 @@ export function ModsLibrary() {
         return
       }
       
-      // Register the BepInEx package as installed in the mod store
-      if (installResult.packageId && installResult.version) {
-        installMod(activeProfileId, installResult.packageId, installResult.version)
+      // Register the modloader package as installed in the mod store.
+      // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
+      const installedId = installResult.packageUuid4 || installResult.packageId
+      if (installedId && installResult.version) {
+        installMod(activeProfileId, installedId, installResult.version)
       }
       
       toast.success("Base dependencies installed", {
@@ -955,9 +964,11 @@ export function ModsLibrary() {
           description: installResult.error,
         })
       } else {
-        // Register the BepInEx package as installed in the mod store
-        if (installResult.packageId && installResult.version) {
-          installMod(activeProfileId, installResult.packageId, installResult.version)
+        // Register the modloader package as installed in the mod store.
+        // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
+        const installedId = installResult.packageUuid4 || installResult.packageId
+        if (installedId && installResult.version) {
+          installMod(activeProfileId, installedId, installResult.version)
         }
         
         toast.success("Base dependencies installed")

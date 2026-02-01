@@ -6,7 +6,7 @@ import { promises as fs } from "fs"
 import { join } from "path"
 import { pathExists, ensureDir } from "../downloads/fs-utils"
 import { getPathSettings } from "../downloads/settings-state"
-import { ensureCatalogUpToDate, resolvePackagesByOwnerName } from "../thunderstore/catalog"
+import { ensureCatalogUpToDate, resolvePackagesByOwnerName, getCatalogStatus } from "../thunderstore/catalog"
 import { downloadMod } from "../downloads/downloader"
 import { getExtractedModPath, getArchivePath, resolveGamePaths } from "../downloads/path-resolver"
 
@@ -37,6 +37,7 @@ function isPreloaderDll(name: string): boolean {
  */
 export interface BepInExBootstrapResult {
   available: boolean
+  uuid4?: string
   version?: string
   bootstrapRoot?: string
   error?: string
@@ -58,31 +59,46 @@ async function findBepInExPack(
   owner: string,
   name: string
 ): Promise<{ uuid4: string; version: string; downloadUrl: string } | null> {
-  try {
-    // Ensure catalog is up-to-date
-    await ensureCatalogUpToDate(packageIndexUrl)
-    
-    // Look up the package by owner-name
-    const packageId = `${owner}-${name}`
-    const packages = resolvePackagesByOwnerName(packageIndexUrl, [packageId])
-    const pack = packages.get(packageId)
-    
-    if (!pack || pack.versions.length === 0) {
-      console.error(`[BepInExBootstrap] ${packageId} not found in catalog`)
-      return null
+  const packageId = `${owner}-${name}`
+
+  // The catalog builds in the background. On first run, the package might not be
+  // queryable immediately after ensureCatalogUpToDate(). Retry for a short time.
+  const maxWaitMs = 15000
+  const retryDelayMs = 250
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < maxWaitMs) {
+    try {
+      await ensureCatalogUpToDate(packageIndexUrl)
+
+      const packages = resolvePackagesByOwnerName(packageIndexUrl, [packageId])
+      const pack = packages.get(packageId)
+
+      if (pack && pack.versions.length > 0) {
+        const latestVersion = pack.versions[0]
+        return {
+          uuid4: pack.uuid4,
+          version: latestVersion.version_number,
+          downloadUrl: latestVersion.download_url,
+        }
+      }
+
+      // If the catalog build failed, don't spin.
+      const status = getCatalogStatus(packageIndexUrl)
+      if (status?.status === "error") {
+        console.error(`[BepInExBootstrap] Catalog build error while resolving ${packageId}: ${status.errorMessage || "unknown"}`)
+        return null
+      }
+    } catch (error) {
+      // Keep retrying unless we hit the max wait time.
+      console.error(`[BepInExBootstrap] Failed to resolve ${packageId} from catalog (will retry):`, error)
     }
-    
-    const latestVersion = pack.versions[0]
-    
-    return {
-      uuid4: pack.uuid4,
-      version: latestVersion.version_number,
-      downloadUrl: latestVersion.download_url,
-    }
-  } catch (error) {
-    console.error(`[BepInExBootstrap] Failed to find BepInEx pack:`, error)
-    return null
+
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
   }
+
+  console.error(`[BepInExBootstrap] ${packageId} not found in catalog after ${maxWaitMs}ms`)
+  return null
 }
 
 /**
@@ -260,6 +276,7 @@ export async function ensureBepInExPack(
         console.log(`[BepInExBootstrap] BepInEx pack ${packInfo.version} already available and valid`)
         return {
           available: true,
+          uuid4: packInfo.uuid4,
           version: packInfo.version,
           bootstrapRoot: validation.effectiveRoot,
         }
@@ -301,6 +318,7 @@ export async function ensureBepInExPack(
     
     return {
       available: true,
+      uuid4: packInfo.uuid4,
       version: packInfo.version,
       bootstrapRoot: validation.effectiveRoot,
     }

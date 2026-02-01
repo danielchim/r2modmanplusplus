@@ -148,7 +148,7 @@ ignoreDisableSwitch=false
       }
     } else {
       // UnityDoorstop format
-      content = content.replace(/^enabled\s*=/im, "enabled=true")
+      content = content.replace(/^enabled\s*=.*$/im, "enabled=true")
       
       if (!/^targetAssembly\s*=/im.test(content)) {
         content += `\ntargetAssembly=${preloaderPath}`
@@ -161,7 +161,7 @@ ignoreDisableSwitch=false
     if (detectedFormat === "general") {
       content = content.replace(/^enabled\s*=\s*.*/im, "enabled = false")
     } else {
-      content = content.replace(/^enabled\s*=/im, "enabled=false")
+      content = content.replace(/^enabled\s*=.*$/im, "enabled=false")
     }
   }
   
