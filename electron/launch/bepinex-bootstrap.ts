@@ -6,7 +6,7 @@ import { promises as fs } from "fs"
 import { join } from "path"
 import { pathExists, ensureDir } from "../downloads/fs-utils"
 import { getPathSettings } from "../downloads/settings-state"
-import { ensureCatalogUpToDate, getPackageByUuid, resolvePackagesByOwnerName } from "../thunderstore/catalog"
+import { ensureCatalogUpToDate, resolvePackagesByOwnerName } from "../thunderstore/catalog"
 import { downloadMod } from "../downloads/downloader"
 import { getExtractedModPath, getArchivePath, resolveGamePaths } from "../downloads/path-resolver"
 
@@ -276,30 +276,57 @@ export async function ensureBepInExPack(
  * Copies BepInEx bootstrap files to profile root
  * Idempotent operation
  */
+async function hasBepInExCore(root: string): Promise<boolean> {
+  const coreDir = join(root, "BepInEx", "core")
+  return await pathExists(coreDir)
+}
+
+async function resolvePackRoot(baseDir: string): Promise<string> {
+  if (await hasBepInExCore(baseDir)) {
+    return baseDir
+  }
+  
+  const entries = await fs.readdir(baseDir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const candidate = join(baseDir, entry.name)
+    if (await hasBepInExCore(candidate)) {
+      return candidate
+    }
+  }
+  
+  throw new Error(`BepInEx pack at ${baseDir} does not contain a BepInEx/core directory`)
+}
+
 export async function copyBepInExToProfile(
   bootstrapRoot: string,
   profileRoot: string
 ): Promise<void> {
   console.log(`[BepInExBootstrap] Copying BepInEx to profile: ${profileRoot}`)
   
+  await ensureDir(profileRoot)
+  const packRoot = await resolvePackRoot(bootstrapRoot)
+  
   // Copy BepInEx folder
-  const bepInExSrc = join(bootstrapRoot, "BepInEx")
+  const bepInExSrc = join(packRoot, "BepInEx")
   const bepInExDest = join(profileRoot, "BepInEx")
   
   if (await pathExists(bepInExSrc)) {
     await copyDirectory(bepInExSrc, bepInExDest)
+  } else {
+    throw new Error(`BepInEx folder not found in pack root ${packRoot}`)
   }
   
   // Copy root Doorstop files (winhttp.dll, doorstop_config.ini, etc.)
-  const entries = await fs.readdir(bootstrapRoot, { withFileTypes: true })
+  const entries = await fs.readdir(packRoot, { withFileTypes: true })
   
   for (const entry of entries) {
     if (entry.isFile() && entry.name !== "manifest.json" && entry.name !== "icon.png" && entry.name !== "README.md") {
-      const srcPath = join(bootstrapRoot, entry.name)
+      const srcPath = join(packRoot, entry.name)
       const destPath = join(profileRoot, entry.name)
       await fs.copyFile(srcPath, destPath)
     }
   }
   
-  console.log(`[BepInExBootstrap] BepInEx copied to profile`)
+  console.log(`[BepInExBootstrap] BepInEx copied to profile from ${packRoot}`)
 }
