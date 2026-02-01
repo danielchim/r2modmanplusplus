@@ -11,7 +11,8 @@ type AppState = {
   
   // UI state
   searchQuery: string
-  sortBy: "name" | "downloads" | "updated"
+  sortKey: "updated" | "name" | "downloads"
+  sortDir: "asc" | "desc"
   showContextPanel: boolean
   settingsOpen: boolean
   settingsActiveSection: string | null
@@ -22,7 +23,9 @@ type AppState = {
   selectMod: (modId: string | null) => void
   setModLibraryTab: (tab: "installed" | "online") => void
   setSearchQuery: (query: string) => void
-  setSortBy: (sortBy: "name" | "downloads" | "updated") => void
+  setSortKey: (sortKey: "updated" | "name" | "downloads") => void
+  setSortDir: (sortDir: "asc" | "desc") => void
+  setSort: (sort: { key: "updated" | "name" | "downloads"; dir: "asc" | "desc" }) => void
   setShowContextPanel: (show: boolean) => void
   setSettingsOpen: (open: boolean) => void
   openSettingsToGame: (gameId: string) => void
@@ -35,7 +38,8 @@ export const useAppStore = create<AppState>((set) => ({
   selectedModId: null,
   modLibraryTab: "installed",
   searchQuery: "",
-  sortBy: "name",
+  sortKey: "updated",
+  sortDir: "desc",
   showContextPanel: true,
   settingsOpen: false,
   settingsActiveSection: null,
@@ -46,7 +50,9 @@ export const useAppStore = create<AppState>((set) => ({
   selectMod: (modId) => set({ selectedModId: modId, showContextPanel: modId !== null }),
   setModLibraryTab: (tab) => set({ modLibraryTab: tab }),
   setSearchQuery: (query) => set({ searchQuery: query }),
-  setSortBy: (sortBy) => set({ sortBy: sortBy }),
+  setSortKey: (sortKey) => set({ sortKey }),
+  setSortDir: (sortDir) => set({ sortDir }),
+  setSort: (sort) => set({ sortKey: sort.key, sortDir: sort.dir }),
   setShowContextPanel: (show) => set({ showContextPanel: show }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
   openSettingsToGame: (gameId) => set({ settingsOpen: true, settingsActiveSection: `game-${gameId}` }),
