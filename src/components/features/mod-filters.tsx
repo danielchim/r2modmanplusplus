@@ -12,6 +12,9 @@ type ModFiltersProps = {
   onToggleCategory: (category: string) => void
   onClearCategories: () => void
   categoryCounts?: Record<string, number>
+  sortKey: "updated" | "name" | "downloads"
+  sortDir: "asc" | "desc"
+  onSortChange: (sort: { key: "updated" | "name" | "downloads"; dir: "asc" | "desc" }) => void
 }
 
 export const ModFilters = memo(function ModFilters({
@@ -22,8 +25,12 @@ export const ModFilters = memo(function ModFilters({
   onToggleCategory,
   onClearCategories,
   categoryCounts,
+  sortKey,
+  sortDir,
+  onSortChange,
 }: ModFiltersProps) {
   const [sectionsOpen, setSectionsOpen] = useState(true)
+  const [sortOpen, setSortOpen] = useState(true)
   const [categoriesOpen, setCategoriesOpen] = useState(true)
 
   return (
@@ -95,6 +102,163 @@ export const ModFilters = memo(function ModFilters({
                   )}
                 </div>
                 <span>Modpacks</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sort Group */}
+        <div className="border-b border-border">
+          <button
+            onClick={() => setSortOpen(!sortOpen)}
+            className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
+          >
+            <span>Sort</span>
+            {sortOpen ? (
+              <ChevronUp className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 text-muted-foreground" />
+            )}
+          </button>
+          {sortOpen && (
+            <div className="px-4 pb-3 space-y-1">
+              <button
+                onClick={() => onSortChange({ key: "updated", dir: "desc" })}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  sortKey === "updated" && sortDir === "desc"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div
+                  className={cn(
+                    "size-4 rounded-full border-2 flex items-center justify-center",
+                    sortKey === "updated" && sortDir === "desc"
+                      ? "border-primary"
+                      : "border-muted-foreground/50"
+                  )}
+                >
+                  {sortKey === "updated" && sortDir === "desc" && (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Last updated: Newest</span>
+              </button>
+              <button
+                onClick={() => onSortChange({ key: "updated", dir: "asc" })}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  sortKey === "updated" && sortDir === "asc"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div
+                  className={cn(
+                    "size-4 rounded-full border-2 flex items-center justify-center",
+                    sortKey === "updated" && sortDir === "asc"
+                      ? "border-primary"
+                      : "border-muted-foreground/50"
+                  )}
+                >
+                  {sortKey === "updated" && sortDir === "asc" && (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Last updated: Oldest</span>
+              </button>
+              <button
+                onClick={() => onSortChange({ key: "name", dir: "asc" })}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  sortKey === "name" && sortDir === "asc"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div
+                  className={cn(
+                    "size-4 rounded-full border-2 flex items-center justify-center",
+                    sortKey === "name" && sortDir === "asc"
+                      ? "border-primary"
+                      : "border-muted-foreground/50"
+                  )}
+                >
+                  {sortKey === "name" && sortDir === "asc" && (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Name: A–Z</span>
+              </button>
+              <button
+                onClick={() => onSortChange({ key: "name", dir: "desc" })}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  sortKey === "name" && sortDir === "desc"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div
+                  className={cn(
+                    "size-4 rounded-full border-2 flex items-center justify-center",
+                    sortKey === "name" && sortDir === "desc"
+                      ? "border-primary"
+                      : "border-muted-foreground/50"
+                  )}
+                >
+                  {sortKey === "name" && sortDir === "desc" && (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Name: Z–A</span>
+              </button>
+              <button
+                onClick={() => onSortChange({ key: "downloads", dir: "desc" })}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  sortKey === "downloads" && sortDir === "desc"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div
+                  className={cn(
+                    "size-4 rounded-full border-2 flex items-center justify-center",
+                    sortKey === "downloads" && sortDir === "desc"
+                      ? "border-primary"
+                      : "border-muted-foreground/50"
+                  )}
+                >
+                  {sortKey === "downloads" && sortDir === "desc" && (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Downloads: Most</span>
+              </button>
+              <button
+                onClick={() => onSortChange({ key: "downloads", dir: "asc" })}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  sortKey === "downloads" && sortDir === "asc"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div
+                  className={cn(
+                    "size-4 rounded-full border-2 flex items-center justify-center",
+                    sortKey === "downloads" && sortDir === "asc"
+                      ? "border-primary"
+                      : "border-muted-foreground/50"
+                  )}
+                >
+                  {sortKey === "downloads" && sortDir === "asc" && (
+                    <div className="size-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Downloads: Least</span>
               </button>
             </div>
           )}
