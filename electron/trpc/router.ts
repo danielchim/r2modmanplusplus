@@ -1,5 +1,5 @@
 import { initTRPC } from "@trpc/server"
-import { dialog, shell } from "electron"
+import { app, dialog, shell } from "electron"
 import { promises as fs } from "fs"
 import { join } from "path"
 import superjson from "superjson"
@@ -32,6 +32,36 @@ const publicProcedure = t.procedure
  * Migrated from existing ipcMain handlers
  */
 const desktopRouter = t.router({
+  /**
+   * Get default paths from Electron
+   * Returns platform-appropriate defaults for dataFolder and steamFolder
+   */
+  getDefaultPaths: publicProcedure.query(async () => {
+    const dataFolder = app.getPath("userData")
+    
+    // Best-effort Steam folder detection (Windows focus)
+    let steamFolder = ""
+    const steamCandidates = [
+      "C:\\Program Files (x86)\\Steam",
+      "C:\\Program Files\\Steam",
+    ]
+    
+    for (const candidate of steamCandidates) {
+      try {
+        await fs.access(candidate)
+        steamFolder = candidate
+        break
+      } catch {
+        // Directory doesn't exist, try next
+      }
+    }
+    
+    return {
+      dataFolder,
+      steamFolder,
+    }
+  }),
+
   /**
    * Open native folder selection dialog
    * Returns selected folder path or null if cancelled

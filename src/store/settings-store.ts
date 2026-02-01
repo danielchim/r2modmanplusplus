@@ -48,8 +48,8 @@ type SettingsState = {
 }
 
 const defaultGlobalSettings: GlobalSettings = {
-  dataFolder: "E:\\lmao",
-  steamFolder: "C:\\Program Files (x86)\\Steam",
+  dataFolder: "",
+  steamFolder: "",
   modDownloadFolder: "",
   cacheFolder: "",
   speedLimitEnabled: false,
