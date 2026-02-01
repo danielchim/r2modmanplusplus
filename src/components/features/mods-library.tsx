@@ -113,6 +113,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ModTile } from "./mod-tile"
 import { ModListItem } from "./mod-list-item"
 import { CreateProfileDialog } from "./create-profile-dialog"
+import { InstallBaseDependenciesDialog } from "./install-base-dependencies-dialog"
 import { ModFilters } from "./mod-filters"
 import { DependencyDownloadDialog } from "./dependencies/dependency-download-dialog"
 
@@ -435,6 +436,9 @@ export function ModsLibrary() {
   const [section, setSection] = useState<"mod" | "modpack">("mod")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [filtersOpen, setFiltersOpen] = useState(true)
+  const [installDepsOpen, setInstallDepsOpen] = useState(false)
+  const [depsMissing, setDepsMissing] = useState<string[]>([])
+  const [isInstallingDeps, setIsInstallingDeps] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Reset filters to open when viewport becomes desktop-sized
@@ -496,6 +500,8 @@ export function ModsLibrary() {
   
   // Launch-related queries and mutations
   const launchMutation = trpc.launch.start.useMutation()
+  const installDepsMutation = trpc.launch.installBaseDependencies.useMutation()
+  const trpcUtils = trpc.useUtils()
   
   // Query to verify binary exists
   const binaryVerification = trpc.launch.verifyBinary.useQuery(
@@ -808,6 +814,19 @@ export function ModsLibrary() {
     if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
     
     try {
+      // Check if base dependencies are installed
+      const depsCheck = await trpcUtils.launch.checkBaseDependencies.fetch({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+      })
+      
+      if (depsCheck.needsInstall) {
+        // Show install dialog
+        setDepsMissing(depsCheck.missing)
+        setInstallDepsOpen(true)
+        return
+      }
+      
       const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
       
       const result = await launchMutation.mutateAsync({
@@ -835,6 +854,95 @@ export function ModsLibrary() {
       toast.error("Launch failed", {
         description: message,
       })
+    }
+  }
+  
+  const handleInstallAndLaunch = async () => {
+    if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
+    
+    try {
+      setIsInstallingDeps(true)
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
+      const installResult = await installDepsMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
+      })
+      
+      if (!installResult.success) {
+        toast.error("Installation failed", {
+          description: installResult.error,
+        })
+        setIsInstallingDeps(false)
+        setInstallDepsOpen(false)
+        return
+      }
+      
+      toast.success("Base dependencies installed")
+      setIsInstallingDeps(false)
+      setInstallDepsOpen(false)
+      
+      const result = await launchMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        mode: "modded",
+        installFolder,
+        exePath: binaryVerification.data.exePath,
+        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
+      })
+      
+      if (result.success) {
+        toast.success("Game launched", {
+          description: `Started in modded mode (PID: ${result.pid})`,
+        })
+      } else {
+        toast.error("Launch failed", {
+          description: result.error,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Failed", {
+        description: message,
+      })
+      setIsInstallingDeps(false)
+      setInstallDepsOpen(false)
+    }
+  }
+  
+  const handleInstallOnly = async () => {
+    if (!selectedGameId || !activeProfileId) return
+    
+    try {
+      setIsInstallingDeps(true)
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
+      const installResult = await installDepsMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
+      })
+      
+      if (!installResult.success) {
+        toast.error("Installation failed", {
+          description: installResult.error,
+        })
+      } else {
+        toast.success("Base dependencies installed")
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Installation failed", {
+        description: message,
+      })
+    } finally {
+      setIsInstallingDeps(false)
+      setInstallDepsOpen(false)
     }
   }
   
@@ -916,6 +1024,14 @@ export function ModsLibrary() {
         open={createProfileOpen}
         onOpenChange={setCreateProfileOpen}
         onCreateProfile={handleCreateProfile}
+      />
+      <InstallBaseDependenciesDialog
+        open={installDepsOpen}
+        onOpenChange={setInstallDepsOpen}
+        onInstallAndLaunch={handleInstallAndLaunch}
+        onInstallOnly={handleInstallOnly}
+        missing={depsMissing}
+        isInstalling={isInstallingDeps}
       />
       <div className="flex h-full flex-col">
         {/* Game Banner */}

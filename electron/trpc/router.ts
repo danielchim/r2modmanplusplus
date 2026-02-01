@@ -16,6 +16,7 @@ import { verifyBinary } from "../launch/binary-verifier"
 import { getProcessStatus } from "../launch/process-tracker"
 import { launchGame, type LaunchMode } from "../launch/launcher"
 import { cleanupInjected } from "../launch/injection-tracker"
+import { checkBaseDependencies, installBaseDependencies } from "../launch/base-dependencies"
 import { getLogger } from "../file-logger"
 
 /**
@@ -604,6 +605,53 @@ const launchRouter = t.router({
     )
     .mutation(async ({ input }) => {
       return await cleanupInjected(input.gameId)
+    }),
+  
+  /**
+   * Check if base dependencies are installed for a profile
+   */
+  checkBaseDependencies: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      
+      return await checkBaseDependencies(profileRoot)
+    }),
+  
+  /**
+   * Install base dependencies for a profile
+   */
+  installBaseDependencies: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        packageIndexUrl: z.string(),
+        modloaderPackage: z.object({
+          owner: z.string(),
+          name: z.string(),
+          rootFolder: z.string(),
+        }).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      
+      return await installBaseDependencies(
+        input.gameId,
+        profileRoot,
+        input.packageIndexUrl,
+        input.modloaderPackage
+      )
     }),
 })
 

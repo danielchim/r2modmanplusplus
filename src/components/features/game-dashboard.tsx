@@ -25,6 +25,7 @@ import { CreateProfileDialog } from "./create-profile-dialog"
 import { RenameProfileDialog } from "./rename-profile-dialog"
 import { DeleteProfileDialog } from "./delete-profile-dialog"
 import { UninstallAllModsDialog } from "./uninstall-all-mods-dialog"
+import { InstallBaseDependenciesDialog } from "./install-base-dependencies-dialog"
 import { toast } from "sonner"
 
 // Stable fallback constant to avoid creating new [] in selectors
@@ -35,6 +36,9 @@ export function GameDashboard() {
   const [renameProfileOpen, setRenameProfileOpen] = useState(false)
   const [deleteProfileOpen, setDeleteProfileOpen] = useState(false)
   const [uninstallAllOpen, setUninstallAllOpen] = useState(false)
+  const [installDepsOpen, setInstallDepsOpen] = useState(false)
+  const [depsMissing, setDepsMissing] = useState<string[]>([])
+  const [isInstallingDeps, setIsInstallingDeps] = useState(false)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
   
@@ -56,6 +60,8 @@ export function GameDashboard() {
   
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
   const launchMutation = trpc.launch.start.useMutation()
+  const installDepsMutation = trpc.launch.installBaseDependencies.useMutation()
+  const trpcUtils = trpc.useUtils()
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModCount = installedModsSet?.size ?? 0
   
@@ -193,6 +199,20 @@ export function GameDashboard() {
     if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
     
     try {
+      // Check if base dependencies are installed
+      const depsCheck = await trpcUtils.launch.checkBaseDependencies.fetch({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+      })
+      
+      if (depsCheck.needsInstall) {
+        // Show install dialog
+        setDepsMissing(depsCheck.missing)
+        setInstallDepsOpen(true)
+        return
+      }
+      
+      // Dependencies are installed, proceed with launch
       const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
       
       const result = await launchMutation.mutateAsync({
@@ -220,6 +240,102 @@ export function GameDashboard() {
       toast.error("Launch failed", {
         description: message,
       })
+    }
+  }
+  
+  const handleInstallAndLaunch = async () => {
+    if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
+    
+    try {
+      setIsInstallingDeps(true)
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
+      // Install base dependencies
+      const installResult = await installDepsMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
+      })
+      
+      if (!installResult.success) {
+        toast.error("Installation failed", {
+          description: installResult.error,
+        })
+        setIsInstallingDeps(false)
+        setInstallDepsOpen(false)
+        return
+      }
+      
+      toast.success("Base dependencies installed", {
+        description: `${installResult.filesInstalled || 0} components installed`,
+      })
+      
+      setIsInstallingDeps(false)
+      setInstallDepsOpen(false)
+      
+      // Now launch the game
+      const result = await launchMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        mode: "modded",
+        installFolder,
+        exePath: binaryVerification.data.exePath,
+        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
+      })
+      
+      if (result.success) {
+        toast.success("Game launched", {
+          description: `Started in modded mode (PID: ${result.pid})`,
+        })
+      } else {
+        toast.error("Launch failed", {
+          description: result.error,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Failed", {
+        description: message,
+      })
+      setIsInstallingDeps(false)
+      setInstallDepsOpen(false)
+    }
+  }
+  
+  const handleInstallOnly = async () => {
+    if (!selectedGameId || !activeProfileId) return
+    
+    try {
+      setIsInstallingDeps(true)
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
+      const installResult = await installDepsMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
+      })
+      
+      if (!installResult.success) {
+        toast.error("Installation failed", {
+          description: installResult.error,
+        })
+      } else {
+        toast.success("Base dependencies installed", {
+          description: `${installResult.filesInstalled || 0} components installed`,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Installation failed", {
+        description: message,
+      })
+    } finally {
+      setIsInstallingDeps(false)
+      setInstallDepsOpen(false)
     }
   }
   
@@ -359,6 +475,14 @@ export function GameDashboard() {
         onOpenChange={setUninstallAllOpen}
         modCount={installedModCount}
         onConfirm={handleUninstallAll}
+      />
+      <InstallBaseDependenciesDialog
+        open={installDepsOpen}
+        onOpenChange={setInstallDepsOpen}
+        onInstallAndLaunch={handleInstallAndLaunch}
+        onInstallOnly={handleInstallOnly}
+        missing={depsMissing}
+        isInstalling={isInstallingDeps}
       />
       <div className="flex flex-col gap-4 p-4">
         {/* Section Title */}
