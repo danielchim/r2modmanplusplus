@@ -566,6 +566,11 @@ const launchRouter = t.router({
         exePath: z.string(),
         launchParameters: z.string(),
         packageIndexUrl: z.string(),
+        modloaderPackage: z.object({
+          owner: z.string(),
+          name: z.string(),
+          rootFolder: z.string(),
+        }).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -582,6 +587,7 @@ const launchRouter = t.router({
         launchParameters: input.launchParameters,
         packageIndexUrl: input.packageIndexUrl,
         profileRoot,
+        modloaderPackage: input.modloaderPackage,
       })
       
       return result

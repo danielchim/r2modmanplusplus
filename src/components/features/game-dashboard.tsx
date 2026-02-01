@@ -6,7 +6,7 @@ import { useProfileStore, type Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { trpc } from "@/lib/trpc"
-import { getExeNames, getEcosystemEntry } from "@/lib/ecosystem"
+import { getExeNames, getEcosystemEntry, getModloaderPackageForGame } from "@/lib/ecosystem"
 import { useCatalogStatus } from "@/lib/queries/useOnlineMods"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -193,6 +193,8 @@ export function GameDashboard() {
     if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
     
     try {
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
@@ -201,6 +203,7 @@ export function GameDashboard() {
         exePath: binaryVerification.data.exePath,
         launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
         packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
       })
       
       if (result.success) {
@@ -224,6 +227,8 @@ export function GameDashboard() {
     if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
     
     try {
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
@@ -232,6 +237,7 @@ export function GameDashboard() {
         exePath: binaryVerification.data.exePath,
         launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
         packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
       })
       
       if (result.success) {

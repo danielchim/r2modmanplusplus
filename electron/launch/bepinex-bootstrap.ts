@@ -23,25 +23,30 @@ export interface BepInExBootstrapResult {
 /**
  * Gets the bootstrap directory for a game
  */
-function getBootstrapDir(gameId: string, version: string): string {
+function getBootstrapDir(gameId: string, owner: string, name: string, version: string): string {
   const dataFolder = getPathSettings().global.dataFolder
-  return join(dataFolder, gameId, "_state", "bootstrap", "BepInExPack", version)
+  return join(dataFolder, gameId, "_state", "bootstrap", `${owner}-${name}`, version)
 }
 
 /**
- * Finds BepInEx-BepInExPack in the catalog
+ * Finds a BepInEx pack in the catalog by owner and name
  */
-async function findBepInExPack(packageIndexUrl: string): Promise<{ uuid4: string; version: string; downloadUrl: string } | null> {
+async function findBepInExPack(
+  packageIndexUrl: string,
+  owner: string,
+  name: string
+): Promise<{ uuid4: string; version: string; downloadUrl: string } | null> {
   try {
     // Ensure catalog is up-to-date
     await ensureCatalogUpToDate(packageIndexUrl)
     
-    // Look up BepInEx-BepInExPack
-    const packages = resolvePackagesByOwnerName(packageIndexUrl, ["BepInEx-BepInExPack"])
-    const pack = packages.get("BepInEx-BepInExPack")
+    // Look up the package by owner-name
+    const packageId = `${owner}-${name}`
+    const packages = resolvePackagesByOwnerName(packageIndexUrl, [packageId])
+    const pack = packages.get(packageId)
     
     if (!pack || pack.versions.length === 0) {
-      console.error("[BepInExBootstrap] BepInEx-BepInExPack not found in catalog")
+      console.error(`[BepInExBootstrap] ${packageId} not found in catalog`)
       return null
     }
     
@@ -53,7 +58,7 @@ async function findBepInExPack(packageIndexUrl: string): Promise<{ uuid4: string
       downloadUrl: latestVersion.download_url,
     }
   } catch (error) {
-    console.error("[BepInExBootstrap] Failed to find BepInEx pack:", error)
+    console.error(`[BepInExBootstrap] Failed to find BepInEx pack:`, error)
     return null
   }
 }
@@ -63,23 +68,25 @@ async function findBepInExPack(packageIndexUrl: string): Promise<{ uuid4: string
  */
 async function downloadBepInExPack(
   gameId: string,
+  owner: string,
+  name: string,
   version: string,
   downloadUrl: string
 ): Promise<string> {
-  console.log(`[BepInExBootstrap] Downloading BepInEx pack ${version}`)
+  console.log(`[BepInExBootstrap] Downloading ${owner}-${name} ${version}`)
   
   const settings = getPathSettings()
   const paths = resolveGamePaths(gameId, settings)
   
   // Use standard download paths
-  const archivePath = getArchivePath(paths.archiveRoot, "BepInEx", "BepInExPack", version)
-  const extractPath = getExtractedModPath(paths.modCacheRoot, "BepInEx", "BepInExPack", version)
+  const archivePath = getArchivePath(paths.archiveRoot, owner, name, version)
+  const extractPath = getExtractedModPath(paths.modCacheRoot, owner, name, version)
   
   // Download and extract
   const result = await downloadMod({
     gameId,
-    author: "BepInEx",
-    name: "BepInExPack",
+    author: owner,
+    name,
     version,
     downloadUrl,
     archivePath,
@@ -88,7 +95,7 @@ async function downloadBepInExPack(
   })
   
   // Copy to bootstrap directory for persistence
-  const bootstrapDir = getBootstrapDir(gameId, version)
+  const bootstrapDir = getBootstrapDir(gameId, owner, name, version)
   await ensureDir(bootstrapDir)
   
   console.log(`[BepInExBootstrap] Copying to bootstrap directory: ${bootstrapDir}`)
@@ -197,23 +204,33 @@ async function validateBepInExBootstrap(bootstrapRoot: string): Promise<{ valid:
  */
 export async function ensureBepInExPack(
   gameId: string,
-  packageIndexUrl: string
+  packageIndexUrl: string,
+  modloaderPackage?: {
+    owner: string
+    name: string
+    rootFolder: string
+  }
 ): Promise<BepInExBootstrapResult> {
   console.log(`[BepInExBootstrap] Ensuring BepInEx pack for ${gameId}`)
   
+  // Default to BepInEx-BepInExPack if not specified
+  const packageOwner = modloaderPackage?.owner || "BepInEx"
+  const packageName = modloaderPackage?.name || "BepInExPack"
+  const packageId = `${packageOwner}-${packageName}`
+  
   try {
     // Find BepInEx pack in catalog
-    const packInfo = await findBepInExPack(packageIndexUrl)
+    const packInfo = await findBepInExPack(packageIndexUrl, packageOwner, packageName)
     
     if (!packInfo) {
       return {
         available: false,
-        error: "BepInEx-BepInExPack not found in Thunderstore catalog",
+        error: `${packageId} not found in Thunderstore catalog`,
       }
     }
     
     // Check if already downloaded
-    const bootstrapDir = getBootstrapDir(gameId, packInfo.version)
+    const bootstrapDir = getBootstrapDir(gameId, packageOwner, packageName, packInfo.version)
     
     if (await pathExists(bootstrapDir)) {
       // Validate the bootstrap cache
@@ -242,7 +259,13 @@ export async function ensureBepInExPack(
     }
     
     // Download and extract
-    const extractedPath = await downloadBepInExPack(gameId, packInfo.version, packInfo.downloadUrl)
+    const extractedPath = await downloadBepInExPack(
+      gameId,
+      packageOwner,
+      packageName,
+      packInfo.version,
+      packInfo.downloadUrl
+    )
     
     // Validate the newly downloaded bootstrap
     const validation = await validateBepInExBootstrap(extractedPath)

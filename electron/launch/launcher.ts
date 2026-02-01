@@ -39,6 +39,11 @@ export interface LaunchOptions {
   launchParameters: string
   packageIndexUrl: string
   profileRoot: string
+  modloaderPackage?: {
+    owner: string
+    name: string
+    rootFolder: string
+  }
 }
 
 /**
@@ -272,7 +277,7 @@ async function injectLoaderFiles(
  * Launches the game
  */
 export async function launchGame(options: LaunchOptions): Promise<LaunchResult> {
-  const { gameId, profileId, mode, installFolder, exePath, profileRoot, packageIndexUrl } = options
+  const { gameId, profileId, mode, installFolder, exePath, profileRoot, packageIndexUrl, modloaderPackage } = options
   
   const logger = getLogger()
   logger.info(`Launching game ${gameId} in ${mode} mode`, { profileId, exePath })
@@ -280,7 +285,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
   try {
     // Step 1: Ensure BepInEx pack is available (Windows only)
     if (process.platform === "win32") {
-      const bepInExResult = await ensureBepInExPack(gameId, packageIndexUrl)
+      const bepInExResult = await ensureBepInExPack(gameId, packageIndexUrl, modloaderPackage)
       
       if (!bepInExResult.available) {
         logger.error(`BepInEx preparation failed for ${gameId}: ${bepInExResult.error}`)

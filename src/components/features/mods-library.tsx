@@ -12,7 +12,7 @@ import { MOD_CATEGORIES } from "@/mocks/mod-categories"
 import { useOnlineMods, useOnlinePackage, useOnlineCategories } from "@/lib/queries/useOnlineMods"
 import { trpc, hasElectronTRPC } from "@/lib/trpc"
 import { openFolder } from "@/lib/desktop"
-import { getExeNames, getEcosystemEntry } from "@/lib/ecosystem"
+import { getExeNames, getEcosystemEntry, getModloaderPackageForGame } from "@/lib/ecosystem"
 import { parseModSearch } from "@/lib/mod-search"
 import type { Mod } from "@/types/mod"
 import { toast } from "sonner"
@@ -808,6 +808,8 @@ export function ModsLibrary() {
     if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
     
     try {
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
@@ -816,6 +818,7 @@ export function ModsLibrary() {
         exePath: binaryVerification.data.exePath,
         launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
         packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
       })
       
       if (result.success) {
@@ -839,6 +842,8 @@ export function ModsLibrary() {
     if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
     
     try {
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
@@ -847,6 +852,7 @@ export function ModsLibrary() {
         exePath: binaryVerification.data.exePath,
         launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
         packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
       })
       
       if (result.success) {

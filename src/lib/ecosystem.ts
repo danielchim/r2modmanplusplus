@@ -16,8 +16,15 @@ type EcosystemGame = {
   }>
 }
 
+type ModloaderPackage = {
+  packageId: string
+  rootFolder: string
+  loader: string
+}
+
 type EcosystemData = {
   games: Record<string, EcosystemGame>
+  modloaderPackages: ModloaderPackage[]
 }
 
 const ecosystem = ecosystemData as unknown as EcosystemData
@@ -73,3 +80,81 @@ export function getAllGameLabels(): string[] {
 export function hasGame(label: string): boolean {
   return label in ecosystem.games
 }
+
+/**
+ * Get the modloader package for a game
+ * Returns the package ID, owner, name, and rootFolder
+ * 
+ * For BepInEx games, this looks up the correct BepInExPack variant
+ * (e.g., BepInEx-BepInExPack_H3VR for H3VR, BepInEx-BepInExPack for generic games)
+ * 
+ * The packageId is checked against the game's package index URL to find the correct variant.
+ * Falls back to BepInEx-BepInExPack if no specific variant is found.
+ */
+export function getModloaderPackageForGame(gameId: string): {
+  packageId: string
+  owner: string
+  name: string
+  rootFolder: string
+} | null {
+  const entry = getEcosystemEntry(gameId)
+  if (!entry || !entry.r2modman || entry.r2modman.length === 0) {
+    return null
+  }
+  
+  const config = entry.r2modman[0]
+  const packageIndexUrl = config.packageIndex
+  
+  if (!packageIndexUrl) {
+    return null
+  }
+  
+  // Extract community identifier from package index URL
+  // e.g., "https://thunderstore.io/c/h3vr/api/v1/package-listing-index/" -> "h3vr"
+  const communityMatch = packageIndexUrl.match(/thunderstore\.io\/c\/([^/]+)\//)
+  const community = communityMatch?.[1]
+  
+  // Find modloader packages that might match this game
+  // For BepInEx games, look for community-specific BepInExPack variants
+  // e.g., BepInEx-BepInExPack_H3VR for h3vr community
+  const bepinexPackages = ecosystem.modloaderPackages.filter(
+    (pkg) => pkg.loader === "bepinex"
+  )
+  
+  // Try to find a community-specific variant first
+  // Match patterns like BepInEx-BepInExPack_H3VR, BepInEx-BepInExPack_GTFO, etc.
+  if (community) {
+    const communityUpper = community.toUpperCase().replace(/-/g, "_")
+    const communitySpecific = bepinexPackages.find(
+      (pkg) => pkg.packageId.toUpperCase().includes(`_${communityUpper}`)
+    )
+    
+    if (communitySpecific) {
+      const [owner, name] = communitySpecific.packageId.split("-")
+      return {
+        packageId: communitySpecific.packageId,
+        owner,
+        name,
+        rootFolder: communitySpecific.rootFolder,
+      }
+    }
+  }
+  
+  // Fallback to generic BepInEx-BepInExPack
+  const genericPack = bepinexPackages.find(
+    (pkg) => pkg.packageId === "BepInEx-BepInExPack"
+  )
+  
+  if (genericPack) {
+    const [owner, name] = genericPack.packageId.split("-")
+    return {
+      packageId: genericPack.packageId,
+      owner,
+      name,
+      rootFolder: genericPack.rootFolder,
+    }
+  }
+  
+  return null
+}
+
