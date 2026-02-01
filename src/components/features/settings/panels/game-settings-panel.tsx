@@ -25,6 +25,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
   
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
   const unmanageGameMutation = trpc.games.unmanageGameCleanup.useMutation()
+  const cleanupInjectedMutation = trpc.launch.cleanupInjected.useMutation()
   
   const { dataFolder } = useSettingsStore((s) => s.global)
   const getPerGame = useSettingsStore((s) => s.getPerGame)
@@ -117,11 +118,16 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
 
   const handleRemoveManagement = async () => {
     const confirmed = confirm(
-      `Are you sure you want to stop managing ${game.name}?\n\nThis will:\n- Remove the game from your managed list\n- Delete all profiles and mods (files removed from disk)\n- Delete all downloads and caches\n- Clear all game settings\n\nYou can add it back later if needed.`
+      `Are you sure you want to stop managing ${game.name}?\n\nThis will:\n- Attempt to remove injected BepInEx/Doorstop files from the game install folder and restore backups\n- Files modified after injection will be left untouched\n- Remove the game from your managed list\n- Delete all profiles and mods (files removed from disk)\n- Delete all downloads and caches\n- Clear all game settings\n\nThe game must be closed before proceeding.\n\nYou can add it back later if needed.`
     )
     if (confirmed) {
       try {
-        // Delete all game files (profiles + downloads + caches)
+        // First cleanup injected files
+        const cleanupResult = await cleanupInjectedMutation.mutateAsync({
+          gameId,
+        })
+        
+        // Then delete all game files (profiles + downloads + caches)
         const result = await unmanageGameMutation.mutateAsync({
           gameId,
         })
@@ -148,11 +154,33 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         }
         
         toast.success(`${game.name} removed`, {
-          description: `${result.totalRemoved} files cleaned up from disk`,
+          description: `Cleaned up ${cleanupResult.restored + cleanupResult.removed} injected files, ${result.totalRemoved} total files removed`,
         })
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error"
         toast.error("Failed to remove game", {
+          description: message,
+        })
+      }
+    }
+  }
+  
+  const handleCleanupInjected = async () => {
+    const confirmed = confirm(
+      `Clean up injected files from ${game.name}?\n\nThis will:\n- Remove BepInEx/Doorstop files from the game install folder\n- Restore backed-up original files\n- Skip files that were modified after injection\n\nThe game must be closed before proceeding.`
+    )
+    if (confirmed) {
+      try {
+        const result = await cleanupInjectedMutation.mutateAsync({
+          gameId,
+        })
+        
+        toast.success("Injected files cleaned up", {
+          description: `Restored ${result.restored} files, removed ${result.removed} files, skipped ${result.skipped} modified files`,
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error"
+        toast.error("Failed to cleanup injected files", {
           description: message,
         })
       }
@@ -248,6 +276,20 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         </div>
 
         <div className="space-y-0 divide-y divide-border border rounded-lg px-6">
+          <SettingsRow
+            title="Clean up injected files"
+            description="Remove BepInEx/Doorstop files from game install folder and restore backups. Useful when switching to vanilla without unmanaging."
+            rightContent={
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCleanupInjected}
+              >
+                Cleanup Injected Files
+              </Button>
+            }
+          />
+          
           <SettingsRow
             title="Reset installation"
             description="Remove all mods and reset to Default profile only. Keeps game install folder."

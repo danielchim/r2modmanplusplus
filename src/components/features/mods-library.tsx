@@ -8,9 +8,13 @@ import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
-import { useOnlineMods, useOnlinePackage } from "@/lib/queries/useOnlineMods"
-import { hasElectronTRPC } from "@/lib/trpc"
+import { useOnlineMods, useOnlinePackage, useOnlineCategories } from "@/lib/queries/useOnlineMods"
+import { trpc, hasElectronTRPC } from "@/lib/trpc"
+import { openFolder } from "@/lib/desktop"
+import { getExeNames, getEcosystemEntry } from "@/lib/ecosystem"
 import type { Mod } from "@/types/mod"
+import { toast } from "sonner"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 // Stable fallback constants to avoid creating new references in selectors
 const EMPTY_PROFILES: readonly Profile[] = []
@@ -167,6 +171,37 @@ export function ModsLibrary() {
   const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
   const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
+  const exeNames = selectedGameId ? getExeNames(selectedGameId) : []
+  const ecosystem = selectedGameId ? getEcosystemEntry(selectedGameId) : null
+  const packageIndexUrl = ecosystem?.r2modman?.[0]?.packageIndex || ""
+  
+  // Launch-related queries and mutations
+  const launchMutation = trpc.launch.start.useMutation()
+  
+  // Query to verify binary exists
+  const binaryVerification = trpc.launch.verifyBinary.useQuery(
+    {
+      installFolder,
+      exeNames,
+    },
+    {
+      enabled: profilesEnabled && exeNames.length > 0,
+      refetchOnWindowFocus: false,
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  )
+  
+  // Poll launch status
+  const launchStatus = trpc.launch.getStatus.useQuery(
+    {
+      gameId: selectedGameId || "",
+    },
+    {
+      enabled: !!selectedGameId,
+      refetchInterval: 1500, // Poll every 1.5 seconds
+      refetchOnWindowFocus: true,
+    }
+  )
 
   // Helper to apply search filter to a mod
   const matchesSearch = (mod: Mod, query: string) => {
@@ -276,8 +311,29 @@ export function ModsLibrary() {
     enabled: tab === "online" && !!selectedGameId,
   })
 
-  // Compute category counts (ignoring selectedCategories to show availability)
+  // Fetch categories from catalog (Electron only, falls back to MOD_CATEGORIES)
+  const onlineCategoriesQuery = useOnlineCategories(
+    selectedGameId || "",
+    section === "mod" ? "mod" : "modpack",
+    !!selectedGameId
+  )
+
+  // Derive categories list: use catalog data if available, otherwise fallback to static list
+  const categories = useMemo(() => {
+    if (onlineCategoriesQuery.isElectron && onlineCategoriesQuery.data?.categories) {
+      return onlineCategoriesQuery.data.categories
+    }
+    return MOD_CATEGORIES
+  }, [onlineCategoriesQuery.isElectron, onlineCategoriesQuery.data])
+
+  // Compute category counts (prefer catalog counts, fallback to computed)
   const categoryCounts = useMemo(() => {
+    // If we have catalog counts, use those
+    if (onlineCategoriesQuery.isElectron && onlineCategoriesQuery.data?.counts) {
+      return onlineCategoriesQuery.data.counts
+    }
+
+    // Otherwise compute from displayed mods
     if (!selectedGameId) return {}
     
     let baseMods: Mod[] = []
@@ -304,7 +360,7 @@ export function ModsLibrary() {
     })
 
     return counts
-  }, [selectedGameId, tab, installedItems, section, onlineModsQuery.isElectron, onlineModsQuery.data])
+  }, [selectedGameId, tab, installedItems, section, onlineModsQuery.isElectron, onlineModsQuery.data, onlineCategoriesQuery.isElectron, onlineCategoriesQuery.data])
   
   // Early return if no game selected
   if (!selectedGameId) {
@@ -360,6 +416,108 @@ export function ModsLibrary() {
     setSelectedCategories([])
   }
 
+  const handleOpenGameFolder = async () => {
+    if (!installFolder) return
+    
+    try {
+      await openFolder(installFolder)
+      toast.success("Opened game folder")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Failed to open folder", {
+        description: message,
+      })
+    }
+  }
+  
+  const handleStartModded = async () => {
+    if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
+    
+    try {
+      const result = await launchMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        mode: "modded",
+        installFolder,
+        exePath: binaryVerification.data.exePath,
+        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        packageIndexUrl,
+      })
+      
+      if (result.success) {
+        toast.success("Game launched", {
+          description: `Started in modded mode (PID: ${result.pid})`,
+        })
+      } else {
+        toast.error("Launch failed", {
+          description: result.error,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Launch failed", {
+        description: message,
+      })
+    }
+  }
+  
+  const handleStartVanilla = async () => {
+    if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
+    
+    try {
+      const result = await launchMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        mode: "vanilla",
+        installFolder,
+        exePath: binaryVerification.data.exePath,
+        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        packageIndexUrl,
+      })
+      
+      if (result.success) {
+        toast.success("Game launched", {
+          description: `Started in vanilla mode (PID: ${result.pid})`,
+        })
+      } else {
+        toast.error("Launch failed", {
+          description: result.error,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Launch failed", {
+        description: message,
+      })
+    }
+  }
+
+  // Determine launch button state and tooltip
+  let launchDisabled = true
+  let launchTooltip = "Install folder not set"
+  
+  const isRunning = launchStatus.data?.running ?? false
+  const isLaunching = launchMutation.isPending
+  
+  if (installFolder) {
+    if (binaryVerification.isLoading) {
+      launchDisabled = true
+      launchTooltip = "Verifying game files..."
+    } else if (!binaryVerification.data?.ok) {
+      launchDisabled = true
+      launchTooltip = binaryVerification.data?.reason || "Game binary not found"
+    } else if (isRunning) {
+      launchDisabled = true
+      launchTooltip = "Game is running"
+    } else if (isLaunching) {
+      launchDisabled = true
+      launchTooltip = "Launching..."
+    } else {
+      launchDisabled = false
+      launchTooltip = ""
+    }
+  }
+
   return (
     <>
       <CreateProfileDialog
@@ -380,13 +538,72 @@ export function ModsLibrary() {
             <h1 className="text-3xl font-bold text-balance">{currentGame?.name}</h1>
           </div>
           <div className="absolute bottom-4 right-6 flex gap-2">
-            <Button variant="default" size="default">
-              Start Modded
-            </Button>
-            <Button variant="outline" size="default">
-              Start Vanilla
-            </Button>
-            <Button variant="outline" size="default">
+            {launchDisabled ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-block" />
+                  }
+                >
+                  <Button 
+                    variant="default" 
+                    size="default"
+                    disabled={launchDisabled}
+                    onClick={handleStartModded}
+                  >
+                    Start Modded
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {launchTooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button 
+                variant="default" 
+                size="default"
+                disabled={launchDisabled}
+                onClick={handleStartModded}
+              >
+                Start Modded
+              </Button>
+            )}
+            {launchDisabled ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-block" />
+                  }
+                >
+                  <Button 
+                    variant="outline" 
+                    size="default"
+                    disabled={launchDisabled}
+                    onClick={handleStartVanilla}
+                  >
+                    Start Vanilla
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {launchTooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button 
+                variant="outline" 
+                size="default"
+                disabled={launchDisabled}
+                onClick={handleStartVanilla}
+              >
+                Start Vanilla
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size="default"
+              onClick={handleOpenGameFolder}
+              disabled={!installFolder}
+            >
               Open Game Folder
             </Button>
           </div>
@@ -529,7 +746,7 @@ export function ModsLibrary() {
                 <ModFilters
                   section={section}
                   onSectionChange={setSection}
-                  categories={[...MOD_CATEGORIES]}
+                  categories={categories}
                   selectedCategories={selectedCategories}
                   onToggleCategory={handleToggleCategory}
                   onClearCategories={handleClearCategories}
@@ -559,7 +776,7 @@ export function ModsLibrary() {
               <ModFilters
                 section={section}
                 onSectionChange={setSection}
-                categories={[...MOD_CATEGORIES]}
+                categories={categories}
                 selectedCategories={selectedCategories}
                 onToggleCategory={handleToggleCategory}
                 onClearCategories={handleClearCategories}

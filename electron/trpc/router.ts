@@ -7,11 +7,15 @@ import { z } from "zod"
 import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies } from "../thunderstore/dependencies"
-import { clearCatalog, closeAllCatalogs } from "../thunderstore/catalog"
+import { clearCatalog, closeAllCatalogs, getCategories } from "../thunderstore/catalog"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
 import { resolveGamePaths } from "../downloads/path-resolver"
 import { installModToProfile, uninstallModFromProfile, resetProfileBepInEx, deleteGameCaches } from "../profiles/mod-installer"
+import { verifyBinary } from "../launch/binary-verifier"
+import { getProcessStatus } from "../launch/process-tracker"
+import { launchGame, type LaunchMode } from "../launch/launcher"
+import { cleanupInjected } from "../launch/injection-tracker"
 
 /**
  * Initialize tRPC with SuperJSON for rich data serialization
@@ -197,6 +201,21 @@ const thunderstoreRouter = t.router({
     .mutation(async ({ input }) => {
       await clearCatalog(input.packageIndexUrl)
       return { success: true }
+    }),
+
+  /**
+   * Get unique categories from catalog for filtering
+   * Returns categories with package counts per category
+   */
+  getCategories: publicProcedure
+    .input(
+      z.object({
+        packageIndexUrl: z.string(),
+        section: z.enum(["all", "mod", "modpack"]).optional(),
+      })
+    )
+    .query(({ input }) => {
+      return getCategories(input.packageIndexUrl, input.section)
     }),
 })
 
@@ -467,6 +486,87 @@ const gamesRouter = t.router({
 })
 
 /**
+ * Launch procedures
+ * Handles game launching with BepInEx injection
+ */
+const launchRouter = t.router({
+  /**
+   * Verify game binary exists
+   */
+  verifyBinary: publicProcedure
+    .input(
+      z.object({
+        installFolder: z.string(),
+        exeNames: z.array(z.string()),
+      })
+    )
+    .query(async ({ input }) => {
+      return await verifyBinary(input.installFolder, input.exeNames)
+    }),
+  
+  /**
+   * Get launch status for a game
+   * Returns whether the game is currently running and its PID
+   */
+  getStatus: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+      })
+    )
+    .query(({ input }) => {
+      return getProcessStatus(input.gameId)
+    }),
+  
+  /**
+   * Launch the game
+   */
+  start: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        mode: z.enum(["modded", "vanilla"]),
+        installFolder: z.string(),
+        exePath: z.string(),
+        launchParameters: z.string(),
+        packageIndexUrl: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      
+      const result = await launchGame({
+        gameId: input.gameId,
+        profileId: input.profileId,
+        mode: input.mode as LaunchMode,
+        installFolder: input.installFolder,
+        exePath: input.exePath,
+        launchParameters: input.launchParameters,
+        packageIndexUrl: input.packageIndexUrl,
+        profileRoot,
+      })
+      
+      return result
+    }),
+  
+  /**
+   * Cleanup injected files from game install folder
+   */
+  cleanupInjected: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return await cleanupInjected(input.gameId)
+    }),
+})
+
+/**
  * Helper to count files in a directory
  */
 async function countFilesInDir(dirPath: string): Promise<number> {
@@ -519,6 +619,7 @@ export const appRouter = t.router({
   downloads: downloadsRouter,
   profiles: profilesRouter,
   games: gamesRouter,
+  launch: launchRouter,
 })
 
 /**

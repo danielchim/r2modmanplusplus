@@ -250,3 +250,52 @@ export function useOnlineDependencies(params: UseOnlineDependenciesParams) {
     isElectron: true,
   }
 }
+
+/**
+ * Hook for fetching catalog categories with counts
+ * Only works in Electron mode - returns empty data in web mode
+ * 
+ * WARNING: This hook conditionally calls tRPC hooks based on isElectron.
+ * This is safe because isElectron never changes during app lifetime.
+ */
+export function useOnlineCategories(gameId: string, section: "all" | "mod" | "modpack" = "all", enabled = true) {
+  // Get package index URL from ecosystem
+  const ecosystem = getEcosystemEntry(gameId)
+  const packageIndexUrl = ecosystem?.r2modman?.[0]?.packageIndex
+
+  // Check if we're in Electron mode (stable for app lifetime)
+  const isElectron = hasElectronTRPC()
+
+  // Only use the query if we're in Electron and have a package index URL
+  const shouldFetch = isElectron && enabled && !!packageIndexUrl
+
+  // Conditional hook call - safe because isElectron is stable
+  if (!isElectron) {
+    return {
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: async () => ({ data: undefined }),
+      isElectron: false,
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const result = trpc.thunderstore.getCategories.useQuery(
+    {
+      packageIndexUrl: packageIndexUrl || "",
+      section,
+    },
+    {
+      enabled: shouldFetch,
+      refetchOnWindowFocus: false,
+      staleTime: 10 * 60 * 1000, // 10 minutes - categories don't change often
+    }
+  )
+
+  return {
+    ...result,
+    isElectron: true,
+  }
+}

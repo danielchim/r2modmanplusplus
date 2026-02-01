@@ -6,7 +6,7 @@ import { useProfileStore, type Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { trpc } from "@/lib/trpc"
-// import { getExeNames } from "@/lib/ecosystem" // Will be used for IPC binary verification later
+import { getExeNames, getEcosystemEntry } from "@/lib/ecosystem"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
@@ -53,6 +53,7 @@ export function GameDashboard() {
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
   
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
+  const launchMutation = trpc.launch.start.useMutation()
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModCount = installedModsSet?.size ?? 0
   
@@ -60,7 +61,34 @@ export function GameDashboard() {
   const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
   const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
-  // const exeNames = getExeNames(selectedGameId) // Will be used for IPC binary verification later
+  const exeNames = selectedGameId ? getExeNames(selectedGameId) : []
+  const ecosystem = selectedGameId ? getEcosystemEntry(selectedGameId) : null
+  const packageIndexUrl = ecosystem?.r2modman?.[0]?.packageIndex || ""
+  
+  // Query to verify binary exists
+  const binaryVerification = trpc.launch.verifyBinary.useQuery(
+    {
+      installFolder,
+      exeNames,
+    },
+    {
+      enabled: profilesEnabled && exeNames.length > 0,
+      refetchOnWindowFocus: false,
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  )
+  
+  // Poll launch status
+  const launchStatus = trpc.launch.getStatus.useQuery(
+    {
+      gameId: selectedGameId || "",
+    },
+    {
+      enabled: !!selectedGameId,
+      refetchInterval: 1500, // Poll every 1.5 seconds
+      refetchOnWindowFocus: true,
+    }
+  )
   
   // Auto-ensure default profile when install folder becomes valid
   useEffect(() => {
@@ -85,11 +113,88 @@ export function GameDashboard() {
   let launchDisabled = true
   let launchTooltip = "Install folder not set"
   
+  const isRunning = launchStatus.data?.running ?? false
+  const isLaunching = launchMutation.isPending
+  
   if (installFolder) {
-    // Install folder is set, but we can't verify binary without IPC yet
-    // TODO: Add IPC call to check if any of exeNames exist in installFolder
-    launchDisabled = true
-    launchTooltip = "Game binary was not found"
+    if (binaryVerification.isLoading) {
+      launchDisabled = true
+      launchTooltip = "Verifying game files..."
+    } else if (!binaryVerification.data?.ok) {
+      launchDisabled = true
+      launchTooltip = binaryVerification.data?.reason || "Game binary not found"
+    } else if (isRunning) {
+      launchDisabled = true
+      launchTooltip = "Game is running"
+    } else if (isLaunching) {
+      launchDisabled = true
+      launchTooltip = "Launching..."
+    } else {
+      launchDisabled = false
+      launchTooltip = ""
+    }
+  }
+  
+  const handleStartModded = async () => {
+    if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
+    
+    try {
+      const result = await launchMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        mode: "modded",
+        installFolder,
+        exePath: binaryVerification.data.exePath,
+        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        packageIndexUrl,
+      })
+      
+      if (result.success) {
+        toast.success("Game launched", {
+          description: `Started in modded mode (PID: ${result.pid})`,
+        })
+      } else {
+        toast.error("Launch failed", {
+          description: result.error,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Launch failed", {
+        description: message,
+      })
+    }
+  }
+  
+  const handleStartVanilla = async () => {
+    if (!selectedGameId || !activeProfileId || !binaryVerification.data?.exePath) return
+    
+    try {
+      const result = await launchMutation.mutateAsync({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        mode: "vanilla",
+        installFolder,
+        exePath: binaryVerification.data.exePath,
+        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        packageIndexUrl,
+      })
+      
+      if (result.success) {
+        toast.success("Game launched", {
+          description: `Started in vanilla mode (PID: ${result.pid})`,
+        })
+      } else {
+        toast.error("Launch failed", {
+          description: result.error,
+        })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error"
+      toast.error("Launch failed", {
+        description: message,
+      })
+    }
   }
 
   const handleCreateProfile = (profileName: string) => {
@@ -357,52 +462,78 @@ export function GameDashboard() {
 
         {/* Launch Controls */}
         <div className="mt-auto space-y-2 border-t border-border pt-4">
-          <Tooltip open={launchDisabled ? undefined : false}>
-            <TooltipTrigger
-              render={
-                <span className="inline-block w-full" />
-              }
-            >
-              <Button 
-                variant="default" 
-                size="lg" 
-                className="w-full" 
-                disabled={launchDisabled}
+          {launchDisabled ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="inline-block w-full" />
+                }
               >
-                Start Modded
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {launchTooltip}
-            </TooltipContent>
-          </Tooltip>
+                <Button 
+                  variant="default" 
+                  size="lg" 
+                  className="w-full" 
+                  disabled={launchDisabled}
+                  onClick={handleStartModded}
+                >
+                  Start Modded
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {launchTooltip}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button 
+              variant="default" 
+              size="lg" 
+              className="w-full" 
+              disabled={launchDisabled}
+              onClick={handleStartModded}
+            >
+              Start Modded
+            </Button>
+          )}
           
-          <Tooltip open={launchDisabled ? undefined : false}>
-            <TooltipTrigger
-              render={
-                <span className="inline-block w-full" />
-              }
-            >
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="w-full" 
-                disabled={launchDisabled}
+          {launchDisabled ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="inline-block w-full" />
+                }
               >
-                Start Vanilla
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {launchTooltip}
-            </TooltipContent>
-          </Tooltip>
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="w-full" 
+                  disabled={launchDisabled}
+                  onClick={handleStartVanilla}
+                >
+                  Start Vanilla
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {launchTooltip}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="w-full" 
+              disabled={launchDisabled}
+              onClick={handleStartVanilla}
+            >
+              Start Vanilla
+            </Button>
+          )}
         </div>
 
         {/* Status Indicator */}
-        <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2">
-          <div className="size-2 rounded-full bg-primary" />
-          <span className="text-xs font-medium text-primary">
-            Modded Game Ready
+        <div className={`flex items-center gap-2 rounded-md px-3 py-2 ${isRunning ? "bg-green-500/10" : "bg-primary/10"}`}>
+          <div className={`size-2 rounded-full ${isRunning ? "bg-green-500" : "bg-primary"}`} />
+          <span className={`text-xs font-medium ${isRunning ? "text-green-500" : "text-primary"}`}>
+            {isRunning ? `Running (PID: ${launchStatus.data?.pid})` : "Ready"}
           </span>
         </div>
       </div>

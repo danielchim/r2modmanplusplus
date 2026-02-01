@@ -591,6 +591,66 @@ export function resolvePackagesByOwnerName(
 }
 
 /**
+ * Result of a category query
+ */
+export interface CategoriesResult {
+  categories: string[]
+  counts: Record<string, number>
+}
+
+/**
+ * Gets unique categories from the catalog with counts
+ * Uses SQLite JSON functions to efficiently extract categories without full-table scan
+ */
+export function getCategories(packageIndexUrl: string, section: "all" | "mod" | "modpack" = "all"): CategoriesResult {
+  const startTime = Date.now()
+  const db = getDb(packageIndexUrl)
+  
+  console.log(`[Catalog] Fetching categories for section: ${section}`)
+  
+  // Build WHERE clause for section filtering
+  const conditions: string[] = ["is_deprecated = 0"]
+  
+  if (section === "modpack") {
+    conditions.push("categories LIKE '%\"modpacks\"%' COLLATE NOCASE")
+  } else if (section === "mod") {
+    conditions.push("categories NOT LIKE '%\"modpacks\"%' COLLATE NOCASE")
+  }
+  
+  const whereClause = conditions.join(" AND ")
+  
+  // Use SQLite's JSON1 extension to explode categories array and count packages per category
+  // This avoids parsing JSON in JS and is much faster
+  const stmt = db.prepare<[], { category: string; count: number }>(`
+    SELECT 
+      TRIM(value, '"') as category,
+      COUNT(DISTINCT uuid4) as count
+    FROM packages, json_each(packages.categories)
+    WHERE ${whereClause}
+    GROUP BY category
+    ORDER BY category COLLATE NOCASE
+  `)
+  
+  const rows = stmt.all()
+  
+  const categories: string[] = []
+  const counts: Record<string, number> = {}
+  
+  for (const row of rows) {
+    categories.push(row.category)
+    counts[row.category] = row.count
+  }
+  
+  const elapsedMs = Date.now() - startTime
+  console.log(`[Catalog] Found ${categories.length} categories in ${elapsedMs}ms`)
+  
+  return {
+    categories,
+    counts,
+  }
+}
+
+/**
  * Clears catalog for a community
  */
 export async function clearCatalog(packageIndexUrl: string): Promise<void> {
