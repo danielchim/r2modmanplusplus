@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect } from "react"
+import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react"
 import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2 } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
@@ -143,7 +143,7 @@ type ModsResultsVirtualizedProps = {
   }
 }
 
-function ModsResultsVirtualized({
+const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
   displayMods,
   viewMode,
   tab,
@@ -421,7 +421,7 @@ function ModsResultsVirtualized({
     </div>
     </>
   )
-}
+})
 
 export function ModsLibrary() {
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
@@ -672,18 +672,6 @@ export function ModsLibrary() {
     return counts
   }, [selectedGameId, tab, installedItems, section, onlineModsQuery.isElectron, onlineModsQuery.data, onlineCategoriesQuery.isElectron, onlineCategoriesQuery.data])
   
-  // Early return if no game selected
-  if (!selectedGameId) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-muted-foreground">No game selected</p>
-          <p className="text-sm text-muted-foreground">Add a game to get started</p>
-        </div>
-      </div>
-    )
-  }
-
   // Determine which mods to display based on tab and Electron status
   let displayMods: Mod[] = []
   let isLoadingMods = false
@@ -826,6 +814,18 @@ export function ModsLibrary() {
       launchDisabled = false
       launchTooltip = ""
     }
+  }
+
+  // Handle no game selected state
+  if (!selectedGameId) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="text-muted-foreground">No game selected</p>
+          <p className="text-sm text-muted-foreground">Add a game to get started</p>
+        </div>
+      </div>
+    )
   }
 
   return (
