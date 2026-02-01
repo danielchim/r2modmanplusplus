@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Settings, Pause, Play, X, CheckCircle2, AlertCircle, Clock, Loader2, FolderOpen, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,24 +58,17 @@ function getStatusIcon(status: DownloadTask["status"]) {
   }
 }
 
-function getStatusLabel(status: DownloadTask["status"]): string {
-  switch (status) {
-    case "queued":
-      return "Queued"
-    case "downloading":
-      return "Downloading"
-    case "completed":
-      return "Completed"
-    case "error":
-      return "Failed"
-    case "paused":
-      return "Paused"
-    case "cancelled":
-      return "Cancelled"
-  }
+const DOWNLOAD_STATUS_KEYS: Record<DownloadTask["status"], string> = {
+  queued: "downloads_status_queued",
+  downloading: "downloads_status_downloading",
+  completed: "downloads_status_completed",
+  error: "downloads_status_failed",
+  paused: "downloads_status_paused",
+  cancelled: "downloads_status_cancelled",
 }
 
 export function DownloadsPage() {
+  const { t } = useTranslation()
   const tasks = useDownloadStore((s) => s.tasks)
   const getAllActiveTasks = useDownloadStore((s) => s.getAllActiveTasks)
   const getPausedTasks = useDownloadStore((s) => s.getPausedTasks)
@@ -122,24 +116,24 @@ export function DownloadsPage() {
         <div className="mb-6 rounded-xl border border-border bg-gradient-to-br from-sky-900/20 via-slate-900/30 to-slate-950/40 p-6">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold text-balance">Downloads</h1>
+              <h1 className="text-2xl font-bold text-balance">{t("downloads_page_title")}</h1>
               <p className="text-sm text-muted-foreground text-pretty">
-                Manage your mod downloads and installation queue
+                {t("downloads_page_description")}
               </p>
             </div>
             <div className="flex items-center gap-6">
               {/* Stats */}
               <div className="flex items-center gap-6">
                 <div className="text-right">
-                  <div className="text-xs text-muted-foreground">Download</div>
+                  <div className="text-xs text-muted-foreground">{t("downloads_label_download")}</div>
                   <div className="text-sm font-medium tabular-nums">{formatSpeed(totalSpeed)}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-muted-foreground">Upload</div>
+                  <div className="text-xs text-muted-foreground">{t("downloads_label_upload")}</div>
                   <div className="text-sm font-medium tabular-nums">0 B/s</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-muted-foreground">Active</div>
+                  <div className="text-xs text-muted-foreground">{t("downloads_label_active")}</div>
                   <div className="text-sm font-medium tabular-nums">{activeDownloads}</div>
                 </div>
               </div>
@@ -155,10 +149,10 @@ export function DownloadsPage() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">
-              Upcoming <span className="text-muted-foreground">({queuedCount})</span>
+              {t("downloads_section_upcoming")} <span className="text-muted-foreground">({queuedCount})</span>
             </h2>
             <p className="text-sm text-muted-foreground">
-              {queuedCount === 0 ? "No downloads in the queue" : `${activeDownloads} active, ${queuedCount - activeDownloads} pending`}
+              {queuedCount === 0 ? t("downloads_queue_empty") : t("downloads_queue_status", { active: activeDownloads, pending: queuedCount - activeDownloads })}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -171,7 +165,7 @@ export function DownloadsPage() {
                     onClick={resumeAll}
                   >
                     <Play className="size-4 mr-1.5" />
-                    Resume All
+                    {t("downloads_resume_all")}
                   </Button>
                 ) : (
                   <Button 
@@ -181,7 +175,7 @@ export function DownloadsPage() {
                     disabled={activeDownloads === 0}
                   >
                     <Pause className="size-4 mr-1.5" />
-                    Pause All
+                    {t("downloads_pause_all")}
                   </Button>
                 )}
                 <Button 
@@ -190,7 +184,7 @@ export function DownloadsPage() {
                   onClick={cancelAll}
                 >
                   <X className="size-4 mr-1.5" />
-                  Cancel All
+                  {t("downloads_cancel_all")}
                 </Button>
               </>
             )}
@@ -201,7 +195,7 @@ export function DownloadsPage() {
         <div className="space-y-6">
           {allTasks.length === 0 ? (
             <div className="rounded-lg border border-border bg-muted/50 p-12 text-center">
-              <p className="text-sm text-muted-foreground">No downloads in your queue</p>
+              <p className="text-sm text-muted-foreground">{t("downloads_no_downloads_in_queue")}</p>
             </div>
           ) : (
             Object.entries(tasksByGame).map(([gameId, gameTasks]) => {
@@ -220,7 +214,7 @@ export function DownloadsPage() {
                     <div>
                       <h3 className="text-sm font-semibold">{game.name}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {gameTasks.length} {gameTasks.length === 1 ? "download" : "downloads"}
+                        {gameTasks.length === 1 ? t("downloads_count", { count: gameTasks.length }) : t("downloads_count_plural", { count: gameTasks.length })}
                       </p>
                     </div>
                   </div>
@@ -256,7 +250,7 @@ export function DownloadsPage() {
                               <Badge variant={getStatusBadgeVariant(task.status)} className="shrink-0">
                                 <span className="flex items-center gap-1">
                                   {getStatusIcon(task.status)}
-                                  <span>{getStatusLabel(task.status)}</span>
+                                  <span>{t(DOWNLOAD_STATUS_KEYS[task.status])}</span>
                                 </span>
                               </Badge>
                             </div>
@@ -282,7 +276,7 @@ export function DownloadsPage() {
                             {task.status === "completed" && (
                               <div className="space-y-2">
                                 <div className="text-xs text-muted-foreground">
-                                  Downloaded {formatBytes(task.bytesTotal)} successfully
+                                  {t("downloads_downloaded_success", { size: formatBytes(task.bytesTotal) })}
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   {/* Install button */}
@@ -310,7 +304,7 @@ export function DownloadsPage() {
                                           className="h-7 text-xs"
                                         >
                                           <Download className="size-3 mr-1.5" />
-                                          Install to Profile
+                                          {t("downloads_install_to_profile")}
                                         </Button>
                                       )
                                     }
@@ -326,7 +320,7 @@ export function DownloadsPage() {
                                       className="h-7 text-xs"
                                     >
                                       <FolderOpen className="size-3 mr-1.5" />
-                                      Show Archive
+                                      {t("downloads_show_archive")}
                                     </Button>
                                   )}
                                   {task.extractedPath && (
@@ -337,7 +331,7 @@ export function DownloadsPage() {
                                       className="h-7 text-xs"
                                     >
                                       <FolderOpen className="size-3 mr-1.5" />
-                                      Show Extracted
+                                      {t("downloads_show_extracted")}
                                     </Button>
                                   )}
                                 </div>
@@ -347,7 +341,7 @@ export function DownloadsPage() {
                             {/* Error info */}
                             {task.status === "error" && (
                               <div className="text-xs text-destructive">
-                                {task.error || "Download failed"}
+                                {task.error || t("downloads_failed")}
                               </div>
                             )}
                           </div>

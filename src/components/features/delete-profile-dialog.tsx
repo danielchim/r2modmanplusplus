@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -26,11 +27,12 @@ export function DeleteProfileDialog({
   disabled = false,
   disabledReason,
 }: DeleteProfileDialogProps) {
+  const { t } = useTranslation()
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Profile</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialog_delete_profile_title")}</AlertDialogTitle>
           <AlertDialogDescription>
             Are you sure you want to delete the profile "{profileName}"? This will
             remove all installed mods and settings for this profile. This action
@@ -43,7 +45,7 @@ export function DeleteProfileDialog({
           </div>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={disabled}

@@ -1,4 +1,5 @@
 import { useState, useMemo, memo } from "react"
+import { useTranslation } from "react-i18next"
 import { CheckCircle2, AlertCircle, AlertTriangle, XCircle, Download, RefreshCw, ExternalLink } from "lucide-react"
 import {
   Dialog,
@@ -73,16 +74,16 @@ function SkeletonDependencyRow() {
   )
 }
 
-function getStatusLabel(status: DependencyStatus) {
+function getStatusKey(status: DependencyStatus): string {
   switch (status) {
     case "installed_correct":
-      return "Installed"
+      return "mod_inspector_dep_status_installed"
     case "installed_wrong":
-      return "Wrong version"
+      return "mod_inspector_dep_status_wrong_version"
     case "not_installed":
-      return "Not installed"
+      return "mod_inspector_dep_status_not_installed"
     case "unresolved":
-      return "Not found"
+      return "mod_inspector_dep_status_not_found"
   }
 }
 
@@ -100,6 +101,7 @@ function getStatusVariant(status: DependencyStatus): "default" | "secondary" | "
 }
 
 export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({ mod, requestedVersion, open, onOpenChange }: DependencyDownloadDialogProps) {
+  const { t } = useTranslation()
   const activeProfileId = useProfileStore((s) => mod ? s.activeProfileIdByGame[mod.gameId] : undefined)
   const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
   const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
@@ -456,7 +458,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-4">
-            <DialogTitle>Download Dependencies</DialogTitle>
+            <DialogTitle>{t("dialog_download_dependencies_title")}</DialogTitle>
             <DialogDescription>
               {mod.name} requires the following dependencies. Select which ones to download.
             </DialogDescription>
@@ -466,7 +468,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
           <div className="space-y-4 pb-4">
             {/* Target Mod */}
             <div>
-              <h3 className="mb-2 text-sm font-semibold">Target Mod</h3>
+              <h3 className="mb-2 text-sm font-semibold">{t("dialog_target_mod")}</h3>
               <div className="rounded-md border border-border bg-muted/30 p-3">
                 <div className="flex items-start gap-3">
                   <Checkbox 
@@ -600,7 +602,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
                                         {dep.name}
                                       </p>
                                       <Badge variant={getStatusVariant(dep.status)} className="shrink-0">
-                                        {getStatusLabel(dep.status)}
+                                        {t(getStatusKey(dep.status))}
                                       </Badge>
                                     </div>
                                     

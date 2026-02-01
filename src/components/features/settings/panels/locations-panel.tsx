@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { useSettingsStore } from "@/store/settings-store"
 import { SettingsRow } from "../settings-row"
 import { FolderPathControl } from "../folder-path-control"
@@ -8,6 +9,7 @@ interface PanelProps {
 
 export function LocationsPanel(_props: PanelProps) {
   void _props
+  const { t } = useTranslation()
   const dataFolder = useSettingsStore((s) => s.global.dataFolder)
   const steamFolder = useSettingsStore((s) => s.global.steamFolder)
   const modDownloadFolder = useSettingsStore((s) => s.global.modDownloadFolder)
@@ -17,16 +19,16 @@ export function LocationsPanel(_props: PanelProps) {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-2">Locations</h2>
+        <h2 className="text-2xl font-semibold mb-2">{t("settings_locations")}</h2>
         <p className="text-sm text-muted-foreground">
-          Manage folder locations and paths for mod storage and game installations
+          {t("settings_locations_description")}
         </p>
       </div>
 
       <div className="space-y-0 divide-y divide-border">
         <SettingsRow
-          title="Data folder"
-          description="The folder where mods are stored for all games and profiles"
+          title={t("settings_locations_data_folder_title")}
+          description={t("settings_locations_data_folder_description")}
           belowContent={
             <FolderPathControl
               value={dataFolder}
@@ -37,8 +39,8 @@ export function LocationsPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Steam folder"
-          description="The location of the Steam installation folder"
+          title={t("settings_locations_steam_folder_title")}
+          description={t("settings_locations_steam_folder_description")}
           belowContent={
             <FolderPathControl
               value={steamFolder}
@@ -49,12 +51,12 @@ export function LocationsPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Global mod download folder"
-          description="Default location for downloaded mod archives across all games. A subfolder for each game will be created automatically. Leave blank to use dataFolder/downloads."
+          title={t("settings_locations_global_download_title")}
+          description={t("settings_locations_global_download_description")}
           belowContent={
             <FolderPathControl
               value={modDownloadFolder}
-              placeholder="Not set (uses dataFolder/downloads)"
+              placeholder={t("settings_locations_placeholder_not_set_downloads")}
               onChangePath={(nextPath) => updateGlobal({ modDownloadFolder: nextPath })}
               className="w-full"
             />
@@ -62,12 +64,12 @@ export function LocationsPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Global cache folder"
-          description="Location for cached data (Thunderstore packages, metadata). Leave blank to use dataFolder/cache."
+          title={t("settings_locations_global_cache_title")}
+          description={t("settings_locations_global_cache_description")}
           belowContent={
             <FolderPathControl
               value={cacheFolder}
-              placeholder="Not set (uses dataFolder/cache)"
+              placeholder={t("settings_locations_placeholder_not_set_cache")}
               onChangePath={(nextPath) => updateGlobal({ cacheFolder: nextPath })}
               className="w-full"
             />

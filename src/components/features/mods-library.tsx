@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react"
+import { useTranslation } from "react-i18next"
 import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
@@ -158,6 +159,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
   selectedCategories,
   onlineModsQuery,
 }: ModsResultsVirtualizedProps) {
+  const { t } = useTranslation()
   // Shared dependency dialog state (one dialog for all mods)
   const [dependencyDialog, setDependencyDialog] = useState<DependencyDialogState>({
     mod: null,
@@ -243,19 +245,19 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
       />
       <div ref={scrollParentRef} className="flex-1 overflow-y-auto" style={{ contain: "strict" }}>
         <div ref={gridMeasureRef} className="p-4 lg:p-6">
-        <h2 className="mb-4 text-lg font-semibold">
+<h2 className="mb-4 text-lg font-semibold">
           {tab === "installed"
-            ? (section === "mod" ? "Installed Mods" : "Installed Modpacks")
-            : (section === "mod" ? "All Mods" : "All Modpacks")
+            ? (section === "mod" ? t("library_installed_mods") : t("library_installed_modpacks"))
+            : (section === "mod" ? t("library_all_mods") : t("library_all_modpacks"))
           }
         </h2>
-        
+
         {/* Loading State */}
         {isLoadingMods && (
           <div className="flex h-[400px] items-center justify-center">
             <div className="text-center space-y-2">
               <Loader2 className="size-8 animate-spin text-muted-foreground mx-auto" />
-              <p className="text-muted-foreground">Loading {section === "mod" ? "mods" : "modpacks"}...</p>
+              <p className="text-muted-foreground">{section === "mod" ? t("library_loading_mods") : t("library_loading_modpacks")}</p>
             </div>
           </div>
         )}
@@ -264,10 +266,10 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
         {hasError && !isLoadingMods && (
           <div className="flex h-[400px] items-center justify-center">
             <div className="text-center space-y-2">
-              <p className="text-destructive">Failed to load {section === "mod" ? "mods" : "modpacks"}</p>
-              <p className="text-sm text-muted-foreground">Please check your connection and try again</p>
+              <p className="text-destructive">{section === "mod" ? t("library_failed_to_load_mods") : t("library_failed_to_load_modpacks")}</p>
+              <p className="text-sm text-muted-foreground">{t("library_check_connection")}</p>
               <Button variant="outline" size="sm" onClick={() => onlineModsQuery.refetch()}>
-                Retry
+                {t("common_retry")}
               </Button>
             </div>
           </div>
@@ -277,13 +279,13 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
         {!isLoadingMods && !hasError && displayMods.length === 0 && (
           <div className="flex h-[400px] items-center justify-center">
             <div className="text-center">
-              <p className="text-muted-foreground">No {section === "mod" ? "mods" : "modpacks"} found</p>
+              <p className="text-muted-foreground">{section === "mod" ? t("library_no_mods_found") : t("library_no_modpacks_found")}</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {searchQuery || selectedCategories.length > 0
-                  ? "Try clearing filters or adjusting your search"
+                  ? t("library_try_clearing_filters")
                   : tab === "installed"
-                    ? `No ${section === "mod" ? "mods" : "modpacks"} installed yet`
-                    : `No ${section === "mod" ? "mods" : "modpacks"} available`}
+                    ? (section === "mod" ? t("library_no_mods_installed_yet") : t("library_no_modpacks_installed_yet"))
+                    : (section === "mod" ? t("library_no_mods_available") : t("library_no_modpacks_available"))}
               </p>
             </div>
           </div>
@@ -350,10 +352,10 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
                   {onlineModsQuery.isFetchingNextPage ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
-                      Loading...
+                      {t("library_loading_mods")}
                     </>
                   ) : (
-                    "Load More"
+                    t("library_load_more")
                   )}
                 </Button>
               </div>
@@ -414,10 +416,10 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
                   {onlineModsQuery.isFetchingNextPage ? (
                     <>
                       <Loader2 className="mr-2 size-4 animate-spin" />
-                      Loading...
+                      {t("library_loading_mods")}
                     </>
                   ) : (
-                    "Load More"
+                    t("library_load_more")
                   )}
                 </Button>
               </div>
@@ -431,6 +433,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
 })
 
 export function ModsLibrary() {
+  const { t } = useTranslation()
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [section, setSection] = useState<"mod" | "modpack">("mod")
@@ -1049,8 +1052,8 @@ export function ModsLibrary() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center space-y-2">
-          <p className="text-muted-foreground">No game selected</p>
-          <p className="text-sm text-muted-foreground">Add a game to get started</p>
+          <p className="text-muted-foreground">{t("common_no_game_selected")}</p>
+          <p className="text-sm text-muted-foreground">{t("common_add_game_to_get_started")}</p>
         </div>
       </div>
     )
@@ -1097,7 +1100,7 @@ export function ModsLibrary() {
                     disabled={launchDisabled}
                     onClick={handleStartModded}
                   >
-                    Start Modded
+                    {t("dashboard_start_modded")}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -1111,7 +1114,7 @@ export function ModsLibrary() {
                 disabled={launchDisabled}
                 onClick={handleStartModded}
               >
-                Start Modded
+                {t("dashboard_start_modded")}
               </Button>
             )}
             {launchDisabled ? (
@@ -1127,7 +1130,7 @@ export function ModsLibrary() {
                     disabled={launchDisabled}
                     onClick={handleStartVanilla}
                   >
-                    Start Vanilla
+                    {t("dashboard_start_vanilla")}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -1141,7 +1144,7 @@ export function ModsLibrary() {
                 disabled={launchDisabled}
                 onClick={handleStartVanilla}
               >
-                Start Vanilla
+                {t("dashboard_start_vanilla")}
               </Button>
             )}
             <Button 
@@ -1150,7 +1153,7 @@ export function ModsLibrary() {
               onClick={handleOpenGameFolder}
               disabled={!installFolder}
             >
-              Open Game Folder
+              {t("dashboard_open_game_folder")}
             </Button>
           </div>
         </div>
@@ -1160,7 +1163,7 @@ export function ModsLibrary() {
           <div className="flex items-center gap-4 px-6 py-3">
             <div className="flex-1 flex items-end gap-2">
               <div className="flex-1">
-                <div className="text-xs text-muted-foreground mb-1">Profile</div>
+                <div className="text-xs text-muted-foreground mb-1">{t("common_profile")}</div>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     disabled={!profilesEnabled}
@@ -1171,7 +1174,7 @@ export function ModsLibrary() {
                       />
                     }
                   >
-                    <span>{profilesEnabled ? (currentProfile?.name ?? activeProfileId ?? "Default") : "Not available"}</span>
+                    <span>{profilesEnabled ? (currentProfile?.name ?? activeProfileId ?? t("common_default")) : t("common_not_available")}</span>
                     <ChevronDown className="size-4 text-muted-foreground" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
@@ -1180,7 +1183,7 @@ export function ModsLibrary() {
                   >
                     {/* All Profiles Section */}
                     <DropdownMenuGroup>
-                      <DropdownMenuLabel className="px-3 py-2">All Profiles</DropdownMenuLabel>
+                      <DropdownMenuLabel className="px-3 py-2">{t("common_all_profiles")}</DropdownMenuLabel>
                       <DropdownMenuRadioGroup
                         value={activeProfileId ?? ""}
                         onValueChange={(profileId) => setActiveProfile(selectedGameId, profileId)}
@@ -1192,7 +1195,7 @@ export function ModsLibrary() {
                             className="mx-1 gap-3 rounded-md px-3 py-2"
                           >
                             <span>{profile.name}</span>
-                            <span className="ml-auto text-xs text-muted-foreground">{profile.modCount} mods</span>
+                            <span className="ml-auto text-xs text-muted-foreground">{t("library_mods_count", { count: profile.modCount })}</span>
                           </DropdownMenuRadioItem>
                         ))}
                       </DropdownMenuRadioGroup>
@@ -1207,7 +1210,7 @@ export function ModsLibrary() {
                         onClick={() => setCreateProfileOpen(true)}
                       >
                         <Plus className="size-5" />
-                        <span>Create new profile</span>
+                        <span>{t("common_create_new_profile")}</span>
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                   </DropdownMenuContent>
@@ -1215,7 +1218,7 @@ export function ModsLibrary() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="More options"
+                  aria-label={t("common_more_options")}
                   onClick={() => {
                     selectMod(null) // Clear selected mod to show game dashboard
                     setShowContextPanel(true)
@@ -1233,7 +1236,7 @@ export function ModsLibrary() {
               className={tab === "installed" ? "rounded-b-none border-b-2 border-primary" : "rounded-b-none"}
               onClick={() => setTab("installed")}
             >
-              Installed
+              {t("library_tab_installed")}
             </Button>
             <Button
               variant="ghost"
@@ -1241,7 +1244,7 @@ export function ModsLibrary() {
               className={tab === "online" ? "rounded-b-none border-b-2 border-primary" : "rounded-b-none"}
               onClick={() => setTab("online")}
             >
-              Online
+              {t("library_tab_online")}
             </Button>
           </div>
         </div>

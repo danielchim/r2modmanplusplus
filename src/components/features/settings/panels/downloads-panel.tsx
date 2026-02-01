@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { useSettingsStore } from "@/store/settings-store"
 import { SettingsRow } from "../settings-row"
 import { Switch } from "@/components/ui/switch"
@@ -14,8 +15,8 @@ interface PanelProps {
   searchQuery: string
 }
 
-function formatSpeed(bps: number, unit: "Bps" | "bps"): string {
-  if (bps === 0) return "Unlimited"
+function formatSpeed(bps: number, unit: "Bps" | "bps", t: (key: string) => string): string {
+  if (bps === 0) return t("settings_downloads_unlimited")
   
   const value = unit === "bps" ? bps * 8 : bps
   const units = unit === "bps" 
@@ -35,6 +36,7 @@ function formatSpeed(bps: number, unit: "Bps" | "bps"): string {
 }
 
 export function DownloadsPanel(_props: PanelProps) {
+  const { t } = useTranslation()
   const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled, autoInstallMods } = useSettingsStore((s) => s.global)
   const updateGlobal = useSettingsStore((s) => s.updateGlobal)
 
@@ -81,16 +83,16 @@ export function DownloadsPanel(_props: PanelProps) {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-2">Downloads</h2>
+        <h2 className="text-2xl font-semibold mb-2">{t("settings_downloads")}</h2>
         <p className="text-sm text-muted-foreground">
-          Configure download behavior and bandwidth limits
+          {t("settings_downloads_description")}
         </p>
       </div>
 
       <div className="space-y-0 divide-y divide-border">
         <SettingsRow
-          title="Limit download speed"
-          description="Enable bandwidth throttling for mod downloads"
+          title={t("settings_downloads_limit_speed_title")}
+          description={t("settings_downloads_limit_speed_description")}
           rightContent={
             <Switch
               checked={speedLimitEnabled}
@@ -101,8 +103,8 @@ export function DownloadsPanel(_props: PanelProps) {
 
         {speedLimitEnabled && (
           <SettingsRow
-            title="Speed limit"
-            description={`Current: ${formatSpeed(speedLimitBps, speedUnit)}`}
+            title={t("settings_downloads_speed_limit_title")}
+            description={t("settings_downloads_speed_limit_current", { speed: formatSpeed(speedLimitBps, speedUnit, t) })}
             rightContent={
               <div className="flex items-center gap-4 min-w-[300px]">
                 <Slider
@@ -119,8 +121,8 @@ export function DownloadsPanel(_props: PanelProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Bps">B/s</SelectItem>
-                    <SelectItem value="bps">b/s</SelectItem>
+                    <SelectItem value="Bps">{t("settings_downloads_bps")}</SelectItem>
+                    <SelectItem value="bps">{t("settings_downloads_b_s")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -129,8 +131,8 @@ export function DownloadsPanel(_props: PanelProps) {
         )}
 
         <SettingsRow
-          title="Max concurrent downloads"
-          description="Maximum number of mods to download simultaneously"
+          title={t("settings_downloads_max_concurrent_title")}
+          description={t("settings_downloads_max_concurrent_description")}
           rightContent={
             <Select 
               value={maxConcurrentDownloads.toString()} 
@@ -151,8 +153,8 @@ export function DownloadsPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Download cache"
-          description="Cache downloaded mods to speed up reinstallation"
+          title={t("settings_downloads_cache_title")}
+          description={t("settings_downloads_cache_description")}
           rightContent={
             <Switch
               checked={downloadCacheEnabled}
@@ -162,8 +164,8 @@ export function DownloadsPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Auto-install after download"
-          description="Automatically install mods to the active profile when downloads complete"
+          title={t("settings_downloads_auto_install_title")}
+          description={t("settings_downloads_auto_install_description")}
           rightContent={
             <Switch
               checked={autoInstallMods}

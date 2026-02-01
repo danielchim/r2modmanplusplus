@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +13,7 @@ type RenameProfileDialogProps = {
 
 export function RenameProfileDialog({ open, onOpenChange, onRenameProfile, currentName }: RenameProfileDialogProps) {
   const [profileName, setProfileName] = useState(currentName)
-
+  const { t } = useTranslation()
   // Update local state when currentName changes or dialog opens
   useEffect(() => {
     if (open) {
@@ -39,20 +40,20 @@ export function RenameProfileDialog({ open, onOpenChange, onRenameProfile, curre
         onOverlayClick={handleCancel}
       >
         <DialogHeader>
-          <DialogTitle>Rename Profile</DialogTitle>
+          <DialogTitle>{t("dialog_rename_profile_title")}</DialogTitle>
           <DialogDescription>
-            Enter a new name for your profile "{currentName}".
+            {t("dialog_rename_profile_description", { name: currentName })}
           </DialogDescription>
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <label htmlFor="profile-name" className="text-sm font-medium">
-              Profile Name
+              {t("dialog_rename_profile_name_label")}
             </label>
             <Input
               id="profile-name"
-              placeholder="e.g., Hardcore, Co-op, Testing"
+              placeholder={t("dialog_rename_profile_placeholder")}
               value={profileName}
               onChange={(e) => setProfileName(e.target.value)}
               onKeyDown={(e) => {
@@ -67,13 +68,13 @@ export function RenameProfileDialog({ open, onOpenChange, onRenameProfile, curre
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel}>
-            Cancel
+            {t("common_cancel")}
           </Button>
           <Button 
             onClick={handleRename} 
             disabled={!profileName.trim() || profileName.trim() === currentName}
           >
-            Rename Profile
+            {t("dialog_rename_profile_button")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { List, ChevronLeft, FolderOpen } from "lucide-react"
 
 import {
@@ -33,6 +34,7 @@ type AddGameDialogProps = {
 type Step = "select" | "location"
 
 export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGameDialogProps) {
+  const { t } = useTranslation()
   const [step, setStep] = useState<Step>("select")
   const [pickedGame, setPickedGame] = useState<EcosystemGame | null>(null)
   const [installFolder, setInstallFolder] = useState("")
@@ -103,7 +105,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
       if (profileChoice === "create" && selectedProfileId) {
         setActiveProfile(pickedGame.id, selectedProfileId)
       } else if (profileChoice === "import") {
-        toast.info("Profile import not implemented yet")
+        toast.info(t("add_game_profile_import_toast"))
         setActiveProfile(pickedGame.id, defaultProfileId)
       } else {
         setActiveProfile(pickedGame.id, defaultProfileId)
@@ -155,12 +157,11 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
           <>
             {/* Header */}
             <div className="border-b border-border px-6 py-4">
-              <h2 className="text-lg font-semibold mb-1">Game selection</h2>
+              <h2 className="text-lg font-semibold mb-1">{t("add_game_title_selection")}</h2>
               <p className="text-sm text-muted-foreground">
-                {forceOpen 
-                  ? "Add your first game to get started" 
-                  : "Which game are you managing your mods for?"
-                }
+                {forceOpen
+                  ? t("add_game_subtitle_first")
+                  : t("add_game_subtitle_which")}
               </p>
             </div>
 
@@ -170,7 +171,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
               <div className="flex gap-3 mb-4">
                 <Input
                   type="text"
-                  placeholder="Search for a game"
+                  placeholder={t("add_game_search_placeholder")}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   className="flex-1"
@@ -185,10 +186,10 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                 <div className="flex justify-center mb-4">
                   <TabsList variant="line">
                     <TabsTrigger value="game">
-                      Game
+                      {t("add_game_tab_game")}
                     </TabsTrigger>
                     <TabsTrigger value="server">
-                      Server
+                      {t("add_game_tab_server")}
                     </TabsTrigger>
                   </TabsList>
                 </div>
@@ -198,7 +199,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                   <div className="h-full overflow-y-auto p-4">
                     {filteredGames.length === 0 ? (
                       <div className="text-muted-foreground py-20 text-center text-sm">
-                        No games found
+                        {t("add_game_no_games_found")}
                       </div>
                     ) : (
                       <div className="grid grid-cols-8 gap-8">
@@ -234,7 +235,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                   {/* Server Game Grid - Same as Game tab */}
                   <div className="h-full overflow-y-auto pr-2">
                     <div className="text-muted-foreground rounded-md border border-dashed py-12 text-center text-sm mb-4">
-                      Connect to a server to browse games.
+                      {t("add_game_connect_server")}
                     </div>
                       <div className="grid grid-cols-8 gap-8">
                       {ECOSYSTEM_GAMES.map((game) => (
@@ -278,10 +279,10 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                 className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
               >
                 <ChevronLeft className="size-4" />
-                Back to game selection
+                {t("add_game_back_to_selection")}
               </button>
-              <h2 className="text-lg font-semibold mb-1">Set install location</h2>
-              <p className="text-sm text-muted-foreground">Where is {pickedGame.name} installed?</p>
+              <h2 className="text-lg font-semibold mb-1">{t("add_game_set_install_location")}</h2>
+              <p className="text-sm text-muted-foreground">{t("add_game_where_installed", { gameName: pickedGame.name })}</p>
             </div>
 
             {/* Main content */}
@@ -305,12 +306,12 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                 {/* Install folder input */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Game install folder (optional)
+                    {t("add_game_install_folder_optional")}
                   </label>
                   <div className="flex gap-2">
                     <Input
                       type="text"
-                      placeholder="e.g., C:\Program Files (x86)\Steam\steamapps\common\..."
+                      placeholder={t("add_game_install_placeholder")}
                       value={installFolder}
                       onChange={(e) => setInstallFolder(e.target.value)}
                       className="flex-1"
@@ -321,17 +322,17 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                       onClick={handleBrowseFolder}
                     >
                       <FolderOpen className="size-4 mr-2" />
-                      Select Folder
+                      {t("add_game_select_folder")}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    If you skip this, the Launch buttons will be disabled until you set the folder later.
+                    {t("add_game_skip_folder_hint")}
                   </p>
                 </div>
 
                 {/* Profile Selection - Always visible, disabled when no path */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Profile</label>
+                  <label className="text-sm font-medium">{t("add_game_profile")}</label>
                   <Select 
                     value={profileChoice} 
                     onValueChange={(value) => setProfileChoice(value as typeof profileChoice)}
@@ -341,14 +342,14 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="default">Use Default profile</SelectItem>
-                      <SelectItem value="create">Create new profile…</SelectItem>
-                      <SelectItem value="import">Import from code…</SelectItem>
+                      <SelectItem value="default">{t("add_game_use_default_profile")}</SelectItem>
+                      <SelectItem value="create">{t("add_game_create_new_profile")}</SelectItem>
+                      <SelectItem value="import">{t("add_game_import_from_code")}</SelectItem>
                     </SelectContent>
                   </Select>
                   {!isValidPath && (
                     <p className="text-xs text-muted-foreground">
-                      Set the install folder to enable profile selection
+                      {t("add_game_set_install_to_enable_profile")}
                     </p>
                   )}
                   {profileChoice === "create" && isValidPath && (
@@ -359,7 +360,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
                       className="w-full"
                       onClick={() => setCreateProfileOpen(true)}
                     >
-                      {selectedProfileId ? "Change profile name" : "Choose profile name"}
+                      {selectedProfileId ? t("add_game_change_profile_name") : t("add_game_choose_profile_name")}
                     </Button>
                   )}
                 </div>
@@ -369,10 +370,10 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
             {/* Footer */}
             <div className="border-t border-border px-6 py-4 flex justify-end gap-3">
               <Button variant="ghost" onClick={handleBack}>
-                Cancel
+                {t("common_cancel")}
               </Button>
               <Button onClick={handleAddGame} disabled={!pickedGame}>
-                Add Game
+                {t("add_game_add_game_button")}
               </Button>
             </div>
           </>

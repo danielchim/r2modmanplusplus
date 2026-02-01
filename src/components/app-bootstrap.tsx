@@ -5,6 +5,7 @@ import { useProfileStore } from "@/store/profile-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { DownloadBridge } from "@/components/download-bridge"
 import { trpc, hasElectronTRPC } from "@/lib/trpc"
+import { i18n } from "@/lib/i18n"
 
 export function AppBootstrap() {
   const hasInitialized = useRef(false)
@@ -15,6 +16,10 @@ export function AppBootstrap() {
   const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
   const globalSettings = useSettingsStore((s) => s.global)
   const updateGlobal = useSettingsStore((s) => s.updateGlobal)
+
+  useEffect(() => {
+    void i18n.changeLanguage(globalSettings.language)
+  }, [globalSettings.language])
   
   // Fetch default paths from Electron (only in Electron mode)
   const defaultPathsQuery = trpc.desktop.getDefaultPaths.useQuery(undefined, {

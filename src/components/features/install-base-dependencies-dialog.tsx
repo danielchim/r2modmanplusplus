@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -27,11 +28,12 @@ export function InstallBaseDependenciesDialog({
   missing,
   isInstalling,
 }: InstallBaseDependenciesDialogProps) {
+  const { t } = useTranslation()
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Install Base Dependencies?</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialog_install_base_dependencies_title")}</AlertDialogTitle>
           <AlertDialogDescription>
             {isInstalling 
               ? "Downloading and installing mod loader files. This may take a moment..." 
@@ -56,7 +58,7 @@ export function InstallBaseDependenciesDialog({
           </div>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isInstalling}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isInstalling}>{t("common_cancel")}</AlertDialogCancel>
           <Button
             variant="outline"
             onClick={onInstallOnly}

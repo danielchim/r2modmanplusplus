@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Home, Globe, Settings as SettingsIcon, Download, User, ChevronDown, Plus } from "lucide-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 
@@ -26,9 +27,10 @@ interface GlobalRailContentProps {
 }
 
 export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
+  const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [addGameOpen, setAddGameOpen] = useState(false)
-  
+
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectGame = useAppStore((s) => s.selectGame)
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
@@ -48,7 +50,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const activeProfile = selectedGameId && activeProfileId 
     ? profilesByGame[selectedGameId]?.find(p => p.id === activeProfileId)
     : null
-  const activeProfileName = activeProfile?.name ?? "No profile"
+  const activeProfileName = activeProfile?.name ?? t("rail_no_profile")
   
   // Force open Add Game dialog on first run or after all games are removed
   useEffect(() => {
@@ -139,10 +141,10 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               {/* Games List Section - Scrollable */}
               <div className="overflow-y-auto flex-1 min-h-0">
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel className="px-3 py-2">Games</DropdownMenuLabel>
+                  <DropdownMenuLabel className="px-3 py-2">{t("rail_games")}</DropdownMenuLabel>
                   {managedGames.length === 0 ? (
                     <div className="px-3 py-6 text-center">
-                      <p className="text-xs text-muted-foreground">No games added yet</p>
+                      <p className="text-xs text-muted-foreground">{t("rail_no_games_added_yet")}</p>
                     </div>
                   ) : (
                     <DropdownMenuRadioGroup
@@ -184,7 +186,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                     }}
                   >
                     <Plus className="size-5" />
-                    <span>Add game</span>
+                    <span>{t("rail_add_game")}</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </div>
@@ -201,8 +203,8 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                 <Plus className="size-8 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-sm font-semibold">No game selected</h1>
-                <p className="text-xs text-muted-foreground">Click to add a game</p>
+                <h1 className="text-sm font-semibold">{t("rail_no_game_selected")}</h1>
+                <p className="text-xs text-muted-foreground">{t("rail_click_to_add_game")}</p>
               </div>
             </div>
           </button>
@@ -222,7 +224,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               )}
             >
               <Home className="size-4" />
-              <span className="text-sm">Home</span>
+              <span className="text-sm">{t("rail_nav_home")}</span>
             </Button>
           </Link>
           <Link to="/" onClick={() => {
@@ -235,7 +237,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               className="w-full justify-start gap-2"
             >
               <Globe className="size-4" />
-              <span className="text-sm">Online Mods</span>
+              <span className="text-sm">{t("rail_nav_online_mods")}</span>
             </Button>
           </Link>
           <Link to="/config-editor" onClick={() => onNavigate?.()}>
@@ -248,7 +250,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
               )}
             >
               <SettingsIcon className="size-4" />
-              <span className="text-sm">Config Editor</span>
+              <span className="text-sm">{t("rail_nav_config_editor")}</span>
             </Button>
           </Link>
           <Button
@@ -261,7 +263,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
             }}
           >
             <SettingsIcon className="size-4" />
-            <span className="text-sm">Settings</span>
+            <span className="text-sm">{t("rail_nav_settings")}</span>
           </Button>
         </nav>
       </div>
@@ -270,13 +272,13 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
       <div className="flex-1 min-h-0 overflow-y-auto p-2">
         <div className="mb-2 px-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Recently Managed
+            {t("rail_recently_managed")}
           </h2>
         </div>
         {recentGames.length === 0 ? (
           <div className="px-3 py-8 text-center">
             <p className="text-xs text-muted-foreground">
-              No recently managed games yet
+              {t("rail_no_recently_managed_yet")}
             </p>
           </div>
         ) : (
@@ -315,12 +317,12 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
             )}
           >
             <Download className="size-4" />
-            <span className="text-sm">Downloads</span>
+            <span className="text-sm">{t("rail_nav_downloads")}</span>
           </Button>
         </Link>
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
           <User className="size-4" />
-          <span className="text-sm">SynapseCharlie</span>
+          <span className="text-sm">{t("rail_synapse_charlie")}</span>
         </Button>
       </div>
     </div>

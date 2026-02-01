@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
@@ -8,6 +9,7 @@ interface PanelProps {
 }
 
 export function ModpacksPanel(_props: PanelProps) {
+  const { t } = useTranslation()
   const [showDependencies, setShowDependencies] = useState(false)
 
   // TODO: Get actual installed mods from mod store
@@ -34,16 +36,16 @@ export function ModpacksPanel(_props: PanelProps) {
     <>
       <div>
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold mb-2">Modpacks</h2>
+          <h2 className="text-2xl font-semibold mb-2">{t("settings_modpacks")}</h2>
           <p className="text-sm text-muted-foreground">
-            View and manage modpack information
+            {t("settings_modpacks_description")}
           </p>
         </div>
 
         <div className="space-y-0 divide-y divide-border">
           <SettingsRow
-            title="Show dependency strings"
-            description="View all installed mods formatted as Author-ModName-Version"
+            title={t("settings_modpacks_show_deps_title")}
+            description={t("settings_modpacks_show_deps_description")}
             rightContent={
               <Button 
                 variant="outline" 
@@ -63,7 +65,7 @@ export function ModpacksPanel(_props: PanelProps) {
           <Dialog.Popup className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white dark:bg-gray-900 rounded-lg shadow-xl w-[600px] max-h-[70vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <Dialog.Title className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Dependency Strings
+                {t("settings_modpacks_deps_dialog_title")}
               </Dialog.Title>
               <Dialog.Close className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -88,11 +90,11 @@ export function ModpacksPanel(_props: PanelProps) {
                 size="sm"
                 onClick={handleCopyDependencies}
               >
-                Copy to Clipboard
+                {t("settings_modpacks_copy_to_clipboard")}
               </Button>
               <Dialog.Close>
                 <Button variant="default" size="sm">
-                  Close
+                  {t("settings_modpacks_close")}
                 </Button>
               </Dialog.Close>
             </div>

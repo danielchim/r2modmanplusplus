@@ -1,5 +1,5 @@
 import { ArrowLeft, Download, Trash2, ExternalLink, AlertCircle, FileText, History, Network, Package, Pause, Play, Loader2, CheckCircle2, AlertTriangle, XCircle, X, RefreshCw } from "lucide-react"
-
+import { useTranslation } from "react-i18next"
 import { useState, useMemo } from "react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
@@ -71,20 +71,15 @@ function getStatusBadgeVariant(status: DependencyStatus): "default" | "secondary
   }
 }
 
-function getStatusLabel(status: DependencyStatus) {
-  switch (status) {
-    case "installed_correct":
-      return "Installed"
-    case "installed_wrong":
-      return "Wrong version"
-    case "not_installed":
-      return "Not installed"
-    case "unresolved":
-      return "Not found"
-  }
+const DEP_STATUS_KEYS: Record<DependencyStatus, string> = {
+  installed_correct: "mod_inspector_dep_status_installed",
+  installed_wrong: "mod_inspector_dep_status_wrong_version",
+  not_installed: "mod_inspector_dep_status_not_installed",
+  unresolved: "mod_inspector_dep_status_not_found",
 }
 
 function ModInspectorSkeleton({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col">
       {/* Header with Back Button */}
@@ -94,7 +89,7 @@ function ModInspectorSkeleton({ onBack }: { onBack: () => void }) {
           className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" />
-          <span>Back</span>
+          <span>{t("mod_inspector_back")}</span>
         </button>
         <div className="flex items-start gap-3">
           <Skeleton className="size-12 rounded" />
@@ -134,19 +129,19 @@ function ModInspectorSkeleton({ onBack }: { onBack: () => void }) {
           <TabsList variant="line" className="h-auto w-full justify-start rounded-none border-0 bg-transparent p-0">
             <TabsTrigger value="readme" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <FileText className="size-4" />
-              <span>Readme</span>
+              <span>{t("mod_inspector_tab_readme")}</span>
             </TabsTrigger>
             <TabsTrigger value="changelog" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <History className="size-4" />
-              <span>Updates</span>
+              <span>{t("mod_inspector_tab_updates")}</span>
             </TabsTrigger>
             <TabsTrigger value="dependencies" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <Network className="size-4" />
-              <span>Deps</span>
+              <span>{t("mod_inspector_tab_deps")}</span>
             </TabsTrigger>
             <TabsTrigger value="versions" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <Package className="size-4" />
-              <span>Versions</span>
+              <span>{t("mod_inspector_tab_versions")}</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -216,6 +211,7 @@ function SkeletonDependencyRow() {
 }
 
 function ModInspectorError({ onBack, error }: { onBack: () => void; error?: Error }) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-full flex-col">
       <div className="shrink-0 border-b border-border p-4">
@@ -224,7 +220,7 @@ function ModInspectorError({ onBack, error }: { onBack: () => void; error?: Erro
           className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" />
-          <span>Back</span>
+          <span>{t("mod_inspector_back")}</span>
         </button>
       </div>
       <div className="flex flex-1 items-center justify-center p-4">
@@ -232,14 +228,14 @@ function ModInspectorError({ onBack, error }: { onBack: () => void; error?: Erro
           <div className="flex items-start gap-3">
             <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
             <div className="flex-1 space-y-3">
-              <p className="text-sm font-medium text-destructive">Failed to load package</p>
+              <p className="text-sm font-medium text-destructive">{t("mod_inspector_failed_to_load_package")}</p>
               <p className="text-xs text-muted-foreground">
-                {error?.message || "An error occurred while fetching the package"}
+                {error?.message || t("mod_inspector_error_fetching_package")}
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={onBack} className="gap-2">
                   <ArrowLeft className="size-3" />
-                  Go Back
+                  {t("mod_inspector_go_back")}
                 </Button>
               </div>
             </div>
@@ -251,6 +247,7 @@ function ModInspectorError({ onBack, error }: { onBack: () => void; error?: Erro
 }
 
 export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
+  const { t } = useTranslation()
   const { startDownload, pauseDownload, resumeDownload, cancelDownload } = useDownloadActions()
 
   const toggleMod = useModManagementStore((s) => s.toggleMod)
@@ -326,15 +323,15 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const getCtaInfo = (): { label: string; disabledReason?: string } => {
     switch (ctaKind) {
       case "install":
-        return { label: `Install v${selectedVersion}` }
+        return { label: t("mod_inspector_install_version", { version: selectedVersion }) }
       case "upgrade":
-        return { label: `Upgrade to v${selectedVersion}` }
+        return { label: t("mod_inspector_upgrade_to_version", { version: selectedVersion }) }
       case "downgrade":
-        return { label: `Downgrade to v${selectedVersion}` }
+        return { label: t("mod_inspector_downgrade_to_version", { version: selectedVersion }) }
       case "unknown-installed-version":
         return {
-          label: "Installed version unknown",
-          disabledReason: "This mod appears to be installed locally. Version switching is disabled until we can detect the installed version."
+          label: t("mod_inspector_installed_version_unknown"),
+          disabledReason: t("mod_inspector_installed_version_unknown_reason"),
         }
       case "none":
         return { label: "" }
@@ -494,7 +491,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="size-4" />
-            <span>Back</span>
+            <span>{t("mod_inspector_back")}</span>
           </button>
           <div className="flex items-start gap-3">
             <img
@@ -506,7 +503,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               <h2 className="text-base font-semibold text-balance line-clamp-2">
                 {mod.name}
               </h2>
-              <p className="text-xs text-muted-foreground">by {mod.author}</p>
+              <p className="text-xs text-muted-foreground">{t("mod_inspector_by_author", { author: mod.author })}</p>
             </div>
           </div>
         </div>
@@ -523,7 +520,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               <h2 className="text-base font-semibold text-balance line-clamp-2">
                 {mod.name}
               </h2>
-              <p className="text-xs text-muted-foreground">by {mod.author}</p>
+              <p className="text-xs text-muted-foreground">{t("mod_inspector_by_author", { author: mod.author })}</p>
             </div>
           </div>
         </div>
@@ -536,7 +533,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
-                <span>Queued for download...</span>
+                <span>{t("mod_inspector_queued_for_download")}</span>
               </div>
               <Button variant="ghost" size="sm" onClick={handleCancel}>
                 <X className="size-4" />
@@ -550,7 +547,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Loader2 className="size-4 animate-spin text-primary" />
-                <span className="text-sm font-medium">Downloading...</span>
+                <span className="text-sm font-medium">{t("mod_inspector_downloading")}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={handlePause}>
@@ -577,16 +574,16 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Paused</span>
+                <span className="text-sm font-medium">{t("mod_inspector_paused")}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="default" size="sm" onClick={handleResume}>
                   <Play className="size-4" />
-                  <span>Resume</span>
+                  <span>{t("mod_inspector_resume")}</span>
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   <X className="size-4" />
-                  <span>Cancel</span>
+                  <span>{t("mod_inspector_cancel")}</span>
                 </Button>
               </div>
             </div>
@@ -627,8 +624,8 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             {!isUninstalling && (
               <div className="flex items-center justify-between rounded-md border border-border bg-muted/50 p-3">
                 <div>
-                  <p className="text-sm font-medium">Enable Mod</p>
-                  <p className="text-xs text-muted-foreground">Load this mod in-game</p>
+                  <p className="text-sm font-medium">{t("mod_inspector_enable_mod")}</p>
+                  <p className="text-xs text-muted-foreground">{t("mod_inspector_enable_mod_description")}</p>
                 </div>
                 <Switch checked={enabled} onCheckedChange={handleToggleEnabled} />
               </div>
@@ -643,12 +640,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               {isUninstalling ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  <span>Uninstalling...</span>
+                  <span>{t("mod_inspector_uninstalling")}</span>
                 </>
               ) : (
                 <>
                   <Trash2 className="size-4" />
-                  <span>Uninstall</span>
+                  <span>{t("mod_inspector_uninstall")}</span>
                 </>
               )}
             </Button>
@@ -663,12 +660,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
           {installed && installedVersion ? (
             <>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Installed</span>
+                <span className="text-xs text-muted-foreground">{t("mod_inspector_installed")}</span>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-medium">v{installedVersion}</span>
                   {isVersionGreater(mod.version, installedVersion) ? (
                     <Badge variant="default" className="text-[10px] px-1.5 py-0">
-                      Update available
+                      {t("mod_inspector_update_available")}
                     </Badge>
                   ) : null}
                 </div>
@@ -679,7 +676,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
           ) : null}
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Version</span>
+            <span className="text-xs text-muted-foreground">{t("mod_inspector_version")}</span>
 
             <Select
               value={selectedVersion}
@@ -694,7 +691,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                     <div className="flex items-center gap-2">
                       <span className="text-xs">{version.version_number}</span>
                       {version.version_number === mod.version && (
-                        <Badge variant="secondary" className="text-[10px] px-1 py-0">Latest</Badge>
+                        <Badge variant="secondary" className="text-[10px] px-1 py-0">{t("mod_inspector_latest")}</Badge>
                       )}
                     </div>
                   </SelectItem>
@@ -704,14 +701,14 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
           </div>
           <Separator />
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Downloads</span>
+            <span className="text-xs text-muted-foreground">{t("mod_inspector_downloads")}</span>
             <span className="text-xs font-medium tabular-nums">
               {mod.downloads.toLocaleString()}
             </span>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Last Updated</span>
+            <span className="text-xs text-muted-foreground">{t("mod_inspector_last_updated")}</span>
             <span className="text-xs font-medium">
               {new Date(mod.lastUpdated).toLocaleDateString()}
             </span>
@@ -725,19 +722,19 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
           <TabsList variant="line" className="h-auto w-full justify-start rounded-none border-0 bg-transparent p-0">
             <TabsTrigger value="readme" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <FileText className="size-4" />
-              <span>Readme</span>
+              <span>{t("mod_inspector_tab_readme")}</span>
             </TabsTrigger>
             <TabsTrigger value="changelog" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <History className="size-4" />
-              <span>Updates</span>
+              <span>{t("mod_inspector_tab_updates")}</span>
             </TabsTrigger>
             <TabsTrigger value="dependencies" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <Network className="size-4" />
-              <span>Deps</span>
+              <span>{t("mod_inspector_tab_deps")}</span>
             </TabsTrigger>
             <TabsTrigger value="versions" className="gap-2 rounded-none border-b-2 px-4 py-3">
               <Package className="size-4" />
-              <span>Versions</span>
+              <span>{t("mod_inspector_tab_versions")}</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -761,9 +758,9 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                 <div className="flex items-start gap-3">
                   <AlertCircle className="size-5 text-destructive shrink-0 mt-0.5" />
                   <div className="flex-1 space-y-2">
-                    <p className="text-sm font-medium text-destructive">Failed to load readme</p>
+                    <p className="text-sm font-medium text-destructive">{t("mod_inspector_failed_to_load_readme")}</p>
                     <p className="text-xs text-muted-foreground">
-                      {readmeError?.message || "An error occurred while fetching the readme"}
+                      {readmeError?.message || t("mod_inspector_error_fetching_readme")}
                     </p>
                     <Button
                       variant="outline"
@@ -772,7 +769,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                       className="gap-2"
                     >
                       <RefreshCw className="size-3" />
-                      Retry
+                      {t("mod_inspector_retry")}
                     </Button>
                   </div>
                 </div>
@@ -787,7 +784,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
         <TabsContent value="changelog" className="p-4">
           <div>
-            <h3 className="mb-3 text-sm font-semibold">Version History</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t("mod_inspector_version_history")}</h3>
             <div className="space-y-4">
               <div className="border-l-2 border-primary pl-4">
                 <div className="mb-1 flex items-center gap-2">
@@ -826,18 +823,18 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
         <TabsContent value="dependencies" className="p-4">
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Dependencies ({isLoadingDeps ? "..." : depInfos.length})</h3>
+              <h3 className="text-sm font-semibold">{isLoadingDeps ? t("mod_inspector_dependencies_loading") : t("mod_inspector_dependencies_count", { count: depInfos.length })}</h3>
               {!isLoadingDeps && depInfos.some(d => d.status === "not_installed" || d.status === "installed_wrong") && (
                 <Button variant="secondary" size="sm" onClick={handleDownloadMissingDeps}>
                   <Download className="size-3 mr-1.5" />
-                  Download missing
+                  {t("mod_inspector_download_missing")}
                 </Button>
               )}
             </div>
             {mod.dependencies.length === 0 ? (
               <div className="rounded-md border border-border bg-muted/50 p-6 text-center">
                 <p className="text-xs text-muted-foreground">
-                  This mod has no dependencies
+                  {t("mod_inspector_no_dependencies")}
                 </p>
               </div>
             ) : isLoadingDeps ? (
@@ -866,18 +863,18 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                           {depInfo.resolvedMod?.name || depInfo.parsed.fullString}
                         </p>
                         <Badge variant={getStatusBadgeVariant(depInfo.status)} className="shrink-0">
-                          {getStatusLabel(depInfo.status)}
+                          {t(DEP_STATUS_KEYS[depInfo.status])}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {depInfo.parsed.version
-                          ? `Requires v${depInfo.parsed.version}`
-                          : "Any version"}
-                        {depInfo.installedVersion && ` • Installed: v${depInfo.installedVersion}`}
+                          ? t("mod_inspector_requires_version", { version: depInfo.parsed.version })
+                          : t("mod_inspector_any_version")}
+                        {depInfo.installedVersion && ` • ${t("mod_inspector_installed_version_label", { version: depInfo.installedVersion })}`}
                       </p>
                       {depInfo.status === "unresolved" && (
                         <p className="text-xs text-muted-foreground mt-1 italic">
-                          Not found in catalog
+                          {t("mod_inspector_not_found_in_catalog")}
                         </p>
                       )}
                     </div>
@@ -893,15 +890,15 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
         <TabsContent value="versions" className="p-4">
           <div>
-            <h3 className="mb-3 text-sm font-semibold">Available Versions</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t("mod_inspector_available_versions")}</h3>
             <div className="overflow-x-auto rounded-md border border-border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Version</TableHead>
-                    <TableHead className="text-xs">Released</TableHead>
-                    <TableHead className="text-xs text-right">Downloads</TableHead>
-                    <TableHead className="text-xs text-right">Action</TableHead>
+                    <TableHead className="text-xs">{t("mod_inspector_table_version")}</TableHead>
+                    <TableHead className="text-xs">{t("mod_inspector_table_released")}</TableHead>
+                    <TableHead className="text-xs text-right">{t("mod_inspector_table_downloads")}</TableHead>
+                    <TableHead className="text-xs text-right">{t("mod_inspector_table_action")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -911,7 +908,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                         <div className="flex items-center gap-2">
                           <code className="text-xs font-medium">{version.version_number}</code>
                           {version.version_number === mod.version && (
-                            <Badge variant="secondary" className="text-xs">Current</Badge>
+                            <Badge variant="secondary" className="text-xs">{t("mod_inspector_current")}</Badge>
                           )}
                         </div>
                       </TableCell>
@@ -923,7 +920,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                       </TableCell>
                       <TableCell className="py-2 text-right">
                         {version.version_number === installedVersion ? (
-                          <Badge variant="outline" className="text-xs">Installed</Badge>
+                          <Badge variant="outline" className="text-xs">{t("mod_inspector_installed")}</Badge>
                         ) : (
                           <Button
                             variant="ghost"
@@ -942,7 +939,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
                               })
                             }}
                           >
-                            Install
+                            {t("mod_inspector_install")}
                           </Button>
                         )}
                       </TableCell>
@@ -972,7 +969,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             }}
           >
             <ExternalLink className="size-4" />
-            <span>View on Thunderstore</span>
+            <span>{t("mod_inspector_view_on_thunderstore")}</span>
           </Button>
           {mod.websiteUrl && (
             <Button
@@ -988,7 +985,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               }}
             >
               <ExternalLink className="size-4" />
-              <span>Report Issue</span>
+              <span>{t("mod_inspector_report_issue")}</span>
             </Button>
           )}
         </div>
@@ -998,6 +995,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 }
 
 export function ModInspector() {
+  const { t } = useTranslation()
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectMod = useAppStore((s) => s.selectMod)
@@ -1057,14 +1055,14 @@ export function ModInspector() {
             className="mb-3 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="size-4" />
-            <span>Back</span>
+            <span>{t("mod_inspector_back")}</span>
           </button>
           <div className="flex items-start gap-3">
             <div className="size-12 rounded bg-muted flex items-center justify-center text-muted-foreground">
               <Package className="size-6" />
             </div>
             <div className="flex-1">
-              <h2 className="text-base font-semibold">Unknown mod</h2>
+              <h2 className="text-base font-semibold">{t("mod_inspector_unknown_mod")}</h2>
               <p className="text-xs text-muted-foreground">ID: {selectedModId}</p>
             </div>
           </div>
@@ -1076,14 +1074,14 @@ export function ModInspector() {
             {installedVersion && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Installed Version</span>
+                  <span className="text-xs text-muted-foreground">{t("mod_inspector_installed_version")}</span>
                   <span className="text-xs font-medium">v{installedVersion}</span>
                 </div>
                 <Separator />
               </>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Mod ID</span>
+              <span className="text-xs text-muted-foreground">{t("mod_inspector_mod_id")}</span>
               <code className="text-xs font-mono break-all max-w-[200px]">{selectedModId}</code>
             </div>
           </div>
@@ -1095,9 +1093,9 @@ export function ModInspector() {
             <div className="flex items-start gap-3">
               <AlertCircle className="size-5 text-yellow-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-yellow-600">Metadata unavailable</p>
+                <p className="text-sm font-medium text-yellow-600">{t("mod_inspector_metadata_unavailable")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  This mod is installed but its metadata couldn't be loaded. It may be a locally-installed mod or a Thunderstore package that isn't available in web mode.
+                  {t("mod_inspector_metadata_unavailable_description")}
                 </p>
               </div>
             </div>
@@ -1120,7 +1118,7 @@ export function ModInspector() {
             }}
           >
             <Trash2 className="size-4" />
-            <span>Uninstall</span>
+            <span>{t("mod_inspector_uninstall")}</span>
           </Button>
         </div>
       </div>

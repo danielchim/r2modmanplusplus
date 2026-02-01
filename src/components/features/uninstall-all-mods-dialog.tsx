@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,7 @@ export function UninstallAllModsDialog({
   modCount,
   onConfirm,
 }: UninstallAllModsDialogProps) {
+  const { t } = useTranslation()
   const handleConfirm = () => {
     onConfirm()
     onOpenChange(false)
@@ -36,14 +38,14 @@ export function UninstallAllModsDialog({
           <AlertDialogMedia>
             <AlertTriangle className="text-destructive" />
           </AlertDialogMedia>
-          <AlertDialogTitle>Uninstall All Mods?</AlertDialogTitle>
+          <AlertDialogTitle>{t("dialog_uninstall_all_mods_title")}</AlertDialogTitle>
           <AlertDialogDescription>
             This will uninstall <strong>{modCount}</strong> mod{modCount === 1 ? '' : 's'} from the current profile.
             This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleConfirm}>
             Uninstall All
           </AlertDialogAction>

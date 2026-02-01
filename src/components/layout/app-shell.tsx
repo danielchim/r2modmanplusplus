@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Menu } from "lucide-react"
 import { Toaster } from "sonner"
 import { GlobalRail } from "./global-rail"
@@ -15,6 +16,7 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, showContextPanel = true }: AppShellProps) {
+  const { t } = useTranslation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const showContextPanelState = useAppStore((s) => s.showContextPanel)
 
@@ -39,7 +41,7 @@ export function AppShell({ children, showContextPanel = true }: AppShellProps) {
           >
             <Menu className="size-5" />
           </Button>
-          <h1 className="text-sm font-semibold">r2modman</h1>
+          <h1 className="text-sm font-semibold">{t("app_title")}</h1>
         </div>
 
         {children}

@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense, useMemo } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
@@ -31,6 +32,7 @@ const CONFIG_DOCS: ConfigDoc[] = [
 ]
 
 export function ConfigEditorCenter() {
+  const { t } = useTranslation()
   const [selectedDocId, setSelectedDocId] = useState<string>("bepinex")
   const [mode, setMode] = useState<"gui" | "raw">("gui")
   const [baselineText, setBaselineText] = useState<string>("")
@@ -144,7 +146,7 @@ export function ConfigEditorCenter() {
         <div className="flex h-full flex-col">
           {/* Header */}
           <div className="shrink-0 border-b border-border p-4">
-            <h2 className="text-lg font-semibold">Config Files</h2>
+            <h2 className="text-lg font-semibold">{t("config_editor_config_files")}</h2>
           </div>
 
           {/* Search */}
@@ -173,7 +175,7 @@ export function ConfigEditorCenter() {
                 ) : (
                   <ChevronDown className="size-4" />
                 )}
-                <span className="font-medium">Core System</span>
+                <span className="font-medium">{t("config_editor_core_system")}</span>
               </button>
               {!collapsedSections.has("core") && (
                 <div className="ml-3 mt-1 space-y-1">
@@ -239,7 +241,7 @@ export function ConfigEditorCenter() {
                 ) : (
                   <ChevronDown className="size-4" />
                 )}
-                <span className="font-medium">User Mods</span>
+                <span className="font-medium">{t("config_editor_user_mods")}</span>
               </button>
               {!collapsedSections.has("user") && (
                 <div className="ml-3 mt-1 space-y-1">
@@ -340,7 +342,7 @@ export function ConfigEditorCenter() {
         {/* Footer */}
         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-border px-6 py-4">
           {dirty && (
-            <span className="mr-auto text-sm text-muted-foreground">Unsaved changes</span>
+            <span className="mr-auto text-sm text-muted-foreground">{t("config_editor_unsaved_changes")}</span>
           )}
           <Button variant="outline" size="sm" onClick={handleRevert} disabled={!dirty}>
             Revert
@@ -355,7 +357,7 @@ export function ConfigEditorCenter() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Config File?</AlertDialogTitle>
+            <AlertDialogTitle>{t("dialog_delete_config_file_title")}</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete <strong>{fileToDelete?.title}</strong> ({fileToDelete?.subtitle})?
               <br /><br />
@@ -363,7 +365,7 @@ export function ConfigEditorCenter() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete File
             </AlertDialogAction>

@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
 
 import "./index.css"
+import "./lib/i18n"
 import { createRouter } from "./router"
 import { AppBootstrap } from "./components/app-bootstrap"
 import { queryClient } from "./lib/query-client"

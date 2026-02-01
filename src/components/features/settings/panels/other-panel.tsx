@@ -1,7 +1,9 @@
+import { useMemo } from "react"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { useSettingsStore } from "@/store/settings-store"
+import { useTranslation } from "react-i18next"
 import {
   Select,
   SelectContent,
@@ -14,9 +16,23 @@ interface PanelProps {
   searchQuery?: string
 }
 
+/** Locale code to i18n key for language name: e.g. "zh-CN" → "language_zh_CN" */
+function getLanguageLabelKey(locale: string): string {
+  return `language_${locale.replace(/-/g, "_")}`
+}
+
 export function OtherPanel(_props: PanelProps) {
-  const { theme, cardDisplayType, funkyMode, enforceDependencyVersions } = useSettingsStore((s) => s.global)
+  void _props
+  const { t, i18n } = useTranslation()
+
+  const { theme, language, cardDisplayType, funkyMode, enforceDependencyVersions } = useSettingsStore((s) => s.global)
   const updateGlobal = useSettingsStore((s) => s.updateGlobal)
+
+  const availableLanguages = useMemo(
+    () => Object.keys(i18n.options.resources ?? {}) as string[],
+    [i18n.options.resources]
+  )
+  const languageLabel = t(getLanguageLabelKey(language))
 
   const handleRefreshModList = () => {
     // TODO: Implement refresh online mod list
@@ -26,16 +42,16 @@ export function OtherPanel(_props: PanelProps) {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-2">Appearance</h2>
+        <h2 className="text-2xl font-semibold mb-2">{t("settings_appearance_title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Customize the look and feel of r2modman
+          {t("settings_appearance_description")}
         </p>
       </div>
 
       <div className="space-y-0 divide-y divide-border">
         <SettingsRow
-          title="Theme"
-          description="Choose your preferred color scheme"
+          title={t("settings_appearance_theme_title")}
+          description={t("settings_appearance_theme_description")}
           rightContent={
             <div className="flex gap-2">
               {(["system", "light", "dark"] as const).map((mode) => (
@@ -54,8 +70,32 @@ export function OtherPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Card display type"
-          description="Choose how mod cards are displayed in the library"
+          title={t("settings_appearance_language_title")}
+          description={t("settings_appearance_language_description")}
+          rightContent={
+            <Select
+              value={language}
+              onValueChange={(value: string | null) => {
+                if (value) updateGlobal({ language: value })
+              }}
+            >
+              <SelectTrigger className="w-[140px]">
+                <span className="flex-1 text-left">{languageLabel}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {availableLanguages.map((locale) => (
+                  <SelectItem key={locale} value={locale}>
+                    {t(getLanguageLabelKey(locale))}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title={t("settings_appearance_card_display_type_title")}
+          description={t("settings_appearance_card_display_type_description")}
           rightContent={
             <Select
               value={cardDisplayType}
@@ -67,16 +107,16 @@ export function OtherPanel(_props: PanelProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="collapsed">Collapsed</SelectItem>
-                <SelectItem value="expanded">Expanded</SelectItem>
+                <SelectItem value="collapsed">{t("settings_appearance_card_display_type_collapsed")}</SelectItem>
+                <SelectItem value="expanded">{t("settings_appearance_card_display_type_expanded")}</SelectItem>
               </SelectContent>
             </Select>
           }
         />
 
         <SettingsRow
-          title="Funky mode"
-          description="Enable experimental and fun UI effects"
+          title={t("settings_appearance_funky_mode_title")}
+          description={t("settings_appearance_funky_mode_description")}
           rightContent={
             <Switch
               checked={funkyMode}
@@ -86,27 +126,27 @@ export function OtherPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Refresh online mod list"
-          description="Fetch the latest list of available mods from Thunderstore"
+          title={t("settings_appearance_refresh_online_mod_list_title")}
+          description={t("settings_appearance_refresh_online_mod_list_description")}
           rightContent={
             <Button variant="outline" size="sm" onClick={handleRefreshModList}>
-              Refresh
+              {t("settings_appearance_refresh_online_mod_list_action")}
             </Button>
           }
         />
       </div>
 
       <div className="mt-12 mb-8">
-        <h2 className="text-2xl font-semibold mb-2">Mod Management</h2>
+        <h2 className="text-2xl font-semibold mb-2">{t("settings_mod_management_title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Configure how mods and their dependencies are handled
+          {t("settings_mod_management_description")}
         </p>
       </div>
 
       <div className="space-y-0 divide-y divide-border">
         <SettingsRow
-          title="Enforce dependency versions"
-          description="When enabled, mods with specific version requirements will only accept that exact version. When disabled, any version of the dependency will be considered acceptable."
+          title={t("settings_mod_management_enforce_dependency_versions_title")}
+          description={t("settings_mod_management_enforce_dependency_versions_description")}
           rightContent={
             <Switch
               checked={enforceDependencyVersions}

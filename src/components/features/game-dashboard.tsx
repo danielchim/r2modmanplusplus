@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import { Plus, Upload, Download as DownloadIcon, ChevronDown, Settings, FolderOpen, FileCode, FileDown, Edit, Trash2 } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
@@ -32,6 +33,7 @@ import { toast } from "sonner"
 const EMPTY_PROFILES: readonly Profile[] = []
 
 export function GameDashboard() {
+  const { t } = useTranslation()
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [renameProfileOpen, setRenameProfileOpen] = useState(false)
   const [deleteProfileOpen, setDeleteProfileOpen] = useState(false)
@@ -163,8 +165,8 @@ export function GameDashboard() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center space-y-2">
-          <p className="text-muted-foreground">No game selected</p>
-          <p className="text-sm text-muted-foreground">Add a game to get started</p>
+          <p className="text-muted-foreground">{t("common_no_game_selected")}</p>
+          <p className="text-sm text-muted-foreground">{t("common_add_game_to_get_started")}</p>
         </div>
       </div>
     )
@@ -172,7 +174,7 @@ export function GameDashboard() {
   
   // Determine launch button state and tooltip
   let launchDisabled = true
-  let launchTooltip = "Install folder not set"
+  let launchTooltip = t("dashboard_install_folder_not_set")
   
   const isRunning = launchStatus.data?.running ?? false
   const isLaunching = launchMutation.isPending
@@ -180,13 +182,13 @@ export function GameDashboard() {
   if (installFolder) {
     if (binaryVerification.isLoading) {
       launchDisabled = true
-      launchTooltip = "Verifying game files..."
+      launchTooltip = t("dashboard_verifying_game_files")
     } else if (!binaryVerification.data?.ok) {
       launchDisabled = true
-      launchTooltip = binaryVerification.data?.reason || "Game binary not found"
+      launchTooltip = binaryVerification.data?.reason || t("dashboard_game_binary_not_found")
     } else if (isRunning) {
       launchDisabled = true
-      launchTooltip = "Game is running"
+      launchTooltip = t("dashboard_game_is_running")
     } else if (isLaunching) {
       launchDisabled = true
       launchTooltip = "Launching..."
@@ -515,7 +517,7 @@ export function GameDashboard() {
       <div className="flex flex-col gap-4 p-4">
         {/* Section Title */}
         <div>
-          <h2 className="text-lg font-semibold text-balance">Profiles & Sync</h2>
+          <h2 className="text-lg font-semibold text-balance">{t("dashboard_profiles_and_sync")}</h2>
         </div>
 
         {/* Current Profile Display */}
@@ -531,9 +533,9 @@ export function GameDashboard() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-muted-foreground">Current Profile</div>
+                <div className="text-xs text-muted-foreground">{t("dashboard_current_profile")}</div>
                 <div className="mt-1 font-medium">
-                  {profilesEnabled ? (currentProfile?.name ?? activeProfileId ?? "Default") : "Not available"}
+                  {profilesEnabled ? (currentProfile?.name ?? activeProfileId ?? t("common_default")) : t("common_not_available")}
                 </div>
               </div>
               <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
@@ -545,7 +547,7 @@ export function GameDashboard() {
           >
             {/* All Profiles Section */}
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="px-3 py-2">All Profiles</DropdownMenuLabel>
+              <DropdownMenuLabel className="px-3 py-2">{t("common_all_profiles")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={activeProfileId ?? ""}
                 onValueChange={(profileId) => setActiveProfile(selectedGameId, profileId)}
@@ -572,7 +574,7 @@ export function GameDashboard() {
                 onClick={() => setCreateProfileOpen(true)}
               >
                 <Plus className="size-5" />
-                <span>Create new profile</span>
+                <span>{t("common_create_new_profile")}</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -582,7 +584,7 @@ export function GameDashboard() {
         <div className="space-y-2">
           {!profilesEnabled && (
             <div className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground text-center">
-              Set install folder in Game Settings to enable profiles
+              {t("dashboard_set_install_folder_to_enable_profiles")}
             </div>
           )}
           <Button 
@@ -592,7 +594,7 @@ export function GameDashboard() {
             disabled={!profilesEnabled}
           >
             <Upload className="size-4" />
-            <span>Import Profile Code</span>
+            <span>{t("dashboard_import_profile_code")}</span>
           </Button>
           <Button 
             variant="outline" 
@@ -601,7 +603,7 @@ export function GameDashboard() {
             disabled={!profilesEnabled}
           >
             <FolderOpen className="size-4" />
-            <span>Import Local Mod</span>
+            <span>{t("dashboard_import_local_mod")}</span>
           </Button>
           <Button 
             variant="outline" 
@@ -611,7 +613,7 @@ export function GameDashboard() {
             disabled={!profilesEnabled}
           >
             <Edit className="size-4" />
-            <span>Rename Profile</span>
+            <span>{t("dashboard_rename_profile")}</span>
           </Button>
           <Button 
             variant="destructive" 
@@ -621,7 +623,7 @@ export function GameDashboard() {
             disabled={!profilesEnabled || activeProfileId === `${selectedGameId}-default`}
           >
             <Trash2 className="size-4" />
-            <span>Delete Profile</span>
+            <span>{t("dashboard_delete_profile")}</span>
           </Button>
           <Button 
             variant="destructive" 
@@ -631,7 +633,7 @@ export function GameDashboard() {
             disabled={installedModCount === 0}
           >
             <Trash2 className="size-4" />
-            <span>Uninstall All Mods</span>
+            <span>{t("dashboard_uninstall_all_mods")}</span>
             {installedModCount > 0 && (
               <span className="ml-auto text-xs">({installedModCount})</span>
             )}
@@ -647,16 +649,16 @@ export function GameDashboard() {
             }
           >
             <DownloadIcon className="size-4" />
-            <span>Export Profile</span>
+            <span>{t("dashboard_export_profile")}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[var(--anchor-width)]">
             <DropdownMenuItem className="gap-2">
               <FileDown className="size-4" />
-              <span>Export as File</span>
+              <span>{t("dashboard_export_as_file")}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2">
               <FileCode className="size-4" />
-              <span>Export as Code</span>
+              <span>{t("dashboard_export_as_code")}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -669,7 +671,7 @@ export function GameDashboard() {
           onClick={() => openSettingsToGame(selectedGameId)}
         >
           <Settings className="size-4" />
-          <span>Game Settings</span>
+          <span>{t("dashboard_game_settings")}</span>
         </Button>
 
         {/* Launch Controls */}
@@ -688,7 +690,7 @@ export function GameDashboard() {
                   disabled={launchDisabled}
                   onClick={handleStartModded}
                 >
-                  Start Modded
+                  {t("dashboard_start_modded")}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -703,7 +705,7 @@ export function GameDashboard() {
               disabled={launchDisabled}
               onClick={handleStartModded}
             >
-              Start Modded
+              {t("dashboard_start_modded")}
             </Button>
           )}
           
@@ -721,7 +723,7 @@ export function GameDashboard() {
                   disabled={launchDisabled}
                   onClick={handleStartVanilla}
                 >
-                  Start Vanilla
+                  {t("dashboard_start_vanilla")}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -736,7 +738,7 @@ export function GameDashboard() {
               disabled={launchDisabled}
               onClick={handleStartVanilla}
             >
-              Start Vanilla
+              {t("dashboard_start_vanilla")}
             </Button>
           )}
         </div>
@@ -745,7 +747,7 @@ export function GameDashboard() {
         <div className={`flex items-center gap-2 rounded-md px-3 py-2 ${isRunning ? "bg-green-500/10" : "bg-primary/10"}`}>
           <div className={`size-2 rounded-full ${isRunning ? "bg-green-500" : "bg-primary"}`} />
           <span className={`text-xs font-medium ${isRunning ? "text-green-500" : "text-primary"}`}>
-            {isRunning ? `Running (PID: ${launchStatus.data?.pid})` : "Ready"}
+            {isRunning ? t("dashboard_running_pid", { pid: launchStatus.data?.pid ?? "" }) : t("dashboard_ready")}
           </span>
         </div>
       </div>

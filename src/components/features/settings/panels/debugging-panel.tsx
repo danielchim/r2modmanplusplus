@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc"
@@ -9,6 +10,7 @@ interface PanelProps {
 }
 
 export function DebuggingPanel(_props: PanelProps) {
+  const { t } = useTranslation()
   const [isCopyingLogs, setIsCopyingLogs] = useState(false)
   const [isCopyingInfo, setIsCopyingInfo] = useState(false)
 
@@ -87,16 +89,16 @@ export function DebuggingPanel(_props: PanelProps) {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-2">Debugging</h2>
+        <h2 className="text-2xl font-semibold mb-2">{t("settings_debugging")}</h2>
         <p className="text-sm text-muted-foreground">
-          Tools for troubleshooting and clearing cached data
+          {t("settings_debugging_description")}
         </p>
       </div>
 
       <div className="space-y-0 divide-y divide-border">
         <SettingsRow
-          title="Clean mod cache"
-          description="Clear cached mod files to free up space"
+          title={t("settings_debugging_clean_cache_title")}
+          description={t("settings_debugging_clean_cache_description")}
           rightContent={
             <Button variant="outline" size="sm" onClick={handleCleanModCache}>
               Clean Cache
@@ -105,8 +107,8 @@ export function DebuggingPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Clean online mod list"
-          description="Clear the cached list of available mods from Thunderstore"
+          title={t("settings_debugging_clean_online_title")}
+          description={t("settings_debugging_clean_online_description")}
           rightContent={
             <Button variant="outline" size="sm" onClick={handleCleanOnlineModList}>
               Clean List
@@ -115,8 +117,8 @@ export function DebuggingPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Copy log file"
-          description="Copy the current log file to clipboard for debugging"
+          title={t("settings_debugging_copy_log_title")}
+          description={t("settings_debugging_copy_log_description")}
           rightContent={
             <div className="flex gap-2">
               <Button 
@@ -125,7 +127,7 @@ export function DebuggingPanel(_props: PanelProps) {
                 onClick={handleCopyLogFile}
                 disabled={isCopyingLogs}
               >
-                {isCopyingLogs ? "Copying..." : "Copy Logs"}
+                {isCopyingLogs ? t("settings_debugging_copy_log_copying") : t("settings_debugging_copy_log_button")}
               </Button>
               {logFilePath && (
                 <Button 
@@ -141,8 +143,8 @@ export function DebuggingPanel(_props: PanelProps) {
         />
 
         <SettingsRow
-          title="Copy troubleshooting info"
-          description="Copy system and app information to help diagnose issues"
+          title={t("settings_debugging_copy_info_title")}
+          description={t("settings_debugging_copy_info_description")}
           rightContent={
             <Button 
               variant="outline" 
@@ -150,7 +152,7 @@ export function DebuggingPanel(_props: PanelProps) {
               onClick={handleCopyTroubleshootingInfo}
               disabled={isCopyingInfo}
             >
-              {isCopyingInfo ? "Copying..." : "Copy Info"}
+              {isCopyingInfo ? t("settings_debugging_copy_info_copying") : t("settings_debugging_copy_info_button")}
             </Button>
           }
         />

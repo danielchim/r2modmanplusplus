@@ -1,4 +1,5 @@
 import { useState, memo } from "react"
+import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
@@ -29,6 +30,7 @@ export const ModFilters = memo(function ModFilters({
   sortDir,
   onSortChange,
 }: ModFiltersProps) {
+  const { t } = useTranslation()
   const [sectionsOpen, setSectionsOpen] = useState(true)
   const [sortOpen, setSortOpen] = useState(true)
   const [categoriesOpen, setCategoriesOpen] = useState(true)
@@ -37,7 +39,7 @@ export const ModFilters = memo(function ModFilters({
     <div className="flex h-full flex-col border-r border-border bg-card">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold">Filters</h3>
+        <h3 className="text-sm font-semibold">{t("filters_title")}</h3>
       </div>
 
       {/* Scrollable Content */}
@@ -48,7 +50,7 @@ export const ModFilters = memo(function ModFilters({
             onClick={() => setSectionsOpen(!sectionsOpen)}
             className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
           >
-            <span>Sections</span>
+            <span>{t("filters_sections")}</span>
             {sectionsOpen ? (
               <ChevronUp className="size-4 text-muted-foreground" />
             ) : (
@@ -78,7 +80,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Mods</span>
+                <span>{t("filters_mods")}</span>
               </button>
               <button
                 onClick={() => onSectionChange("modpack")}
@@ -101,7 +103,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Modpacks</span>
+                <span>{t("filters_modpacks")}</span>
               </button>
             </div>
           )}
@@ -113,7 +115,7 @@ export const ModFilters = memo(function ModFilters({
             onClick={() => setSortOpen(!sortOpen)}
             className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
           >
-            <span>Sort</span>
+            <span>{t("filters_sort")}</span>
             {sortOpen ? (
               <ChevronUp className="size-4 text-muted-foreground" />
             ) : (
@@ -143,7 +145,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Last updated: Newest</span>
+                <span>{t("sort_last_updated_newest")}</span>
               </button>
               <button
                 onClick={() => onSortChange({ key: "updated", dir: "asc" })}
@@ -166,7 +168,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Last updated: Oldest</span>
+                <span>{t("sort_last_updated_oldest")}</span>
               </button>
               <button
                 onClick={() => onSortChange({ key: "name", dir: "asc" })}
@@ -189,7 +191,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Name: A–Z</span>
+                <span>{t("sort_name_az")}</span>
               </button>
               <button
                 onClick={() => onSortChange({ key: "name", dir: "desc" })}
@@ -212,7 +214,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Name: Z–A</span>
+                <span>{t("sort_name_za")}</span>
               </button>
               <button
                 onClick={() => onSortChange({ key: "downloads", dir: "desc" })}
@@ -235,7 +237,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Downloads: Most</span>
+                <span>{t("sort_downloads_most")}</span>
               </button>
               <button
                 onClick={() => onSortChange({ key: "downloads", dir: "asc" })}
@@ -258,7 +260,7 @@ export const ModFilters = memo(function ModFilters({
                     <div className="size-2 rounded-full bg-primary" />
                   )}
                 </div>
-                <span>Downloads: Least</span>
+                <span>{t("sort_downloads_least")}</span>
               </button>
             </div>
           )}
@@ -270,7 +272,7 @@ export const ModFilters = memo(function ModFilters({
             onClick={() => setCategoriesOpen(!categoriesOpen)}
             className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/50 transition-colors"
           >
-            <span>Categories</span>
+            <span>{t("filters_categories")}</span>
             {categoriesOpen ? (
               <ChevronUp className="size-4 text-muted-foreground" />
             ) : (

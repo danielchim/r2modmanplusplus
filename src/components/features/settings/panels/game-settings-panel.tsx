@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,6 +19,7 @@ interface GameSettingsPanelProps {
 }
 
 export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
+  const { t } = useTranslation()
   const activeProfileIdByGame = useProfileStore((s) => s.activeProfileIdByGame)
   const profilesByGame = useProfileStore((s) => s.profilesByGame)
   const resetGameProfilesToDefault = useProfileStore((s) => s.resetGameProfilesToDefault)
@@ -43,9 +45,9 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     return (
       <div>
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold mb-2">Game Settings</h2>
+          <h2 className="text-2xl font-semibold mb-2">{t("settings_game_settings")}</h2>
           <p className="text-sm text-muted-foreground">
-            No game selected
+            {t("common_no_game_selected")}
           </p>
         </div>
       </div>
@@ -59,9 +61,9 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     return (
       <div>
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold mb-2">Game Settings</h2>
+          <h2 className="text-2xl font-semibold mb-2">{t("settings_game_settings")}</h2>
           <p className="text-sm text-muted-foreground">
-            Game not found
+            {t("common_game_not_found")}
           </p>
         </div>
       </div>
@@ -198,12 +200,12 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
 
       <div className="space-y-0 divide-y divide-border">
         <SettingsRow
-          title="Game install folder"
-          description="Location where the game is installed"
+          title={t("settings_game_install_folder_title")}
+          description={t("settings_game_install_folder_description")}
           belowContent={
             <FolderPathControl
               value={perGameSettings.gameInstallFolder}
-              placeholder="Not set"
+              placeholder={t("settings_game_install_folder_placeholder")}
               onChangePath={(nextPath) => updatePerGame(gameId, { gameInstallFolder: nextPath })}
               className="w-full"
             />
@@ -211,12 +213,12 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         />
 
         <SettingsRow
-          title="Mod download location"
-          description="Where downloaded mod archives are stored for this game. A game-specific subfolder will be created automatically. Leave blank to use global/app behavior."
+          title={t("settings_game_mod_download_title")}
+          description={t("settings_game_mod_download_description")}
           belowContent={
             <FolderPathControl
               value={perGameSettings.modDownloadFolder}
-              placeholder="Not set (uses global/app behavior)"
+              placeholder={t("settings_game_placeholder_global")}
               onChangePath={(nextPath) => updatePerGame(gameId, { modDownloadFolder: nextPath })}
               className="w-full"
             />
@@ -224,12 +226,12 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         />
 
         <SettingsRow
-          title="Mod cache location"
-          description="Where cached mod files (extracted/processed mods) are stored for this game. Leave blank to use global/app behavior."
+          title={t("settings_game_mod_cache_title")}
+          description={t("settings_game_mod_cache_description")}
           belowContent={
             <FolderPathControl
               value={perGameSettings.modCacheFolder}
-              placeholder="Not set (uses global/app behavior)"
+              placeholder={t("settings_game_placeholder_global")}
               onChangePath={(nextPath) => updatePerGame(gameId, { modCacheFolder: nextPath })}
               className="w-full"
             />
@@ -237,22 +239,22 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         />
 
         <SettingsRow
-          title="Launch parameters"
-          description="Additional command-line arguments to pass when launching the game"
+          title={t("settings_game_launch_params_title")}
+          description={t("settings_game_launch_params_description")}
           rightContent={
             <Input
               value={perGameSettings.launchParameters || ""}
               onChange={(e) => handleLaunchParametersChange(e.target.value)}
-              placeholder="e.g., --debug --windowed"
+              placeholder={t("settings_game_launch_params_placeholder")}
               className="w-[300px]"
             />
           }
         />
 
         <SettingsRow
-          title="Active profile"
-          description="The currently selected profile for this game"
-          value={activeProfileIdByGame[gameId] || "None"}
+          title={t("settings_game_active_profile_title")}
+          description={t("settings_game_active_profile_description")}
+          value={activeProfileIdByGame[gameId] || t("settings_game_active_profile_none")}
           rightContent={
             <Button
               variant="outline"
@@ -260,7 +262,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
               onClick={handleBrowseProfileFolder}
               disabled={!activeProfileIdByGame[gameId]}
             >
-              Browse Profile Folder
+              {t("settings_game_browse_profile_folder")}
             </Button>
           }
         />
@@ -269,51 +271,51 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
       {/* Danger Zone */}
       <div className="mt-8">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-destructive">Danger Zone</h3>
+          <h3 className="text-lg font-semibold text-destructive">{t("settings_danger_zone")}</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Irreversible actions that affect this game
+            {t("settings_game_danger_description")}
           </p>
         </div>
 
         <div className="space-y-0 divide-y divide-border border rounded-lg px-6">
           <SettingsRow
-            title="Clean up injected files"
-            description="Remove BepInEx/Doorstop files from game install folder and restore backups. Useful when switching to vanilla without unmanaging."
+            title={t("settings_game_clean_injected_title")}
+            description={t("settings_game_clean_injected_description")}
             rightContent={
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleCleanupInjected}
               >
-                Cleanup Injected Files
+                {t("settings_game_clean_injected_button")}
               </Button>
             }
           />
           
           <SettingsRow
-            title="Reset installation"
-            description="Remove all mods and reset to Default profile only. Keeps game install folder."
+            title={t("settings_game_reset_title")}
+            description={t("settings_game_reset_description")}
             rightContent={
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleResetGameInstallation}
               >
-                Reset Installation
+                {t("settings_game_reset_button")}
               </Button>
             }
           />
 
           <SettingsRow
-            title="Remove management"
-            description="Stop managing this game entirely. Removes all profiles, mods, and settings."
+            title={t("settings_game_remove_title")}
+            description={t("settings_game_remove_description")}
             rightContent={
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleRemoveManagement}
               >
-                Remove Management
+                {t("settings_game_remove_button")}
               </Button>
             }
           />

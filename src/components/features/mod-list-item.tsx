@@ -1,6 +1,7 @@
 import type { Mod } from "@/mocks/mods"
 
 import { memo } from "react"
+import { useTranslation } from "react-i18next"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -20,6 +21,7 @@ type ModListItemProps = {
 }
 
 export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDialog }: ModListItemProps) {
+  const { t } = useTranslation()
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
@@ -128,27 +130,27 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
           )}
           {hasUpdate && !hasWarnings && (
             <span className="rounded bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-500">
-              Update available
+              {t("mod_inspector_update_available")}
             </span>
           )}
           {hasWarnings && (
             <span className="rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
               <AlertTriangle className="size-3" />
-              Missing deps
+              {t("common_missing_deps")}
             </span>
           )}
           {isQueued && !hasUpdate && (
             <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
-              Queued
+              {t("downloads_status_queued")}
             </span>
           )}
           {isPaused && !hasUpdate && (
             <span className="rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500">
-              Paused
+              {t("downloads_status_paused")}
             </span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">by {mod.author}</p>
+        <p className="text-xs text-muted-foreground">{t("library_by_author", { author: mod.author })}</p>
         <p className="line-clamp-1 text-xs text-muted-foreground">{mod.description}</p>
         
         {/* Download Progress */}
@@ -164,7 +166,7 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
       {/* Enable/Disable Toggle */}
       {isInstalled && !isUninstalling ? (
         <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <span className="text-sm text-muted-foreground">Enabled</span>
+          <span className="text-sm text-muted-foreground">{t("common_enabled")}</span>
           <Switch
             checked={isEnabled}
             onCheckedChange={() => activeProfileId && toggleMod(activeProfileId, mod.id)}
@@ -175,7 +177,7 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
       {/* Mod Stats */}
       <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
         <span>{installedVersion ?? mod.version}</span>
-        <span>{mod.downloads.toLocaleString()} downloads</span>
+        <span>{t("library_downloads_count", { count: mod.downloads })}</span>
         <span>{new Date(mod.lastUpdated).toLocaleDateString()}</span>
       </div>
       
@@ -193,12 +195,12 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
             {isUninstalling ? (
               <>
                 <Loader2 className="size-3 mr-1.5 animate-spin" />
-                Uninstalling
+                {t("common_uninstalling")}
               </>
             ) : (
               <>
                 <Trash2 className="size-3 mr-1.5" />
-                Uninstall
+                {t("common_uninstall")}
               </>
             )}
           </>
@@ -206,12 +208,12 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
           <>
             {isDownloading && <Loader2 className="size-3 mr-1.5 animate-spin" />}
             {isPaused && <Pause className="size-3 mr-1.5" />}
-            {isQueued ? "Queued" : isPaused ? "Paused" : "Downloading"}
+            {isQueued ? t("downloads_status_queued") : isPaused ? t("downloads_status_paused") : t("downloads_status_downloading")}
           </>
         ) : (
           <>
             <Download className="size-3 mr-1.5" />
-            Download
+            {t("common_download")}
           </>
         )}
       </Button>

@@ -23,6 +23,7 @@ type GlobalSettings = {
   // UI / Other
   cardDisplayType: "collapsed" | "expanded"
   theme: "dark" | "light" | "system"
+  language: string
   funkyMode: boolean
 }
 
@@ -62,6 +63,7 @@ const defaultGlobalSettings: GlobalSettings = {
   enforceDependencyVersions: true,
   cardDisplayType: "collapsed",
   theme: "dark",
+  language: "en",
   funkyMode: false,
 }
 

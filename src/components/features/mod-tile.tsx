@@ -1,6 +1,7 @@
 import type { Mod } from "@/mocks/mods"
 
 import { memo } from "react"
+import { useTranslation } from "react-i18next"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useModManagementStore } from "@/store/mod-management-store"
@@ -20,6 +21,7 @@ type ModTileProps = {
 }
 
 export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: ModTileProps) {
+  const { t } = useTranslation()
   const selectMod = useAppStore((s) => s.selectMod)
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
@@ -115,7 +117,7 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
       {/* Mod Info */}
       <div className="flex flex-1 flex-col gap-1 p-3">
         <h3 className="line-clamp-1 text-sm font-semibold">{mod.name}</h3>
-        <p className="text-xs text-muted-foreground">by {mod.author}</p>
+        <p className="text-xs text-muted-foreground">{t("library_by_author", { author: mod.author })}</p>
         
         {/* Download Progress */}
         {isDownloading && downloadTask ? (
@@ -129,7 +131,7 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
         
         <div className="mt-auto flex items-center justify-between pt-2">
           <span className="text-xs text-muted-foreground">
-            {mod.downloads.toLocaleString()} downloads
+            {t("library_downloads_count", { count: mod.downloads })}
           </span>
           
           {/* Enable Toggle Indicator */}
@@ -144,7 +146,7 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
         {/* Enable/Disable Toggle */}
         {isInstalled && !isUninstalling ? (
           <div className="mt-2 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-            <span className="text-sm text-muted-foreground">Enabled</span>
+            <span className="text-sm text-muted-foreground">{t("common_enabled")}</span>
             <Switch
               checked={isEnabled}
               onCheckedChange={() => activeProfileId && toggleMod(activeProfileId, mod.id)}
@@ -165,12 +167,12 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
               {isUninstalling ? (
                 <>
                   <Loader2 className="size-3 mr-1.5 animate-spin" />
-                  Uninstalling
+                  {t("common_uninstalling")}
                 </>
               ) : (
                 <>
                   <Trash2 className="size-3 mr-1.5" />
-                  Uninstall
+                  {t("common_uninstall")}
                 </>
               )}
             </>
@@ -178,12 +180,12 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
             <>
               {isDownloading && <Loader2 className="size-3 mr-1.5 animate-spin" />}
               {isPaused && <Pause className="size-3 mr-1.5" />}
-              {isQueued ? "Queued" : isPaused ? "Paused" : "Downloading"}
+              {isQueued ? t("downloads_status_queued") : isPaused ? t("downloads_status_paused") : t("downloads_status_downloading")}
             </>
           ) : (
             <>
               <Download className="size-3 mr-1.5" />
-              Download
+              {t("common_download")}
             </>
           )}
         </Button>
@@ -192,14 +194,14 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
       {/* Status Badge */}
       {isInstalled && isEnabled && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
-          Active
+          {t("common_active")}
         </div>
       ) : null}
 
       {/* Update Available Badge */}
       {hasUpdate && !hasWarnings ? (
         <div className="absolute right-2 top-2 rounded bg-green-200 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-500">
-          Update available
+          {t("mod_inspector_update_available")}
         </div>
       ) : null}
 
@@ -207,19 +209,19 @@ export const ModTile = memo(function ModTile({ mod, onOpenDependencyDialog }: Mo
       {hasWarnings ? (
         <div className="absolute right-2 top-2 rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
           <AlertTriangle className="size-3" />
-          Missing deps
+          {t("common_missing_deps")}
         </div>
       ) : null}
 
       {/* Download Status Badges */}
       {isQueued && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-muted px-2 py-0.5 text-xs font-medium">
-          Queued
+          {t("downloads_status_queued")}
         </div>
       ) : null}
       {isPaused && !hasWarnings && !hasUpdate ? (
         <div className="absolute right-2 top-2 rounded bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500">
-          Paused
+          {t("downloads_status_paused")}
         </div>
       ) : null}
       {isDownloading && downloadTask && !hasWarnings && !hasUpdate ? (

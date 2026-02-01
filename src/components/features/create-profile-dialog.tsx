@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +11,7 @@ type CreateProfileDialogProps = {
 }
 
 export function CreateProfileDialog({ open, onOpenChange, onCreateProfile }: CreateProfileDialogProps) {
+  const { t } = useTranslation()
   const [profileName, setProfileName] = useState("")
 
   const handleCreate = () => {
@@ -32,7 +34,7 @@ export function CreateProfileDialog({ open, onOpenChange, onCreateProfile }: Cre
         onOverlayClick={handleCancel}
       >
         <DialogHeader>
-          <DialogTitle>Create New Profile</DialogTitle>
+          <DialogTitle>{t("dialog_create_new_profile_title")}</DialogTitle>
           <DialogDescription>
             Enter a name for your new profile. You can use profiles to manage different mod configurations.
           </DialogDescription>
