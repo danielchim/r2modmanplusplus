@@ -458,6 +458,7 @@ export function ModsLibrary() {
   const searchQuery = useAppStore((s) => s.searchQuery)
   const sortKey = useAppStore((s) => s.sortKey)
   const sortDir = useAppStore((s) => s.sortDir)
+  const setSort = useAppStore((s) => s.setSort)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setShowContextPanel = useAppStore((s) => s.setShowContextPanel)
   const selectMod = useAppStore((s) => s.selectMod)
@@ -1104,6 +1105,9 @@ export function ModsLibrary() {
                   onToggleCategory={handleToggleCategory}
                   onClearCategories={handleClearCategories}
                   categoryCounts={categoryCounts}
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSortChange={setSort}
                 />
               </SheetContent>
             </Sheet>
@@ -1134,6 +1138,9 @@ export function ModsLibrary() {
                 onToggleCategory={handleToggleCategory}
                 onClearCategories={handleClearCategories}
                 categoryCounts={categoryCounts}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSortChange={setSort}
               />
             </div>
           )}
