@@ -11,10 +11,16 @@ import { injectFiles } from "./injection-tracker"
 import { trackProcess } from "./process-tracker"
 import { getLogger } from "../file-logger"
 
-/**
- * Doorstop configuration style
- */
-type DoorstopStyle = "enabled" | "targetAssembly"
+const DOORSTOP_PROXY_DLLS = ["winhttp.dll", "version.dll", "winmm.dll"] as const
+const DOORSTOP_METADATA_PREFIXES = ["doorstop", ".doorstop"]
+
+function isDoorstopMetadataFile(name: string): boolean {
+  const normalized = name.toLowerCase()
+  if (normalized === "doorstop_config.ini") {
+    return false
+  }
+  return DOORSTOP_METADATA_PREFIXES.some(prefix => normalized.startsWith(prefix))
+}
 
 /**
  * Launch mode
@@ -42,55 +48,6 @@ export interface LaunchResult {
   success: boolean
   pid?: number
   error?: string
-}
-
-/**
- * Reads doorstop_config.ini to determine argument style
- */
-async function detectDoorstopStyle(configPath: string): Promise<DoorstopStyle> {
-  try {
-    const content = await fs.readFile(configPath, "utf-8")
-    
-    // Check for "enabled=" line (older style)
-    if (/^enabled\s*=/im.test(content)) {
-      return "enabled"
-    }
-    
-    // Check for "targetAssembly=" line (newer style)
-    if (/^targetAssembly\s*=/im.test(content)) {
-      return "targetAssembly"
-    }
-    
-    // Default to newer style
-    return "targetAssembly"
-  } catch (error) {
-    console.warn("[Launcher] Could not read doorstop_config.ini, defaulting to targetAssembly style")
-    return "targetAssembly"
-  }
-}
-
-/**
- * Finds the BepInEx preloader DLL in profile
- */
-async function findPreloaderDll(profileRoot: string): Promise<string | null> {
-  const coreDir = join(profileRoot, "BepInEx", "core")
-  
-  if (!(await pathExists(coreDir))) {
-    return null
-  }
-  
-  const entries = await fs.readdir(coreDir)
-  
-  // Look for *Preloader*.dll
-  const preloaderFile = entries.find(name => 
-    name.toLowerCase().includes("preloader") && name.toLowerCase().endsWith(".dll")
-  )
-  
-  if (!preloaderFile) {
-    return null
-  }
-  
-  return join(coreDir, preloaderFile)
 }
 
 /**
@@ -182,10 +139,9 @@ async function buildLaunchArgs(
  */
 async function validateProfileArtifacts(profileRoot: string): Promise<string | null> {
   // 1. Check for Doorstop proxy DLL
-  const proxyDlls = ["winhttp.dll", "version.dll", "winmm.dll"]
   let hasProxy = false
   
-  for (const proxyName of proxyDlls) {
+  for (const proxyName of DOORSTOP_PROXY_DLLS) {
     if (await pathExists(join(profileRoot, proxyName))) {
       hasProxy = true
       break
@@ -193,7 +149,7 @@ async function validateProfileArtifacts(profileRoot: string): Promise<string | n
   }
   
   if (!hasProxy) {
-    return `Profile is missing Doorstop proxy DLL (${proxyDlls.join(", ")}). This file may have been quarantined by antivirus software.`
+    return `Profile is missing Doorstop proxy DLL (${DOORSTOP_PROXY_DLLS.join(", ")}). This file may have been quarantined by antivirus software.`
   }
   
   // 2. Check for doorstop_config.ini
@@ -247,8 +203,7 @@ async function injectLoaderFiles(
   const filesToInject: Array<{ src: string; dest: string; isDirectory?: boolean }> = []
   
   // Inject Doorstop proxy DLL (find any available)
-  const proxyDlls = ["winhttp.dll", "version.dll", "winmm.dll"]
-  for (const proxyName of proxyDlls) {
+  for (const proxyName of DOORSTOP_PROXY_DLLS) {
     const proxySrc = join(profileRoot, proxyName)
     if (await pathExists(proxySrc)) {
       filesToInject.push({
@@ -270,57 +225,17 @@ async function injectLoaderFiles(
   // Inject any other root Doorstop files (e.g., .doorstop_version)
   const entries = await fs.readdir(profileRoot, { withFileTypes: true })
   for (const entry of entries) {
-    if (entry.isFile()) {
-      const name = entry.name.toLowerCase()
-      if (
-        name !== "manifest.json" &&
-        name !== "icon.png" &&
-        !name.endsWith(".md") &&
-        !proxyDlls.map(d => d.toLowerCase()).includes(name) &&
-        name !== "doorstop_config.ini"
-      ) {
-        // Additional doorstop files (e.g., .doorstop_version)
-        filesToInject.push({
-          src: join(profileRoot, entry.name),
-          dest: entry.name,
-        })
-      }
+    if (entry.isFile() && isDoorstopMetadataFile(entry.name)) {
+      filesToInject.push({
+        src: join(profileRoot, entry.name),
+        dest: entry.name,
+      })
     }
-  }
-  
-  // Add the BepInEx folder as a directory to inject
-  const profileBepInEx = join(profileRoot, "BepInEx")
-  if (await pathExists(profileBepInEx)) {
-    filesToInject.push({
-      src: profileBepInEx,
-      dest: "BepInEx",
-      isDirectory: true,
-    })
   }
   
   // Now inject all the files and directories
   if (filesToInject.length > 0) {
     await injectFiles(gameId, installFolder, filesToInject)
-  }
-}
-
-/**
- * Recursively copies directory contents
- */
-async function copyDirectory(src: string, dest: string): Promise<void> {
-  await fs.mkdir(dest, { recursive: true })
-  
-  const entries = await fs.readdir(src, { withFileTypes: true })
-  
-  for (const entry of entries) {
-    const srcPath = join(src, entry.name)
-    const destPath = join(dest, entry.name)
-    
-    if (entry.isDirectory()) {
-      await copyDirectory(srcPath, destPath)
-    } else {
-      await fs.copyFile(srcPath, destPath)
-    }
   }
 }
 
