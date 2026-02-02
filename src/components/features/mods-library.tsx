@@ -444,6 +444,7 @@ export function ModsLibrary() {
   const [isInstallingDeps, setIsInstallingDeps] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
+  const [categorySubmenuOpen, setCategorySubmenuOpen] = useState(false)
   const searchContainerRef = useRef<HTMLDivElement>(null)
 
   // Reset filters to open when viewport becomes desktop-sized
@@ -470,12 +471,20 @@ export function ModsLibrary() {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setSearchDropdownOpen(false)
+        setCategorySubmenuOpen(false)
       }
     }
     
     if (searchDropdownOpen) {
       document.addEventListener("mousedown", handleClickOutside)
       return () => document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [searchDropdownOpen])
+  
+  // Close category submenu when main dropdown closes
+  useEffect(() => {
+    if (!searchDropdownOpen) {
+      setCategorySubmenuOpen(false)
     }
   }, [searchDropdownOpen])
 
@@ -862,8 +871,9 @@ export function ModsLibrary() {
     const currentQuery = searchQuery
     const newQuery = currentQuery ? `${currentQuery} ${token}` : token
     setSearchQuery(newQuery)
-    // Close dropdown and focus input after inserting token
+    // Close dropdown and submenu after inserting token
     setSearchDropdownOpen(false)
+    setCategorySubmenuOpen(false)
     setTimeout(() => searchInputRef.current?.focus(), 50)
   }, [searchQuery, setSearchQuery])
   
@@ -1359,12 +1369,20 @@ export function ModsLibrary() {
                       <span className="ml-auto text-xs text-muted-foreground">Filter by author</span>
                     </button>
                     
-                    {/* Category filter with submenu hint */}
-                    <div className="relative">
-                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                        <span className="font-mono">category:</span> (Top categories)
-                      </div>
-                      <div className="max-h-[200px] overflow-y-auto">
+                    {/* Category filter with submenu */}
+                    <button
+                      type="button"
+                      onClick={() => setCategorySubmenuOpen(!categorySubmenuOpen)}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">category:</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {categorySubmenuOpen ? "Hide categories" : "Show categories"}
+                      </span>
+                    </button>
+                    
+                    {categorySubmenuOpen && (
+                      <div className="max-h-[200px] overflow-y-auto bg-muted/50 rounded-md my-1">
                         {categories.slice(0, 10).map((cat) => (
                           <button
                             key={cat}
@@ -1376,7 +1394,7 @@ export function ModsLibrary() {
                           </button>
                         ))}
                       </div>
-                    </div>
+                    )}
                     
                     <div className="my-1 h-px bg-border" />
                     
