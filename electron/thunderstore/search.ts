@@ -14,6 +14,9 @@ export interface SearchParams {
   query?: string
   section?: "all" | "mod" | "modpack"
   sort?: "name" | "downloads" | "updated"
+  sortDir?: "asc" | "desc"
+  categories?: string[]
+  author?: string
   cursor?: number
   limit?: number
 }
@@ -52,6 +55,9 @@ export async function searchPackages(params: SearchParams): Promise<SearchResult
     query = "",
     section = "all",
     sort = "updated",
+    sortDir = "desc",
+    categories = [],
+    author,
     cursor = 0,
     limit = 20,
   } = params
@@ -64,6 +70,9 @@ export async function searchPackages(params: SearchParams): Promise<SearchResult
     query,
     section,
     sort,
+    sortDir,
+    categories,
+    author,
     offset: cursor,
     limit,
   })

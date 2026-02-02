@@ -10,7 +10,7 @@ import { useSettingsStore } from "@/store/settings-store"
 import { MODS } from "@/mocks/mods"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
-import { useOnlineMods, useOnlinePackage, useOnlineCategories } from "@/lib/queries/useOnlineMods"
+import { useOnlineMods, useOnlinePackage, useOnlineCategories, useCatalogStatus } from "@/lib/queries/useOnlineMods"
 import { trpc, hasElectronTRPC } from "@/lib/trpc"
 import { openFolder } from "@/lib/desktop"
 import { getExeNames, getEcosystemEntry, getModloaderPackageForGame } from "@/lib/ecosystem"
@@ -685,6 +685,33 @@ export function ModsLibrary() {
     enabled: tab === "online" && !!selectedGameId,
   })
 
+  // Poll catalog status to handle empty results during rebuild
+  const catalogStatus = useCatalogStatus(selectedGameId || "", tab === "online" && !!selectedGameId)
+  
+  // Auto-refetch online mods while catalog is building and we have no results
+  useEffect(() => {
+    // Only refetch if:
+    // 1. We're on the online tab
+    // 2. Catalog is building
+    // 3. We have no data or the first page is empty
+    // 4. We're not already fetching
+    if (
+      tab === "online" &&
+      catalogStatus.data?.status === "building" &&
+      onlineModsQuery.isElectron &&
+      !onlineModsQuery.isLoading &&
+      !onlineModsQuery.isFetchingNextPage &&
+      (!onlineModsQuery.data?.pages?.[0]?.items.length)
+    ) {
+      // Refetch periodically until we get results or catalog finishes building
+      const refetchTimer = setTimeout(() => {
+        onlineModsQuery.refetch()
+      }, 1000) // Refetch every 1 second while building
+      
+      return () => clearTimeout(refetchTimer)
+    }
+  }, [tab, catalogStatus.data?.status, onlineModsQuery, onlineModsQuery.data?.pages])
+
   // Fetch categories from catalog (Electron only, falls back to MOD_CATEGORIES)
   const onlineCategoriesQuery = useOnlineCategories(
     selectedGameId || "",
@@ -771,7 +798,11 @@ export function ModsLibrary() {
     }
     
     displayMods = mods
-    isLoadingMods = onlineModsQuery.isLoading
+    // Show loading if:
+    // 1. Query is loading, OR
+    // 2. Catalog is building AND we have no results yet
+    isLoadingMods = onlineModsQuery.isLoading || 
+      (catalogStatus.data?.status === "building" && mods.length === 0)
     hasError = onlineModsQuery.isError
   } else {
     // Online tab in web mode: use filtered mocks

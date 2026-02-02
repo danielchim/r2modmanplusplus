@@ -122,6 +122,9 @@ const thunderstoreRouter = t.router({
         query: z.string().optional(),
         section: z.enum(["all", "mod", "modpack"]).optional(),
         sort: z.enum(["name", "downloads", "updated"]).optional(),
+        sortDir: z.enum(["asc", "desc"]).optional(),
+        categories: z.array(z.string()).optional(),
+        author: z.string().optional(),
         cursor: z.number().optional(),
         limit: z.number().optional(),
       })

@@ -18,6 +18,9 @@ export interface CatalogSearchParams {
   query?: string
   section?: "all" | "mod" | "modpack"
   sort?: "name" | "downloads" | "updated"
+  sortDir?: "asc" | "desc"
+  categories?: string[]
+  author?: string
   offset?: number
   limit?: number
 }
@@ -67,6 +70,12 @@ const BATCH_INSERT_SIZE = 500
  * Maps packageIndexUrl -> build promise
  */
 const activeBuildPromises = new Map<string, Promise<void>>()
+
+/**
+ * Serializes ensureCatalogUpToDate() calls per community.
+ * Prevents concurrent rebuild decisions/DB clears when multiple requests hit at once.
+ */
+const activeEnsurePromises = new Map<string, Promise<void>>()
 
 /**
  * Gets the catalog directory path
@@ -321,7 +330,7 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string): Pro
     
     // Fetch and insert chunks progressively
     let totalInserted = 0
-    const allPackages: ThunderstorePackage[] = []
+    let chunksProcessed = 0
     
     // Process chunks in batches
     for (let i = 0; i < chunkUrls.length; i += MAX_CHUNK_CONCURRENCY) {
@@ -340,14 +349,15 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string): Pro
         batchPackages.push(...result.content)
       }
       
-      allPackages.push(...batchPackages)
-      
       // Insert this batch of packages with batch commits
       await insertPackagesBatch(db, batchPackages, totalInserted)
       totalInserted += batchPackages.length
+
+      // Track chunk progress for UI (denominator is number of chunks)
+      chunksProcessed += batch.length
       
-      // Update progress
-      updateBuildProgress(db, totalInserted, "building")
+      // Update progress (tracked as chunks processed for stable %)
+      updateBuildProgress(db, chunksProcessed, "building")
       
       const batchElapsedMs = Date.now() - batchStartTime
       const batchElapsedSec = (batchElapsedMs / 1000).toFixed(1)
@@ -356,7 +366,8 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string): Pro
     
     // Final update
     updatePackageCount(db)
-    updateBuildProgress(db, totalInserted, "ready")
+    // Final status update (keep progress at 100%)
+    updateBuildProgress(db, chunkUrls.length, "ready")
     
     const finalMeta = getMetadata(db)
     logger.info(`[Catalog] Build complete! ${finalMeta?.packageCount || totalInserted} packages indexed.`)
@@ -408,81 +419,96 @@ function insertPackagesBatch(db: Database.Database, packages: ThunderstorePackag
  * Queries can run against partial data during build
  */
 export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<void> {
-  const logger = getLogger()
-  logger.debug(`[Catalog] Ensuring catalog up-to-date for ${packageIndexUrl}`)
+  const existingEnsure = activeEnsurePromises.get(packageIndexUrl)
+  if (existingEnsure) {
+    return existingEnsure
+  }
 
+  const ensurePromise = (async () => {
+    const logger = getLogger()
+    logger.debug(`[Catalog] Ensuring catalog up-to-date for ${packageIndexUrl}`)
+
+    try {
+      await ensureCatalogDir()
+
+      const db = getDb(packageIndexUrl)
+
+      // If there's already a build in progress, nothing else to do.
+      const existingBuild = activeBuildPromises.get(packageIndexUrl)
+      if (existingBuild) {
+        logger.debug(`[Catalog] Build already in progress, skipping check`)
+        return
+      }
+
+      // Check existing metadata
+      const metadata = getMetadata(db)
+
+      // If metadata claims "building" but we have no active build promise, it was
+      // likely left behind after an app restart/crash. Treat as stale and rebuild.
+      if (metadata?.status === "building") {
+        logger.warn(`[Catalog] Catalog stuck in building state (${metadata.packagesIndexed}/${metadata.totalPackages}); restarting build`)
+      }
+
+      // Fetch current index hash to check if update needed
+      logger.debug(`[Catalog] Fetching package index to check for updates...`)
+      const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
+      const currentIndexHash = indexResult.hash
+      const totalChunks = indexResult.content.length
+
+      // If catalog is up-to-date, return
+      if (metadata && metadata.indexHash === currentIndexHash && metadata.status === "ready") {
+        logger.debug(`[Catalog] Catalog up-to-date (${metadata.packageCount} packages, hash: ${currentIndexHash.substring(0, 8)})`)
+        return
+      }
+
+      // Catalog is stale, missing, or stuck - start background rebuild
+      if (metadata) {
+        logger.info(`[Catalog] Catalog needs rebuild (status: ${metadata.status}, old hash: ${metadata.indexHash.substring(0, 8)}, new hash: ${currentIndexHash.substring(0, 8)}), starting background rebuild...`)
+      } else {
+        logger.info(`[Catalog] No catalog found, starting background build...`)
+      }
+
+      // Clear existing data
+      db.exec("DELETE FROM packages")
+
+      // Set initial metadata with building status
+      // Note: totalPackages tracks total CHUNKS (stable denominator for UI).
+      setMetadata(db, {
+        packageIndexUrl,
+        indexHash: currentIndexHash,
+        updatedAt: new Date().toISOString(),
+        status: "building",
+        packagesIndexed: 0,
+        totalPackages: totalChunks,
+        packageCount: 0,
+      })
+
+      // Start background build (don't await)
+      const buildPromise = buildCatalog(db, packageIndexUrl)
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          logger.error(`[Catalog] Background build failed: ${message}`)
+        })
+        .finally(() => {
+          // Remove from active builds when done
+          activeBuildPromises.delete(packageIndexUrl)
+        })
+
+      activeBuildPromises.set(packageIndexUrl, buildPromise)
+
+      logger.info(`[Catalog] Background build started, queries can run against partial data`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      getLogger().error(`[Catalog] Failed to ensure catalog: ${message}`)
+      throw error
+    }
+  })()
+
+  activeEnsurePromises.set(packageIndexUrl, ensurePromise)
   try {
-    await ensureCatalogDir()
-
-    const db = getDb(packageIndexUrl)
-
-    // Check if there's already a build in progress
-    const existingBuild = activeBuildPromises.get(packageIndexUrl)
-    if (existingBuild) {
-      logger.debug(`[Catalog] Build already in progress, skipping check`)
-      return
-    }
-
-    // Check existing metadata
-    const metadata = getMetadata(db)
-    
-    // If catalog is building, just return (queries can run against partial data)
-    if (metadata?.status === "building") {
-      logger.debug(`[Catalog] Catalog is building (${metadata.packagesIndexed}/${metadata.totalPackages} packages indexed)`)
-      return
-    }
-
-    // Fetch current index hash to check if update needed
-    logger.debug(`[Catalog] Fetching package index to check for updates...`)
-    const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
-    const currentIndexHash = indexResult.hash
-    const totalPackages = indexResult.content.length
-
-    // If catalog is up-to-date, return
-    if (metadata && metadata.indexHash === currentIndexHash && metadata.status === "ready") {
-      logger.debug(`[Catalog] Catalog up-to-date (${metadata.packageCount} packages, hash: ${currentIndexHash.substring(0, 8)})`)
-      return
-    }
-
-    // Catalog is stale or missing - start background rebuild
-    if (metadata) {
-      logger.info(`[Catalog] Catalog stale (old hash: ${metadata.indexHash.substring(0, 8)}, new hash: ${currentIndexHash.substring(0, 8)}), starting background rebuild...`)
-    } else {
-      logger.info(`[Catalog] No catalog found, starting background build...`)
-    }
-
-    // Clear existing data
-    db.exec("DELETE FROM packages")
-
-    // Set initial metadata with building status
-    setMetadata(db, {
-      packageIndexUrl,
-      indexHash: currentIndexHash,
-      updatedAt: new Date().toISOString(),
-      status: "building",
-      packagesIndexed: 0,
-      totalPackages: totalPackages,
-      packageCount: 0,
-    })
-
-    // Start background build (don't await)
-    const buildPromise = buildCatalog(db, packageIndexUrl)
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error)
-        logger.error(`[Catalog] Background build failed: ${message}`)
-      })
-      .finally(() => {
-        // Remove from active builds when done
-        activeBuildPromises.delete(packageIndexUrl)
-      })
-    
-    activeBuildPromises.set(packageIndexUrl, buildPromise)
-
-    logger.info(`[Catalog] Background build started, queries can run against partial data`)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    logger.error(`[Catalog] Failed to ensure catalog: ${message}`)
-    throw error
+    await ensurePromise
+  } finally {
+    activeEnsurePromises.delete(packageIndexUrl)
   }
 }
 
@@ -493,9 +519,18 @@ export function searchPackages(packageIndexUrl: string, params: CatalogSearchPar
   const logger = getLogger()
   const startTime = Date.now()
   const db = getDb(packageIndexUrl)
-  const { query, section = "all", sort = "updated", offset = 0, limit = 20 } = params
+  const { 
+    query, 
+    section = "all", 
+    sort = "updated", 
+    sortDir = "desc",
+    categories = [],
+    author,
+    offset = 0, 
+    limit = 20 
+  } = params
   
-  logger.debug(`[Catalog] Search query: "${query || "(none)"}", section: ${section}, sort: ${sort}, offset: ${offset}, limit: ${limit}`)
+  logger.debug(`[Catalog] Search query: "${query || "(none)"}", section: ${section}, sort: ${sort}, sortDir: ${sortDir}, categories: [${categories.join(", ")}], author: ${author || "(none)"}, offset: ${offset}, limit: ${limit}`)
   
   // Build WHERE clause
   const conditions: string[] = ["is_deprecated = 0"]
@@ -508,27 +543,40 @@ export function searchPackages(packageIndexUrl: string, params: CatalogSearchPar
     conditions.push("categories NOT LIKE '%\"modpacks\"%' COLLATE NOCASE")
   }
   
-  // Search filter
+  // Text search filter (match name, owner, description, full_name)
   if (query && query.trim()) {
-    conditions.push("(name LIKE ? COLLATE NOCASE OR owner LIKE ? COLLATE NOCASE)")
+    conditions.push("(name LIKE ? COLLATE NOCASE OR owner LIKE ? COLLATE NOCASE OR latest_description LIKE ? COLLATE NOCASE OR full_name LIKE ? COLLATE NOCASE)")
     const searchPattern = `%${query.trim()}%`
-    queryParams.push(searchPattern, searchPattern)
+    queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern)
+  }
+  
+  // Author filter
+  if (author && author.trim()) {
+    conditions.push("owner LIKE ? COLLATE NOCASE")
+    queryParams.push(`%${author.trim()}%`)
+  }
+  
+  // Category filter (OR semantics using JSON1)
+  if (categories.length > 0) {
+    const categoryPlaceholders = categories.map(() => "?").join(", ")
+    conditions.push(`EXISTS (SELECT 1 FROM json_each(packages.categories) WHERE value IN (${categoryPlaceholders}))`)
+    queryParams.push(...categories)
   }
   
   const whereClause = conditions.join(" AND ")
   
-  // Build ORDER BY clause
+  // Build ORDER BY clause with direction
   let orderBy: string
   switch (sort) {
     case "name":
-      orderBy = "name COLLATE NOCASE ASC, uuid4 ASC"
+      orderBy = `name COLLATE NOCASE ${sortDir === "asc" ? "ASC" : "DESC"}, uuid4 ASC`
       break
     case "downloads":
-      orderBy = "latest_downloads DESC, uuid4 ASC"
+      orderBy = `latest_downloads ${sortDir === "asc" ? "ASC" : "DESC"}, uuid4 ASC`
       break
     case "updated":
     default:
-      orderBy = "date_updated DESC, uuid4 ASC"
+      orderBy = `date_updated ${sortDir === "asc" ? "ASC" : "DESC"}, uuid4 ASC`
       break
   }
   
@@ -768,6 +816,27 @@ export function getCatalogStatus(packageIndexUrl: string): CatalogStatusInfo | n
     if (!metadata) {
       return null
     }
+
+    // If we see a persisted "building" status but no active build, treat it as stale.
+    // This prevents the renderer from showing a "building" toast when no work is running
+    // (e.g. after an app restart/crash). A rebuild will start on next real catalog usage.
+    if (metadata.status === "building" && !activeBuildPromises.has(packageIndexUrl)) {
+      try {
+        db.prepare(
+          "UPDATE metadata SET status = 'stale', packages_indexed = 0, total_packages = 0, updated_at = ?, error_message = NULL WHERE id = 1"
+        ).run(new Date().toISOString())
+      } catch {
+        // Best-effort only
+      }
+
+      return {
+        status: "stale",
+        packagesIndexed: 0,
+        totalPackages: 0,
+        packageCount: metadata.packageCount,
+        errorMessage: metadata.errorMessage,
+      }
+    }
     
     return {
       status: metadata.status,
@@ -776,7 +845,7 @@ export function getCatalogStatus(packageIndexUrl: string): CatalogStatusInfo | n
       packageCount: metadata.packageCount,
       errorMessage: metadata.errorMessage,
     }
-  } catch (error) {
+  } catch {
     return null
   }
 }

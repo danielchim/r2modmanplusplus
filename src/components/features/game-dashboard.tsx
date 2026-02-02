@@ -112,8 +112,13 @@ export function GameDashboard() {
     const { status, packagesIndexed, totalPackages, errorMessage } = catalogStatus.data
     
     if (status === "building") {
-      const progress = totalPackages > 0 ? Math.round((packagesIndexed / totalPackages) * 100) : 0
-      const message = `Building package index... ${packagesIndexed.toLocaleString()}/${totalPackages.toLocaleString()} (${progress}%)`
+      // totalPackages can momentarily be 0 (metadata not initialized yet) or stale.
+      // Clamp progress to [0, 100] to avoid nonsensical values like 69504%.
+      const rawProgress = totalPackages > 0 ? (packagesIndexed / totalPackages) * 100 : 0
+      const progress = Math.max(0, Math.min(100, Math.round(rawProgress)))
+      const safeIndexed = Math.max(0, packagesIndexed)
+      const safeTotal = Math.max(0, totalPackages)
+      const message = `Indexing mod catalog... ${safeIndexed.toLocaleString()}/${safeTotal.toLocaleString()} (${progress}%)`
       
       if (toastIdRef.current) {
         // Update existing toast
@@ -130,16 +135,20 @@ export function GameDashboard() {
     } else if (status === "ready" && toastIdRef.current) {
       // Build complete - dismiss loading toast and show success
       toast.dismiss(toastIdRef.current)
-      toast.success("Package index ready!", {
+      toast.success("Mod catalog ready!", {
         duration: 3000,
       })
       toastIdRef.current = undefined
     } else if (status === "error" && toastIdRef.current) {
       // Build failed - dismiss loading toast and show error
       toast.dismiss(toastIdRef.current)
-      toast.error(`Failed to build package index: ${errorMessage || "Unknown error"}`, {
+      toast.error(`Failed to index mod catalog: ${errorMessage || "Unknown error"}`, {
         duration: 5000,
       })
+      toastIdRef.current = undefined
+    } else if (status === "stale" && toastIdRef.current) {
+      // If we transitioned away from building without completing, ensure the loading toast doesn't stick.
+      toast.dismiss(toastIdRef.current)
       toastIdRef.current = undefined
     }
   }, [catalogStatus.data])

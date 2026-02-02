@@ -149,7 +149,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
       />
       <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent 
-        className="max-w-[80vw]! w-[80vw]! h-[80vh] p-0 gap-0 overflow-hidden flex flex-col"
+        className="!max-w-[80vw] !w-[80vw] h-[80vh] p-0 gap-0 overflow-hidden flex flex-col"
         onOverlayClick={() => handleOpenChange(false)}
       >
         {/* Step 1: Game Selection */}
