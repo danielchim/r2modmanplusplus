@@ -874,7 +874,7 @@ export function ModsLibrary() {
     // Close dropdown and submenu after inserting token
     setSearchDropdownOpen(false)
     setCategorySubmenuOpen(false)
-    setTimeout(() => searchInputRef.current?.focus(), 50)
+    // Don't refocus input to avoid reopening dropdown
   }, [searchQuery, setSearchQuery])
   
   const handleClearTokens = useCallback(() => {
@@ -882,7 +882,7 @@ export function ModsLibrary() {
     const parsed = parseModSearch(searchQuery)
     setSearchQuery(parsed.textQuery)
     setSearchDropdownOpen(false)
-    searchInputRef.current?.focus()
+    // Don't refocus to avoid reopening dropdown
   }, [searchQuery, setSearchQuery])
 
   const handleOpenGameFolder = async () => {
