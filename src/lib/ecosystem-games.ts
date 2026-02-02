@@ -8,6 +8,20 @@ export type EcosystemGame = {
 }
 
 /**
+ * Get the correct path for static assets in both dev and production
+ * Uses Vite's BASE_URL which is set to "./" in electron-vite config for production
+ */
+function getAssetPath(path: string): string {
+  // Use import.meta.env.BASE_URL which Vite sets based on the base config
+  // With base: "./", BASE_URL will be "./" in production
+  const baseUrl = import.meta.env.BASE_URL || "./"
+  // Ensure baseUrl ends with / and path doesn't start with /
+  const cleanBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path
+  return `${cleanBase}game_selection/${cleanPath}`
+}
+
+/**
  * Parses ecosystem.json and extracts games that should be visible in the game selection UI.
  * Only includes games where at least one r2modman entry has gameSelectionDisplayMode === "visible".
  */
@@ -55,7 +69,7 @@ function parseEcosystemGames(): EcosystemGame[] {
       id: gameId,
       name,
       iconUrl,
-      bannerUrl: `/game_selection/${iconUrl}`
+      bannerUrl: getAssetPath(iconUrl)
     })
   }
 

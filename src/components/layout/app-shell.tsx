@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { Menu } from "lucide-react"
+import { Menu, PanelRightOpen } from "lucide-react"
 import { Toaster } from "sonner"
 import { GlobalRail } from "./global-rail"
 import { ContextPanel } from "./context-panel"
 import { MobileRailSheet } from "./mobile-rail-sheet"
+import { MobileContextSheet } from "./mobile-context-sheet"
 import { SettingsDialog } from "@/components/features/settings/settings-dialog"
 import { DownloadManager } from "@/components/features/download/download-manager"
 import { Button } from "@/components/ui/button"
@@ -15,10 +16,24 @@ interface AppShellProps {
   showContextPanel?: boolean
 }
 
+const LG_BREAKPOINT = 1024
+
 export function AppShell({ children, showContextPanel = true }: AppShellProps) {
   const { t } = useTranslation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isLargeScreen, setIsLargeScreen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= LG_BREAKPOINT : true
+  )
   const showContextPanelState = useAppStore((s) => s.showContextPanel)
+  const setShowContextPanel = useAppStore((s) => s.setShowContextPanel)
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${LG_BREAKPOINT}px)`)
+    const handler = () => setIsLargeScreen(mq.matches)
+    handler()
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -41,12 +56,34 @@ export function AppShell({ children, showContextPanel = true }: AppShellProps) {
           >
             <Menu className="size-5" />
           </Button>
-          <h1 className="text-sm font-semibold">{t("app_title")}</h1>
+          <h1 className="text-sm font-semibold flex-1">{t("app_title")}</h1>
+          {showContextPanel && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowContextPanel(true)}
+              aria-label="Open panel"
+            >
+              <PanelRightOpen className="size-5" />
+            </Button>
+          )}
         </div>
 
         {children}
       </div>
-      {showContextPanel && showContextPanelState && <ContextPanel />}
+      {/* Desktop: fixed right context panel */}
+      {showContextPanel && showContextPanelState && (
+        <div className="hidden lg:block">
+          <ContextPanel />
+        </div>
+      )}
+      {/* Mobile only: right panel as sheet (not rendered on lg+ so portal doesn't show on desktop) */}
+      {showContextPanel && !isLargeScreen && (
+        <MobileContextSheet
+          open={showContextPanelState}
+          onOpenChange={setShowContextPanel}
+        />
+      )}
       <SettingsDialog />
       <DownloadManager />
       <Toaster 

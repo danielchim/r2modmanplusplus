@@ -14,8 +14,9 @@
     "lint": "eslint .",
     "preview": "pnpm update-version && vite preview",
     "preview:electron": "pnpm update-version && electron-vite preview",
-    "dist": "pnpm update-version && pnpm build && electron-builder",
-    "dist:mac": "pnpm update-version && pnpm build && electron-builder --mac"
+    "dist": "pnpm update-version && pnpm build:electron && electron-builder",
+    "dist:win": "pnpm update-version && pnpm build:electron && electron-builder --win",
+    "dist:mac": "pnpm update-version && pnpm build:electron && electron-builder --mac"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
@@ -107,9 +108,9 @@
     "version": "0.0.1",
     "major": "0",
     "minor": "0",
-    "build": "1770042281",
+    "build": "1770050557",
     "revision": "1",
     "mode": "UAT",
-    "buildTime": "2026-02-02T14:24:41.374Z"
+    "buildTime": "2026-02-02T16:42:37.087Z"
   }
 }

@@ -46,11 +46,35 @@ export function ConfigEditorCenter() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [fileToDelete, setFileToDelete] = useState<ConfigFile | null>(null)
 
+  // Log active profile context
+  useEffect(() => {
+    if (selectedGameId && activeProfileId) {
+      logger.info(`[ConfigEditor] Active context: gameId=${selectedGameId}, profileId=${activeProfileId}`)
+    } else {
+      logger.warn(`[ConfigEditor] No active profile: gameId=${selectedGameId}, profileId=${activeProfileId}`)
+    }
+  }, [selectedGameId, activeProfileId])
+
   // Query config file list
   const listQuery = trpc.config.list.useQuery(
     { gameId: selectedGameId!, profileId: activeProfileId! },
     { enabled: !!selectedGameId && !!activeProfileId }
   )
+
+  // Log file list results
+  useEffect(() => {
+    if (listQuery.data) {
+      logger.info(`[ConfigEditor] Loaded ${listQuery.data.length} config files`)
+      const groupCounts = listQuery.data.reduce((acc, file) => {
+        acc[file.group] = (acc[file.group] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
+      logger.debug(`[ConfigEditor] Files by group:`, groupCounts)
+    }
+    if (listQuery.error) {
+      logger.error(`[ConfigEditor] Failed to load config files:`, listQuery.error.message)
+    }
+  }, [listQuery.data, listQuery.error])
 
   // Query selected file content
   const readQuery = trpc.config.read.useQuery(

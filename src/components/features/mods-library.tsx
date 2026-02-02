@@ -187,6 +187,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
   const GRID_ROW_HEIGHT = 340
   const MIN_TILE_WIDTH = 200
   const GAP = 16
+  const ROW_GAP = 12
 
   // Compute column count for grid virtualization
   const columnCount = useMemo(() => {
@@ -215,7 +216,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
   const listVirtualizer = useVirtualizer({
     count: viewMode === "list" ? displayMods.length : 0,
     getScrollElement: () => (viewMode === "list" ? scrollParentRef.current : null),
-    estimateSize: () => LIST_ROW_HEIGHT,
+    estimateSize: () => LIST_ROW_HEIGHT + ROW_GAP,
     overscan: 6,
   })
 
@@ -224,7 +225,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
   const gridVirtualizer = useVirtualizer({
     count: viewMode === "grid" ? gridRowCount : 0,
     getScrollElement: () => (viewMode === "grid" ? scrollParentRef.current : null),
-    estimateSize: () => GRID_ROW_HEIGHT,
+    estimateSize: () => GRID_ROW_HEIGHT + ROW_GAP,
     overscan: 4,
   })
 
@@ -317,6 +318,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                       willChange: "transform",
+                      paddingBottom: ROW_GAP,
                     }}
                   >
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
@@ -387,6 +389,7 @@ const ModsResultsVirtualized = memo(function ModsResultsVirtualized({
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                       willChange: "transform",
+                      paddingBottom: ROW_GAP,
                     }}
                   >
                     {/* For installed tab: check if mod is a UUID and we're in Electron */}
