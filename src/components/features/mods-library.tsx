@@ -520,11 +520,32 @@ export function ModsLibrary() {
     }
   )
   
-  // Parse search query into text and author components
-  const { textQuery, authorQuery } = useMemo(
+  // Parse search query into tokens and compute effective filters
+  const parsedSearch = useMemo(
     () => parseModSearch(searchQuery),
     [searchQuery]
   )
+  
+  // Compute effective filters: combine parsed tokens with sidebar state
+  const effectiveFilters = useMemo(() => {
+    return {
+      textQuery: parsedSearch.textQuery,
+      author: parsedSearch.author,
+      // Union of sidebar categories + category tokens
+      categories: [
+        ...selectedCategories,
+        ...parsedSearch.categories.filter(c => !selectedCategories.includes(c))
+      ],
+      // kind: token overrides sidebar section (for online tab only)
+      section: (tab === "online" && parsedSearch.kind) ? parsedSearch.kind : section,
+      // Token sort overrides store values
+      sortKey: parsedSearch.sortKey || sortKey,
+      sortDir: parsedSearch.sortDir || sortDir,
+    }
+  }, [parsedSearch, selectedCategories, section, sortKey, sortDir, tab])
+  
+  // For backwards compatibility with installed tab (still uses textQuery/authorQuery)
+  const { textQuery, author: authorQuery } = parsedSearch
   
   // Poll launch status
   const launchStatus = trpc.launch.getStatus.useQuery(
@@ -678,9 +699,12 @@ export function ModsLibrary() {
   // Thunderstore online mods (only when tab === "online" and in Electron)
   const onlineModsQuery = useOnlineMods({
     gameId: selectedGameId || "",
-    query: textQuery || undefined,
-    section: section === "mod" ? "mod" : "modpack",
-    sort: sortKey,
+    query: effectiveFilters.textQuery || undefined,
+    section: effectiveFilters.section === "mod" ? "mod" : "modpack",
+    sort: effectiveFilters.sortKey,
+    sortDir: effectiveFilters.sortDir,
+    categories: effectiveFilters.categories,
+    author: effectiveFilters.author || undefined,
     limit: 50,
     enabled: tab === "online" && !!selectedGameId,
   })
@@ -773,36 +797,15 @@ export function ModsLibrary() {
     // Installed tab: use installedItems (built from zustand IDs)
     displayMods = installedItems
   } else if (tab === "online" && onlineModsQuery.isElectron) {
-    // Online tab in Electron: use Thunderstore data
+    // Online tab in Electron: use Thunderstore data (backend does all filtering/sorting)
     const pages = onlineModsQuery.data?.pages ?? []
-    let mods = pages.flatMap(page => page.items)
+    displayMods = pages.flatMap(page => page.items)
     
-    // Apply client-side author filtering (backend doesn't support semantic search)
-    if (authorQuery) {
-      const authorQueryLower = authorQuery.toLowerCase()
-      mods = mods.filter((m) => m.author.toLowerCase().includes(authorQueryLower))
-    }
-    
-    // Apply client-side category filtering (backend doesn't support this)
-    if (selectedCategories.length > 0) {
-      mods = mods.filter((m) =>
-        selectedCategories.some((cat) => m.categories.includes(cat))
-      )
-    }
-    
-    // Apply client-side sortDir (backend only sorts by key, not direction)
-    // Backend returns results sorted by sortKey in descending order by default
-    // If we need ascending, reverse the results
-    if (sortDir === "asc") {
-      mods = mods.reverse()
-    }
-    
-    displayMods = mods
     // Show loading if:
     // 1. Query is loading, OR
     // 2. Catalog is building AND we have no results yet
     isLoadingMods = onlineModsQuery.isLoading || 
-      (catalogStatus.data?.status === "building" && mods.length === 0)
+      (catalogStatus.data?.status === "building" && displayMods.length === 0)
     hasError = onlineModsQuery.isError
   } else {
     // Online tab in web mode: use filtered mocks
