@@ -19,6 +19,9 @@ export interface UseOnlineModsParams {
   query?: string
   section?: "all" | "mod" | "modpack"
   sort?: "name" | "downloads" | "updated"
+  sortDir?: "asc" | "desc"
+  categories?: string[]
+  author?: string
   limit?: number
   enabled?: boolean
 }
@@ -31,7 +34,7 @@ export interface UseOnlineModsParams {
  * This is safe because isElectron never changes during app lifetime.
  */
 export function useOnlineMods(params: UseOnlineModsParams) {
-  const { gameId, query, section = "all", sort = "updated", limit = 20, enabled = true } = params
+  const { gameId, query, section = "all", sort = "updated", sortDir = "desc", categories = [], author, limit = 20, enabled = true } = params
 
   // Get package index URL from ecosystem
   const ecosystem = getEcosystemEntry(gameId)
@@ -66,6 +69,9 @@ export function useOnlineMods(params: UseOnlineModsParams) {
       query,
       section,
       sort,
+      sortDir,
+      categories,
+      author,
       limit,
     },
     {
