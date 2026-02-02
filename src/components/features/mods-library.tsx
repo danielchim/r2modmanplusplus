@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X, Filter } from "lucide-react"
+import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
@@ -443,6 +443,8 @@ export function ModsLibrary() {
   const [depsMissing, setDepsMissing] = useState<string[]>([])
   const [isInstallingDeps, setIsInstallingDeps] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
 
   // Reset filters to open when viewport becomes desktop-sized
   useEffect(() => {
@@ -462,6 +464,20 @@ export function ModsLibrary() {
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
+  
+  // Handle click outside to close search dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setSearchDropdownOpen(false)
+      }
+    }
+    
+    if (searchDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [searchDropdownOpen])
 
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const searchQuery = useAppStore((s) => s.searchQuery)
@@ -846,7 +862,8 @@ export function ModsLibrary() {
     const currentQuery = searchQuery
     const newQuery = currentQuery ? `${currentQuery} ${token}` : token
     setSearchQuery(newQuery)
-    // Focus input after inserting token
+    // Close dropdown and focus input after inserting token
+    setSearchDropdownOpen(false)
     setTimeout(() => searchInputRef.current?.focus(), 50)
   }, [searchQuery, setSearchQuery])
   
@@ -854,6 +871,7 @@ export function ModsLibrary() {
     // Remove all recognized tokens, keep only text
     const parsed = parseModSearch(searchQuery)
     setSearchQuery(parsed.textQuery)
+    setSearchDropdownOpen(false)
     searchInputRef.current?.focus()
   }, [searchQuery, setSearchQuery])
 
@@ -1302,13 +1320,14 @@ export function ModsLibrary() {
         {/* Toolbar */}
         <div className="shrink-0 border-b border-border bg-card px-6 py-3">
           <div className="flex items-center gap-3">
-            <div className="relative flex-1">
+            <div ref={searchContainerRef} className="relative flex-1">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
-                placeholder="Search"
+                placeholder="Search or use filters (e.g., author:, category:)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchDropdownOpen(true)}
                 className="pl-9 pr-9"
               />
               {searchQuery.length > 0 && (
@@ -1321,98 +1340,124 @@ export function ModsLibrary() {
                   <X className="size-4" />
                 </button>
               )}
-            </div>
-            {/* Filter Criteria Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-border bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
-                  />
-                }
-              >
-                <Filter className="size-4" />
-                <span className="hidden sm:inline">Add Filter</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[240px]">
-                <DropdownMenuLabel>Insert Filter Token</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => handleInsertToken("author:")}>
-                    <span className="font-mono text-xs">author:</span>
-                    <span className="ml-auto text-xs text-muted-foreground">Filter by author</span>
-                  </DropdownMenuItem>
-                  
-                  {/* Category submenu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <button
-                          type="button"
-                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full"
-                        />
-                      }
+              
+              {/* Filter dropdown - appears on focus */}
+              {searchDropdownOpen && (
+                <div className="absolute z-50 mt-2 w-full rounded-md border border-border bg-popover shadow-lg">
+                  <div className="p-2">
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      Filter Criteria
+                    </div>
+                    
+                    {/* Author filter */}
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("author:")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
                     >
-                      <span className="font-mono text-xs">category:</span>
-                      <ChevronDown className="ml-auto size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="right" align="start" className="max-h-[300px] overflow-y-auto">
-                      {categories.slice(0, 20).map((cat) => (
-                        <DropdownMenuItem
-                          key={cat}
-                          onClick={() => handleInsertToken(`category:"${cat}"`)}
-                        >
-                          {cat}
-                        </DropdownMenuItem>
-                      ))}
-                      {categories.length > 20 && (
-                        <DropdownMenuItem disabled>
-                          <span className="text-xs text-muted-foreground">+ {categories.length - 20} more...</span>
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  <DropdownMenuItem onClick={() => handleInsertToken("kind:mod")}>
-                    <span className="font-mono text-xs">kind:mod</span>
-                    <span className="ml-auto text-xs text-muted-foreground">Show only mods</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleInsertToken("kind:modpack")}>
-                    <span className="font-mono text-xs">kind:modpack</span>
-                    <span className="ml-auto text-xs text-muted-foreground">Show only modpacks</span>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Sort Options</DropdownMenuLabel>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => handleInsertToken("sort:name")}>
-                    <span className="font-mono text-xs">sort:name</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleInsertToken("sort:updated")}>
-                    <span className="font-mono text-xs">sort:updated</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleInsertToken("sort:downloads")}>
-                    <span className="font-mono text-xs">sort:downloads</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleInsertToken("dir:asc")}>
-                    <span className="font-mono text-xs">dir:asc</span>
-                    <span className="ml-auto text-xs text-muted-foreground">Ascending</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleInsertToken("dir:desc")}>
-                    <span className="font-mono text-xs">dir:desc</span>
-                    <span className="ml-auto text-xs text-muted-foreground">Descending</span>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleClearTokens}>
-                  <X className="size-4 mr-2" />
-                  Clear all tokens
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                      <span className="font-mono text-xs">author:</span>
+                      <span className="ml-auto text-xs text-muted-foreground">Filter by author</span>
+                    </button>
+                    
+                    {/* Category filter with submenu hint */}
+                    <div className="relative">
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                        <span className="font-mono">category:</span> (Top categories)
+                      </div>
+                      <div className="max-h-[200px] overflow-y-auto">
+                        {categories.slice(0, 10).map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => handleInsertToken(`category:"${cat}"`)}
+                            className="relative flex w-full cursor-default select-none items-center rounded-sm px-4 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div className="my-1 h-px bg-border" />
+                    
+                    {/* Kind filters */}
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("kind:mod")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">kind:mod</span>
+                      <span className="ml-auto text-xs text-muted-foreground">Show only mods</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("kind:modpack")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">kind:modpack</span>
+                      <span className="ml-auto text-xs text-muted-foreground">Show only modpacks</span>
+                    </button>
+                    
+                    <div className="my-1 h-px bg-border" />
+                    
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      Sort Options
+                    </div>
+                    
+                    {/* Sort options */}
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("sort:name")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">sort:name</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("sort:updated")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">sort:updated</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("sort:downloads")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">sort:downloads</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("dir:asc")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">dir:asc</span>
+                      <span className="ml-auto text-xs text-muted-foreground">Ascending</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToken("dir:desc")}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="font-mono text-xs">dir:desc</span>
+                      <span className="ml-auto text-xs text-muted-foreground">Descending</span>
+                    </button>
+                    
+                    <div className="my-1 h-px bg-border" />
+                    
+                    {/* Clear tokens */}
+                    <button
+                      type="button"
+                      onClick={handleClearTokens}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <X className="size-4 mr-2" />
+                      Clear all tokens
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             {/* View Mode Toggle */}
             <div className="flex gap-1 border border-border rounded-md">
               <Button
