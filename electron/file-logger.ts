@@ -18,15 +18,15 @@ class FileLogger {
 
   constructor() {
     const logsDir = join(app.getPath("userData"), "logs")
-    const latestLogPath = join(logsDir, "log.latest")
+    const latestLogPath = join(logsDir, "log.latest.txt")
     
     // Ensure logs directory exists
     this.ensureLogDirectory()
     
-    // On startup, rotate existing log.latest if it exists
+    // On startup, rotate existing log.latest.txt if it exists
     this.rotateExistingLog(latestLogPath, logsDir)
     
-    // Use log.latest as the main log file
+    // Use log.latest.txt as the main log file
     this.logFilePath = latestLogPath
     
     // Flush logs every 2 seconds
@@ -45,7 +45,7 @@ class FileLogger {
       const timestamp = lastModified.toISOString().replace(/:/g, "-").split(".")[0]
       const rotatedPath = join(logsDir, `r2modman-${timestamp}.log`)
       
-      // Rename the existing log.latest to include the last open time
+      // Rename the existing log.latest.txt to include the last open time
       renameSync(latestLogPath, rotatedPath)
     } catch (error) {
       // File doesn't exist yet, no need to rotate

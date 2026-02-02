@@ -1,20 +1,21 @@
 {
   "name": "r2modmanplusplus",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1769595890.1",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "vite dev",
-    "dev:electron": "electron-vite dev",
-    "build": "vite build",
-    "build:electron": "electron-vite build",
+    "update-version": "node scripts/update-version.js",
+    "dev": "pnpm update-version && vite dev",
+    "dev:electron": "pnpm update-version && electron-vite dev",
+    "build": "pnpm update-version && vite build",
+    "build:electron": "pnpm update-version && electron-vite build",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "preview:electron": "electron-vite preview",
-    "dist": "pnpm build && electron-builder",
-    "dist:mac": "pnpm build && electron-builder --mac"
+    "preview": "pnpm update-version && vite preview",
+    "preview:electron": "pnpm update-version && electron-vite preview",
+    "dist": "pnpm update-version && pnpm build && electron-builder",
+    "dist:mac": "pnpm update-version && pnpm build && electron-builder --mac"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
@@ -101,5 +102,14 @@
       ],
       "category": "Utility"
     }
+  },
+  "buildInfo": {
+    "version": "0.0.1769595890.1",
+    "major": "0",
+    "minor": "0",
+    "build": "1769595890",
+    "revision": "1",
+    "mode": "UAT",
+    "buildTime": "2026-02-02T14:21:44.967Z"
   }
 }

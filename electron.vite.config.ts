@@ -3,6 +3,7 @@ import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite"
+import { vitePluginVersion } from "./scripts/vite-plugin-version.js"
 
 export default defineConfig({
   main: {
@@ -48,6 +49,7 @@ export default defineConfig({
       },
     },
     plugins: [
+      vitePluginVersion(),
       TanStackRouterVite({
         target: "react",
         autoCodeSplitting: true,
