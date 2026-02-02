@@ -734,6 +734,290 @@ const logsRouter = t.router({
 })
 
 /**
+ * Config file management procedures
+ * Manages config files within the active profile folder
+ */
+const configRouter = t.router({
+  /**
+   * List all config files in the active profile
+   * Returns array of config file metadata
+   */
+  list: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = join(paths.profilesRoot, input.profileId)
+      
+      // Check if profile exists
+      if (!(await pathExists(profileRoot))) {
+        return []
+      }
+      
+      const files: Array<{
+        relativePath: string
+        name: string
+        ext: string
+        mtimeMs: number
+        size: number
+        kind: "file"
+        group: string
+      }> = []
+      
+      // Allowed extensions
+      const allowedExts = new Set([".cfg", ".txt", ".json", ".yml", ".yaml", ".ini"])
+      
+      // Directories to skip
+      const skipDirs = new Set(["_state", "dotnet"])
+      
+      // Recursive file walker
+      async function walk(dir: string, relativeTo: string) {
+        try {
+          const entries = await fs.readdir(dir, { withFileTypes: true })
+          
+          for (const entry of entries) {
+            const fullPath = join(dir, entry.name)
+            const relPath = join(relativeTo, entry.name)
+            
+            if (entry.isDirectory()) {
+              // Skip excluded directories
+              if (skipDirs.has(entry.name)) {
+                continue
+              }
+              // Recurse
+              await walk(fullPath, relPath)
+            } else if (entry.isFile()) {
+              const ext = entry.name.substring(entry.name.lastIndexOf(".")).toLowerCase()
+              
+              // Skip plugin manifest.json files
+              if (relPath.includes("BepInEx\\plugins") && entry.name === "manifest.json") {
+                continue
+              }
+              
+              // Include if extension is allowed or if it's doorstop_config.ini
+              if (allowedExts.has(ext) || entry.name === "doorstop_config.ini") {
+                const stat = await fs.stat(fullPath)
+                
+                // Determine group by path
+                let group = "other"
+                if (relPath.startsWith("BepInEx\\config")) {
+                  group = "BepInEx/config"
+                } else if (entry.name === "doorstop_config.ini") {
+                  group = "profile root"
+                }
+                
+                files.push({
+                  relativePath: relPath,
+                  name: entry.name,
+                  ext,
+                  mtimeMs: stat.mtimeMs,
+                  size: stat.size,
+                  kind: "file",
+                  group,
+                })
+              }
+            }
+          }
+        } catch (error) {
+          // Silently skip directories we can't read
+          console.error(`Error reading directory ${dir}:`, error)
+        }
+      }
+      
+      await walk(profileRoot, "")
+      
+      // Sort by name
+      files.sort((a, b) => a.name.localeCompare(b.name))
+      
+      return files
+    }),
+  
+  /**
+   * Read a config file's text content
+   */
+  read: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        relativePath: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = join(paths.profilesRoot, input.profileId)
+      
+      // Security: validate path is safe
+      const { isPathSafe } = await import("../downloads/fs-utils")
+      if (!isPathSafe(profileRoot, input.relativePath)) {
+        throw new Error("Invalid path: attempts to escape profile directory")
+      }
+      
+      const absPath = join(profileRoot, input.relativePath)
+      
+      try {
+        const text = await fs.readFile(absPath, "utf8")
+        return { text }
+      } catch (error: unknown) {
+        if (error instanceof Error && "code" in error) {
+          if (error.code === "ENOENT") {
+            throw new Error("File not found")
+          }
+          if (error.code === "EACCES") {
+            throw new Error("Permission denied")
+          }
+        }
+        throw error
+      }
+    }),
+  
+  /**
+   * Write (or overwrite) a config file atomically
+   */
+  write: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        relativePath: z.string(),
+        text: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = join(paths.profilesRoot, input.profileId)
+      
+      // Security: validate path is safe
+      const { isPathSafe, atomicWrite } = await import("../downloads/fs-utils")
+      if (!isPathSafe(profileRoot, input.relativePath)) {
+        throw new Error("Invalid path: attempts to escape profile directory")
+      }
+      
+      const absPath = join(profileRoot, input.relativePath)
+      
+      try {
+        await atomicWrite(absPath, input.text)
+        return { ok: true }
+      } catch (error: unknown) {
+        if (error instanceof Error && "code" in error) {
+          if (error.code === "EACCES") {
+            throw new Error("Permission denied")
+          }
+        }
+        throw error
+      }
+    }),
+  
+  /**
+   * Delete a config file
+   */
+  delete: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        relativePath: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = join(paths.profilesRoot, input.profileId)
+      
+      // Security: validate path is safe
+      const { isPathSafe } = await import("../downloads/fs-utils")
+      if (!isPathSafe(profileRoot, input.relativePath)) {
+        throw new Error("Invalid path: attempts to escape profile directory")
+      }
+      
+      const absPath = join(profileRoot, input.relativePath)
+      
+      try {
+        await fs.unlink(absPath)
+        return { ok: true }
+      } catch (error: unknown) {
+        if (error instanceof Error && "code" in error) {
+          if (error.code === "ENOENT") {
+            throw new Error("File not found")
+          }
+          if (error.code === "EACCES") {
+            throw new Error("Permission denied")
+          }
+        }
+        throw error
+      }
+    }),
+  
+  /**
+   * Reveal a config file in the system file explorer
+   * Opens the containing folder
+   */
+  reveal: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        relativePath: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = join(paths.profilesRoot, input.profileId)
+      
+      // Security: validate path is safe
+      const { isPathSafe } = await import("../downloads/fs-utils")
+      if (!isPathSafe(profileRoot, input.relativePath)) {
+        throw new Error("Invalid path: attempts to escape profile directory")
+      }
+      
+      const absPath = join(profileRoot, input.relativePath)
+      
+      // Open the containing folder
+      await shell.openPath(join(absPath, ".."))
+      
+      return { ok: true }
+    }),
+  
+  /**
+   * Open a config file in the default system editor
+   */
+  open: publicProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        profileId: z.string(),
+        relativePath: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const settings = getPathSettings()
+      const paths = resolveGamePaths(input.gameId, settings)
+      const profileRoot = join(paths.profilesRoot, input.profileId)
+      
+      // Security: validate path is safe
+      const { isPathSafe } = await import("../downloads/fs-utils")
+      if (!isPathSafe(profileRoot, input.relativePath)) {
+        throw new Error("Invalid path: attempts to escape profile directory")
+      }
+      
+      const absPath = join(profileRoot, input.relativePath)
+      
+      // Open the file
+      await shell.openPath(absPath)
+      
+      return { ok: true }
+    }),
+})
+
+/**
  * Helper to count files in a directory
  */
 async function countFilesInDir(dirPath: string): Promise<number> {
@@ -788,6 +1072,7 @@ export const appRouter = t.router({
   games: gamesRouter,
   launch: launchRouter,
   logs: logsRouter,
+  config: configRouter,
 })
 
 /**
