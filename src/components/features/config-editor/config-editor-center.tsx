@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense, useMemo } from "react"
+import { useState, lazy, Suspense, useMemo, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -10,59 +10,155 @@ import { Loader2, ChevronRight, ChevronDown, FileCode, Search, MoreVertical, Fol
 import { cn } from "@/lib/utils"
 import { parseBepInExConfig, updateConfigValue, type ConfigSection, type ConfigItem } from "@/lib/config-parser"
 import { logger } from "@/lib/logger"
-import BepInExCfg from "@/mocks/BepInEx.cfg?raw"
-import ModProjectYaml from "@/mocks/mod-project.yaml?raw"
+import { trpc } from "@/lib/trpc"
+import { useAppStore } from "@/store/app-store"
+import { useProfileStore } from "@/store/profile-store"
+import { toast } from "sonner"
 
 // Lazy load Monaco editor
 const MonacoEditor = lazy(() => import("@monaco-editor/react"))
 
-type ConfigDoc = {
-  id: string
-  title: string
-  subtitle?: string
-  format: "cfg" | "yaml" | "json"
-  initialText: string
-  category: "core" | "user"
-  icon?: string
+type ConfigFile = {
+  relativePath: string
+  name: string
+  ext: string
+  mtimeMs: number
+  size: number
+  kind: "file"
+  group: string
 }
 
-const CONFIG_DOCS: ConfigDoc[] = [
-  { id: "bepinex", title: "BepInEx", subtitle: "(BepInEx.cfg)", format: "cfg", initialText: BepInExCfg, category: "core" },
-  { id: "bigger-lobby", title: "BiggerLobby", subtitle: "(Com.BiggerLobby.cfg)", format: "cfg", initialText: BepInExCfg, category: "user" },
-  { id: "ftw-arms", title: "FTW Arms", subtitle: "(project.yaml)", format: "yaml", initialText: ModProjectYaml, category: "user" },
-]
+type FileFormat = "cfg" | "yaml" | "yml" | "json" | "ini" | "txt"
 
 export function ConfigEditorCenter() {
   const { t } = useTranslation()
-  const [selectedDocId, setSelectedDocId] = useState<string>("bepinex")
+  const selectedGameId = useAppStore((s) => s.selectedGameId)
+  const activeProfileId = useProfileStore((s) => 
+    selectedGameId ? s.activeProfileIdByGame[selectedGameId] : null
+  )
+  
+  const [selectedRelativePath, setSelectedRelativePath] = useState<string | null>(null)
   const [mode, setMode] = useState<"gui" | "raw">("gui")
   const [baselineText, setBaselineText] = useState<string>("")
   const [draftText, setDraftText] = useState<string>("")
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [fileToDelete, setFileToDelete] = useState<ConfigDoc | null>(null)
+  const [fileToDelete, setFileToDelete] = useState<ConfigFile | null>(null)
 
-  const selectedDoc = CONFIG_DOCS.find(d => d.id === selectedDocId)!
+  // Query config file list
+  const listQuery = trpc.config.list.useQuery(
+    { gameId: selectedGameId!, profileId: activeProfileId! },
+    { enabled: !!selectedGameId && !!activeProfileId }
+  )
 
-  // Initialize baseline and draft when doc changes
-  useMemo(() => {
-    setBaselineText(selectedDoc.initialText)
-    setDraftText(selectedDoc.initialText)
-  }, [selectedDoc.id])
+  // Query selected file content
+  const readQuery = trpc.config.read.useQuery(
+    { gameId: selectedGameId!, profileId: activeProfileId!, relativePath: selectedRelativePath! },
+    { enabled: !!selectedGameId && !!activeProfileId && !!selectedRelativePath }
+  )
 
+  // Mutations
+  const writeMutation = trpc.config.write.useMutation({
+    onSuccess: () => {
+      toast.success("File saved successfully")
+      setBaselineText(draftText)
+      listQuery.refetch()
+    },
+    onError: (error) => {
+      toast.error(`Failed to save file: ${error.message}`)
+    },
+  })
+
+  const deleteMutation = trpc.config.delete.useMutation({
+    onSuccess: () => {
+      toast.success("File deleted successfully")
+      listQuery.refetch()
+      setDeleteDialogOpen(false)
+      setFileToDelete(null)
+      
+      // If we deleted the selected file, clear selection
+      if (fileToDelete && fileToDelete.relativePath === selectedRelativePath) {
+        const remainingFiles = listQuery.data?.filter(f => f.relativePath !== fileToDelete.relativePath) || []
+        if (remainingFiles.length > 0) {
+          setSelectedRelativePath(remainingFiles[0].relativePath)
+        } else {
+          setSelectedRelativePath(null)
+        }
+      }
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete file: ${error.message}`)
+    },
+  })
+
+  const revealMutation = trpc.config.reveal.useMutation({
+    onSuccess: () => {
+      toast.success("Opening folder in explorer")
+    },
+    onError: (error) => {
+      toast.error(`Failed to open folder: ${error.message}`)
+    },
+  })
+
+  const openMutation = trpc.config.open.useMutation({
+    onSuccess: () => {
+      toast.success("Opening file in external editor")
+    },
+    onError: (error) => {
+      toast.error(`Failed to open file: ${error.message}`)
+    },
+  })
+
+  // Auto-select first file when list loads
+  if (listQuery.data && listQuery.data.length > 0 && !selectedRelativePath) {
+    setSelectedRelativePath(listQuery.data[0].relativePath)
+  }
+
+  // Update baseline and draft when file content loads
+  useEffect(() => {
+    if (readQuery.data?.text && baselineText !== readQuery.data.text) {
+      setBaselineText(readQuery.data.text)
+      setDraftText(readQuery.data.text)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readQuery.data?.text])
+
+  const files = listQuery.data || []
+  const selectedFile = files.find(f => f.relativePath === selectedRelativePath)
   const dirty = draftText !== baselineText
 
+  // Determine file format from extension
+  const fileFormat: FileFormat | null = selectedFile
+    ? (selectedFile.ext.slice(1) as FileFormat)
+    : null
+
   // Parse config for GUI mode (only for cfg format)
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const parsedConfig = useMemo(() => {
-    if (selectedDoc.format === "cfg") {
+    if (fileFormat === "cfg") {
       return parseBepInExConfig(draftText)
     }
     return null
-  }, [draftText, selectedDoc.format])
+  }, [draftText, fileFormat])
+
+  // Early return if no game or profile selected
+  if (!selectedGameId || !activeProfileId) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-muted-foreground">No active profile selected</p>
+      </div>
+    )
+  }
 
   const handleSave = () => {
-    setBaselineText(draftText)
+    if (!selectedRelativePath) return
+    writeMutation.mutate({
+      gameId: selectedGameId,
+      profileId: activeProfileId,
+      relativePath: selectedRelativePath,
+      text: draftText,
+    })
   }
 
   const handleRevert = () => {
@@ -90,55 +186,79 @@ export function ConfigEditorCenter() {
     setCollapsedSections(newSet)
   }
 
-  const handleOpenInExplorer = (doc: ConfigDoc) => {
-    // Placeholder: In a real app, this would call an Electron API or filesystem API
-    logger.info(`Opening in explorer: ${doc.title} (${doc.subtitle})`)
-    alert(`Open in Explorer: ${doc.title}\n\nThis would open the file location in your system file explorer.`)
+  const handleOpenInExplorer = (file: ConfigFile) => {
+    logger.info(`Opening in explorer: ${file.name} (${file.relativePath})`)
+    revealMutation.mutate({
+      gameId: selectedGameId,
+      profileId: activeProfileId,
+      relativePath: file.relativePath,
+    })
   }
 
-  const handleOpenInExternalEditor = (doc: ConfigDoc) => {
-    // Placeholder: In a real app, this would call an Electron API
-    logger.info(`Opening in external editor: ${doc.title} (${doc.subtitle})`)
-    alert(`Open in External Editor: ${doc.title}\n\nThis would open the file in your default text editor (e.g., VS Code, Notepad++).`)
+  const handleOpenInExternalEditor = (file: ConfigFile) => {
+    logger.info(`Opening in external editor: ${file.name} (${file.relativePath})`)
+    openMutation.mutate({
+      gameId: selectedGameId,
+      profileId: activeProfileId,
+      relativePath: file.relativePath,
+    })
   }
 
-  const handleDeleteFile = (doc: ConfigDoc) => {
-    setFileToDelete(doc)
+  const handleDeleteFile = (file: ConfigFile) => {
+    setFileToDelete(file)
     setDeleteDialogOpen(true)
   }
 
   const confirmDelete = () => {
     if (fileToDelete) {
-      // Placeholder: In a real app, this would delete the file from filesystem
-      logger.info(`Deleting file: ${fileToDelete.title} (${fileToDelete.subtitle})`)
-      alert(`File Deleted: ${fileToDelete.title}\n\nIn a real app, this would delete the config file from disk.`)
-      
-      // If deleting the currently selected file, switch to another file
-      if (fileToDelete.id === selectedDocId) {
-        const remainingDocs = CONFIG_DOCS.filter(d => d.id !== fileToDelete.id)
-        if (remainingDocs.length > 0) {
-          setSelectedDocId(remainingDocs[0].id)
-        }
-      }
-      
-      setDeleteDialogOpen(false)
-      setFileToDelete(null)
+      logger.info(`Deleting file: ${fileToDelete.name} (${fileToDelete.relativePath})`)
+      deleteMutation.mutate({
+        gameId: selectedGameId,
+        profileId: activeProfileId,
+        relativePath: fileToDelete.relativePath,
+      })
     }
   }
 
-  const canShowGui = selectedDoc.format === "cfg" && parsedConfig
+  const canShowGui = fileFormat === "cfg" && parsedConfig
 
-  // Group docs by category
-  const coreSystemDocs = CONFIG_DOCS.filter(d => d.category === "core")
-  const userModsDocs = CONFIG_DOCS.filter(d => d.category === "user")
+  // Group files by category
+  const groupedFiles: Record<string, ConfigFile[]> = {}
+  for (const file of files) {
+    if (!groupedFiles[file.group]) {
+      groupedFiles[file.group] = []
+    }
+    groupedFiles[file.group].push(file)
+  }
 
-  // Filter docs by search
-  const filteredCoreSystemDocs = coreSystemDocs.filter(d => 
-    d.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-  const filteredUserModsDocs = userModsDocs.filter(d => 
-    d.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Filter files by search
+  const filteredGroupedFiles: Record<string, ConfigFile[]> = {}
+  for (const [group, groupFiles] of Object.entries(groupedFiles)) {
+    const filtered = groupFiles.filter(f => 
+      f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.relativePath.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    if (filtered.length > 0) {
+      filteredGroupedFiles[group] = filtered
+    }
+  }
+
+  // Loading states
+  if (listQuery.isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="size-8 animate-spin" />
+      </div>
+    )
+  }
+
+  if (files.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-muted-foreground">No config files found in this profile</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full min-h-0">
@@ -165,137 +285,72 @@ export function ConfigEditorCenter() {
 
           {/* Tree */}
           <div className="flex-1 overflow-y-auto p-2">
-            {/* Core System */}
-            <div className="mb-2">
-              <button
-                onClick={() => toggleCategoryCollapse("core")}
-                className="flex w-full items-center gap-1 px-2 py-1.5 text-sm hover:bg-muted/50 rounded"
-              >
-                {collapsedSections.has("core") ? (
-                  <ChevronRight className="size-4" />
-                ) : (
-                  <ChevronDown className="size-4" />
-                )}
-                <span className="font-medium">{t("config_editor_core_system")}</span>
-              </button>
-              {!collapsedSections.has("core") && (
-                <div className="ml-3 mt-1 space-y-1">
-                  {filteredCoreSystemDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className={cn(
-                        "group flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors",
-                        selectedDocId === doc.id && "bg-primary/20 border-l-2 border-primary"
-                      )}
-                    >
-                      <button
-                        onClick={() => setSelectedDocId(doc.id)}
-                        className="flex flex-1 items-center gap-2 min-w-0 text-left hover:opacity-80"
-                      >
-                        <FileCode className="size-4 shrink-0 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{doc.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.subtitle}</div>
-                        </div>
-                        {selectedDocId === doc.id && (
-                          <div className="size-2 shrink-0 rounded-full bg-primary" />
+            {Object.entries(filteredGroupedFiles).map(([group, groupFiles]) => (
+              <div key={group} className="mb-2">
+                <button
+                  onClick={() => toggleCategoryCollapse(group)}
+                  className="flex w-full items-center gap-1 px-2 py-1.5 text-sm hover:bg-muted/50 rounded"
+                >
+                  {collapsedSections.has(group) ? (
+                    <ChevronRight className="size-4" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                  <span className="font-medium">{group}</span>
+                </button>
+                {!collapsedSections.has(group) && (
+                  <div className="ml-3 mt-1 space-y-1">
+                    {groupFiles.map((file) => (
+                      <div
+                        key={file.relativePath}
+                        className={cn(
+                          "group flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors",
+                          selectedRelativePath === file.relativePath && "bg-primary/20 border-l-2 border-primary"
                         )}
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          className="size-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center rounded hover:bg-accent"
-                        >
-                          <MoreVertical className="size-3" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenInExplorer(doc)}>
-                            <FolderOpen className="size-4 mr-2" />
-                            Open in Explorer
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenInExternalEditor(doc)}>
-                            <ExternalLink className="size-4 mr-2" />
-                            Open in External Editor
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteFile(doc)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="size-4 mr-2" />
-                            Delete File
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* User Mods */}
-            <div>
-              <button
-                onClick={() => toggleCategoryCollapse("user")}
-                className="flex w-full items-center gap-1 px-2 py-1.5 text-sm hover:bg-muted/50 rounded"
-              >
-                {collapsedSections.has("user") ? (
-                  <ChevronRight className="size-4" />
-                ) : (
-                  <ChevronDown className="size-4" />
-                )}
-                <span className="font-medium">{t("config_editor_user_mods")}</span>
-              </button>
-              {!collapsedSections.has("user") && (
-                <div className="ml-3 mt-1 space-y-1">
-                  {filteredUserModsDocs.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className={cn(
-                        "group flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors",
-                        selectedDocId === doc.id && "bg-primary/20 border-l-2 border-primary"
-                      )}
-                    >
-                      <button
-                        onClick={() => setSelectedDocId(doc.id)}
-                        className="flex flex-1 items-center gap-2 min-w-0 text-left hover:opacity-80"
                       >
-                        <FileCode className="size-4 shrink-0 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{doc.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.subtitle}</div>
-                        </div>
-                        {selectedDocId === doc.id && (
-                          <div className="size-2 shrink-0 rounded-full bg-primary" />
-                        )}
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          className="size-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center rounded hover:bg-accent"
+                        <button
+                          onClick={() => setSelectedRelativePath(file.relativePath)}
+                          className="flex flex-1 items-center gap-2 min-w-0 text-left hover:opacity-80"
                         >
-                          <MoreVertical className="size-3" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenInExplorer(doc)}>
-                            <FolderOpen className="size-4 mr-2" />
-                            Open in Explorer
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenInExternalEditor(doc)}>
-                            <ExternalLink className="size-4 mr-2" />
-                            Open in External Editor
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteFile(doc)}
-                            className="text-destructive focus:text-destructive"
+                          <FileCode className="size-4 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{file.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{file.relativePath}</div>
+                          </div>
+                          {selectedRelativePath === file.relativePath && (
+                            <div className="size-2 shrink-0 rounded-full bg-primary" />
+                          )}
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            className="size-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center rounded hover:bg-accent"
                           >
-                            <Trash2 className="size-4 mr-2" />
-                            Delete File
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                            <MoreVertical className="size-3" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenInExplorer(file)}>
+                              <FolderOpen className="size-4 mr-2" />
+                              Open in Explorer
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenInExternalEditor(file)}>
+                              <ExternalLink className="size-4 mr-2" />
+                              Open in External Editor
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteFile(file)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-4 mr-2" />
+                              Delete File
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -304,7 +359,9 @@ export function ConfigEditorCenter() {
       <div className="flex flex-1 flex-col min-w-0 min-h-0">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
-          <h1 className="text-xl font-semibold">Configuring: {selectedDoc.title}</h1>
+          <h1 className="text-xl font-semibold">
+            {selectedFile ? `Configuring: ${selectedFile.name}` : "Select a config file"}
+          </h1>
 
           {/* Raw Edit Toggle */}
           {canShowGui && (
@@ -320,7 +377,15 @@ export function ConfigEditorCenter() {
 
         {/* Body */}
         <div className="flex-1 overflow-hidden min-h-0">
-          {mode === "gui" && canShowGui ? (
+          {!selectedFile ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-muted-foreground">Select a config file to edit</p>
+            </div>
+          ) : readQuery.isLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="size-8 animate-spin" />
+            </div>
+          ) : mode === "gui" && canShowGui ? (
             <div className="h-full overflow-y-auto">
               <div className="mx-auto w-full max-w-5xl px-8 py-6">
                 <GuiMode 
@@ -333,7 +398,7 @@ export function ConfigEditorCenter() {
             <Suspense fallback={<div className="flex items-center justify-center p-12"><Loader2 className="size-6 animate-spin" /></div>}>
               <RawMode
                 value={draftText}
-                language={getMonacoLanguage(selectedDoc.format)}
+                language={getMonacoLanguage(fileFormat || "txt")}
                 onChange={handleRawTextChange}
               />
             </Suspense>
@@ -348,8 +413,13 @@ export function ConfigEditorCenter() {
           <Button variant="outline" size="sm" onClick={handleRevert} disabled={!dirty}>
             Revert
           </Button>
-          <Button variant="default" size="sm" onClick={handleSave} disabled={!dirty}>
-            Save Changes
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={handleSave} 
+            disabled={!dirty || writeMutation.isPending}
+          >
+            {writeMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </div>
@@ -360,15 +430,19 @@ export function ConfigEditorCenter() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("dialog_delete_config_file_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{fileToDelete?.title}</strong> ({fileToDelete?.subtitle})?
+              Are you sure you want to delete <strong>{fileToDelete?.name}</strong> ({fileToDelete?.relativePath})?
               <br /><br />
               This action cannot be undone. The file will be permanently removed from your system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete File
+            <AlertDialogAction 
+              onClick={confirmDelete} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete File"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -507,13 +581,16 @@ function RawMode({
   )
 }
 
-function getMonacoLanguage(format: "cfg" | "yaml" | "json"): string {
+function getMonacoLanguage(format: FileFormat): string {
   switch (format) {
     case "json":
       return "json"
     case "yaml":
+    case "yml":
       return "yaml"
     case "cfg":
+    case "ini":
+    case "txt":
       return "plaintext"
   }
 }
