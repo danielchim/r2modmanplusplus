@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { useSettingsStore } from "@/store/settings-store"
 import { useTranslation } from "react-i18next"
+import { logger } from "@/lib/logger"
 import {
   Select,
   SelectContent,
@@ -36,7 +37,7 @@ export function OtherPanel(_props: PanelProps) {
 
   const handleRefreshModList = () => {
     // TODO: Implement refresh online mod list
-    console.log("Refreshing online mod list...")
+    logger.info("Refreshing online mod list...")
   }
 
   return (

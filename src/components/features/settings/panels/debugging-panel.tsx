@@ -4,6 +4,7 @@ import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc"
 import { toast } from "sonner"
+import { logger } from "@/lib/logger"
 
 interface PanelProps {
   searchQuery?: string
@@ -23,13 +24,13 @@ export function DebuggingPanel(_props: PanelProps) {
   const handleCleanModCache = () => {
     // TODO: Implement mod cache clearing
     toast.info("Mod cache clearing not yet implemented")
-    console.log("Cleaning mod cache...")
+    logger.info("Cleaning mod cache...")
   }
 
   const handleCleanOnlineModList = () => {
     // TODO: Implement this - need to get the active game's packageIndexUrl
     toast.info("Online mod list clearing not yet implemented")
-    console.log("Cleaning online mod list...")
+    logger.info("Cleaning online mod list...")
   }
 
   const handleCopyLogFile = async () => {
@@ -39,7 +40,7 @@ export function DebuggingPanel(_props: PanelProps) {
       await navigator.clipboard.writeText(logContents)
       toast.success("Log file copied to clipboard")
     } catch (err) {
-      console.error("Failed to copy log file:", err)
+      logger.error("Failed to copy log file:", err)
       toast.error("Failed to copy log file")
     } finally {
       setIsCopyingLogs(false)
@@ -71,7 +72,7 @@ export function DebuggingPanel(_props: PanelProps) {
       await navigator.clipboard.writeText(troubleshootingText)
       toast.success("Troubleshooting info copied to clipboard")
     } catch (err) {
-      console.error("Failed to copy troubleshooting info:", err)
+      logger.error("Failed to copy troubleshooting info:", err)
       toast.error("Failed to copy troubleshooting info")
     } finally {
       setIsCopyingInfo(false)

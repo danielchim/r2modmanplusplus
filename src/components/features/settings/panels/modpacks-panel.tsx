@@ -3,6 +3,7 @@ import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { Dialog } from "@base-ui/react/dialog"
+import { logger } from "@/lib/logger"
 
 interface PanelProps {
   searchQuery?: string
@@ -25,10 +26,10 @@ export function ModpacksPanel(_props: PanelProps) {
     
     try {
       await navigator.clipboard.writeText(dependencyString)
-      console.log("Dependencies copied to clipboard")
+      logger.info("Dependencies copied to clipboard")
       // TODO: Show toast notification
     } catch (err) {
-      console.error("Failed to copy dependencies:", err)
+      logger.error("Failed to copy dependencies:", err)
     }
   }
 

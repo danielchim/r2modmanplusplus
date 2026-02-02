@@ -1,5 +1,5 @@
 import { app } from "electron"
-import { promises as fs } from "fs"
+import { promises as fs, statSync, renameSync } from "fs"
 import { join } from "path"
 
 interface LogEntry {
@@ -18,16 +18,42 @@ class FileLogger {
 
   constructor() {
     const logsDir = join(app.getPath("userData"), "logs")
-    const dateStr = new Date().toISOString().split("T")[0]
-    this.logFilePath = join(logsDir, `r2modman-${dateStr}.log`)
+    const latestLogPath = join(logsDir, "log.latest")
     
     // Ensure logs directory exists
     this.ensureLogDirectory()
+    
+    // On startup, rotate existing log.latest if it exists
+    this.rotateExistingLog(latestLogPath, logsDir)
+    
+    // Use log.latest as the main log file
+    this.logFilePath = latestLogPath
     
     // Flush logs every 2 seconds
     this.flushInterval = setInterval(() => {
       this.flush()
     }, 2000)
+  }
+
+  private rotateExistingLog(latestLogPath: string, logsDir: string): void {
+    try {
+      // Use synchronous operations to ensure rotation completes before any logs are written
+      const stats = statSync(latestLogPath)
+      // Get the file's last modification time
+      const lastModified = stats.mtime
+      // Format timestamp: YYYY-MM-DDTHH-MM-SS (replace colons with hyphens for filename compatibility)
+      const timestamp = lastModified.toISOString().replace(/:/g, "-").split(".")[0]
+      const rotatedPath = join(logsDir, `r2modman-${timestamp}.log`)
+      
+      // Rename the existing log.latest to include the last open time
+      renameSync(latestLogPath, rotatedPath)
+    } catch (error) {
+      // File doesn't exist yet, no need to rotate
+      // This is expected on first run
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        console.error("Failed to rotate existing log file:", error)
+      }
+    }
   }
 
   private async ensureLogDirectory() {

@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Loader2, ChevronRight, ChevronDown, FileCode, Search, MoreVertical, FolderOpen, ExternalLink, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { parseBepInExConfig, updateConfigValue, type ConfigSection, type ConfigItem } from "@/lib/config-parser"
+import { logger } from "@/lib/logger"
 import BepInExCfg from "@/mocks/BepInEx.cfg?raw"
 import ModProjectYaml from "@/mocks/mod-project.yaml?raw"
 
@@ -91,13 +92,13 @@ export function ConfigEditorCenter() {
 
   const handleOpenInExplorer = (doc: ConfigDoc) => {
     // Placeholder: In a real app, this would call an Electron API or filesystem API
-    console.log(`Opening in explorer: ${doc.title} (${doc.subtitle})`)
+    logger.info(`Opening in explorer: ${doc.title} (${doc.subtitle})`)
     alert(`Open in Explorer: ${doc.title}\n\nThis would open the file location in your system file explorer.`)
   }
 
   const handleOpenInExternalEditor = (doc: ConfigDoc) => {
     // Placeholder: In a real app, this would call an Electron API
-    console.log(`Opening in external editor: ${doc.title} (${doc.subtitle})`)
+    logger.info(`Opening in external editor: ${doc.title} (${doc.subtitle})`)
     alert(`Open in External Editor: ${doc.title}\n\nThis would open the file in your default text editor (e.g., VS Code, Notepad++).`)
   }
 
@@ -109,7 +110,7 @@ export function ConfigEditorCenter() {
   const confirmDelete = () => {
     if (fileToDelete) {
       // Placeholder: In a real app, this would delete the file from filesystem
-      console.log(`Deleting file: ${fileToDelete.title} (${fileToDelete.subtitle})`)
+      logger.info(`Deleting file: ${fileToDelete.title} (${fileToDelete.subtitle})`)
       alert(`File Deleted: ${fileToDelete.title}\n\nIn a real app, this would delete the config file from disk.`)
       
       // If deleting the currently selected file, switch to another file
