@@ -61,7 +61,7 @@ export function useOnlineMods(params: UseOnlineModsParams) {
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.searchPackages.useInfiniteQuery(
     {
       packageIndexUrl: packageIndexUrl || "",
@@ -129,7 +129,7 @@ export function useOnlinePackage(gameId: string, uuid4: string, enabled = true) 
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.getPackage.useQuery(
     {
       packageIndexUrl: packageIndexUrl || "",
@@ -176,7 +176,7 @@ export function useOnlineReadme(owner: string, name: string, enabled = true) {
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.getReadme.useQuery(
     {
       owner,
@@ -251,7 +251,7 @@ export function useOnlineDependencies(params: UseOnlineDependenciesParams) {
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.resolveDependencies.useQuery(
     {
       packageIndexUrl: packageIndexUrl || "",
@@ -306,7 +306,7 @@ export function useOnlineDependenciesRecursive(params: UseOnlineDependenciesRecu
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.resolveDependenciesRecursive.useQuery(
     {
       packageIndexUrl: packageIndexUrl || "",
@@ -360,7 +360,7 @@ export function useOnlineCategories(gameId: string, section: "all" | "mod" | "mo
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.getCategories.useQuery(
     {
       packageIndexUrl: packageIndexUrl || "",
@@ -409,7 +409,7 @@ export function useCatalogStatus(gameId: string, enabled = true) {
     }
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+   
   const result = trpc.thunderstore.getCatalogStatus.useQuery(
     {
       packageIndexUrl: packageIndexUrl || "",

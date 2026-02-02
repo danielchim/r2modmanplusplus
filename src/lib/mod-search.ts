@@ -34,7 +34,7 @@ export function parseModSearch(query: string): ParsedModSearch {
   
   // Match author: followed by quoted string or unquoted word
   const authorRegex = /\bauthor:(?:"([^"]*)"|(\S+))/gi
-  let authorMatch = authorRegex.exec(remainingQuery)
+  const authorMatch = authorRegex.exec(remainingQuery)
   if (authorMatch) {
     result.author = authorMatch[1] || authorMatch[2]
     remainingQuery = remainingQuery.replace(authorMatch[0], "").trim()

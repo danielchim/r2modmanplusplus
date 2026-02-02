@@ -43,11 +43,11 @@ function sanitizePayload(payload: unknown, depth = 0): unknown {
 export function logIpcRenderer(direction: Direction, channel: string, payload?: unknown): void {
   if (!isDevEnvironment) return
   if (typeof payload === "undefined") {
-    // eslint-disable-next-line no-console
+     
     console.debug(`[ipc:${direction}] ${channel}`)
     return
   }
-  // eslint-disable-next-line no-console
+   
   console.debug(`[ipc:${direction}] ${channel}`, sanitizePayload(payload))
 }
 

@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Loader2, ChevronRight, ChevronDown, FileCode, Search, MoreVertical, FolderOpen, ExternalLink, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { parseBepInExConfig, updateConfigValue, type ConfigSection, type ConfigItem } from "@/lib/config-parser"
+import { parseBepInExConfig, parseIniConfig, updateConfigValue, updateIniValue, type ConfigSection, type ConfigItem } from "@/lib/config-parser"
 import { logger } from "@/lib/logger"
 import { trpc } from "@/lib/trpc"
 import { useAppStore } from "@/store/app-store"
@@ -157,11 +157,14 @@ export function ConfigEditorCenter() {
     ? (selectedFile.ext.slice(1) as FileFormat)
     : null
 
-  // Parse config for GUI mode (only for cfg format)
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  // Parse config for GUI mode (cfg and ini formats)
+   
   const parsedConfig = useMemo(() => {
     if (fileFormat === "cfg") {
       return parseBepInExConfig(draftText)
+    }
+    if (fileFormat === "ini") {
+      return parseIniConfig(draftText)
     }
     return null
   }, [draftText, fileFormat])
@@ -190,7 +193,9 @@ export function ConfigEditorCenter() {
   }
 
   const handleItemChange = (section: ConfigSection, item: ConfigItem, newValue: string) => {
-    const updated = updateConfigValue(draftText, section.name, item.key, newValue)
+    const updated = fileFormat === "ini" 
+      ? updateIniValue(draftText, section.name, item.key, newValue)
+      : updateConfigValue(draftText, section.name, item.key, newValue)
     setDraftText(updated)
   }
 
@@ -244,7 +249,7 @@ export function ConfigEditorCenter() {
     }
   }
 
-  const canShowGui = fileFormat === "cfg" && parsedConfig
+  const canShowGui = (fileFormat === "cfg" || fileFormat === "ini") && parsedConfig
 
   // Group files by category
   const groupedFiles: Record<string, ConfigFile[]> = {}
@@ -479,7 +484,7 @@ function GuiMode({
   parsedConfig, 
   onItemChange 
 }: { 
-  parsedConfig: ReturnType<typeof parseBepInExConfig>
+  parsedConfig: ReturnType<typeof parseBepInExConfig> | ReturnType<typeof parseIniConfig>
   onItemChange: (section: ConfigSection, item: ConfigItem, newValue: string) => void
 }) {
   return (

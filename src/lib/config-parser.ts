@@ -143,7 +143,7 @@ function inferType(settingType?: string, acceptableValues?: string): ConfigItemT
 export function updateConfigValue(rawText: string, sectionName: string, key: string, newValue: string): string {
   const lines = rawText.split('\n')
   let inTargetSection = false
-  let result: string[] = []
+  const result: string[] = []
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -170,6 +170,141 @@ export function updateConfigValue(rawText: string, sectionName: string, key: str
         // Replace the value, preserving indentation
         const indent = line.match(/^\s*/)?.[0] || ''
         result.push(`${indent}${key} = ${newValue}`)
+        continue
+      }
+    }
+
+    result.push(line)
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * Parse standard .ini file into structured sections and items
+ * Standard INI format:
+ * [Section]
+ * key=value
+ * ; comment
+ * # comment
+ */
+export function parseIniConfig(text: string): ParsedConfig {
+  const lines = text.split('\n')
+  const sections: ConfigSection[] = []
+  let currentSection: ConfigSection | null = null
+  let currentItemComments: string[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // Skip empty lines
+    if (trimmed === '') {
+      continue
+    }
+
+    // Section header: [SectionName]
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const sectionName = trimmed.slice(1, -1)
+      currentSection = {
+        name: sectionName,
+        displayName: sectionName,
+        items: []
+      }
+      sections.push(currentSection)
+      currentItemComments = []
+      continue
+    }
+
+    // Comment lines: ; or #
+    if (trimmed.startsWith(';') || trimmed.startsWith('#')) {
+      const comment = trimmed.startsWith(';') 
+        ? trimmed.slice(1).trim()
+        : trimmed.slice(1).trim()
+      currentItemComments.push(comment)
+      continue
+    }
+
+    // Key = Value or Key: Value
+    if ((trimmed.includes('=') || trimmed.includes(':')) && currentSection) {
+      const separator = trimmed.includes('=') ? '=' : ':'
+      const [key, ...valueParts] = trimmed.split(separator)
+      const value = valueParts.join(separator).trim()
+      
+      const item: ConfigItem = {
+        key: key.trim(),
+        value,
+        type: inferIniType(value),
+        description: currentItemComments.join(' '),
+      }
+
+      currentSection.items.push(item)
+      
+      // Reset for next item
+      currentItemComments = []
+      continue
+    }
+  }
+
+  return { sections, rawText: text }
+}
+
+/**
+ * Infer control type from INI value
+ * Since INI files don't have type metadata, we infer from the value
+ */
+function inferIniType(value: string): ConfigItemType {
+  const lower = value.toLowerCase().trim()
+  
+  // Boolean check
+  if (lower === "true" || lower === "false" || lower === "yes" || lower === "no" || 
+      lower === "on" || lower === "off" || lower === "1" || lower === "0") {
+    return "boolean"
+  }
+  
+  // Number check
+  if (/^-?\d+(\.\d+)?$/.test(value.trim())) {
+    return "number"
+  }
+  
+  return "text"
+}
+
+/**
+ * Update an INI config item value in the raw text
+ * This preserves formatting and comments
+ */
+export function updateIniValue(rawText: string, sectionName: string, key: string, newValue: string): string {
+  const lines = rawText.split('\n')
+  let inTargetSection = false
+  const result: string[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // Check if entering target section
+    if (trimmed === `[${sectionName}]`) {
+      inTargetSection = true
+      result.push(line)
+      continue
+    }
+
+    // Check if entering different section
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      inTargetSection = false
+      result.push(line)
+      continue
+    }
+
+    // If in target section and this is our key
+    if (inTargetSection && (trimmed.includes('=') || trimmed.includes(':'))) {
+      const separator = trimmed.includes('=') ? '=' : ':'
+      const [lineKey] = trimmed.split(separator)
+      if (lineKey.trim() === key) {
+        // Replace the value, preserving indentation and separator
+        const indent = line.match(/^\s*/)?.[0] || ''
+        result.push(`${indent}${key}${separator}${newValue}`)
         continue
       }
     }
