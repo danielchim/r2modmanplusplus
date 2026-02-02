@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X } from "lucide-react"
+import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X, RefreshCw } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
@@ -530,6 +530,7 @@ export function ModsLibrary() {
   // Launch-related queries and mutations
   const launchMutation = trpc.launch.start.useMutation()
   const installDepsMutation = trpc.launch.installBaseDependencies.useMutation()
+  const clearCatalogMutation = trpc.thunderstore.clearCatalog.useMutation()
   const trpcUtils = trpc.useUtils()
   
   // Query to verify binary exists
@@ -884,6 +885,23 @@ export function ModsLibrary() {
     setSearchDropdownOpen(false)
     // Don't refocus to avoid reopening dropdown
   }, [searchQuery, setSearchQuery])
+
+  const handleRefreshCatalog = async () => {
+    if (!selectedGameId || !packageIndexUrl) return
+    
+    try {
+      const toastId = toast.loading("Refreshing mod catalog...")
+      await clearCatalogMutation.mutateAsync({ packageIndexUrl })
+      // Refetch online mods after clearing to trigger rebuild
+      await onlineModsQuery.refetch()
+      toast.success("Catalog refresh started", { id: toastId })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error("Failed to refresh catalog", {
+        description: message,
+      })
+    }
+  }
 
   const handleOpenGameFolder = async () => {
     if (!installFolder) return
@@ -1476,26 +1494,43 @@ export function ModsLibrary() {
                 </div>
               )}
             </div>
-            {/* View Mode Toggle */}
-            <div className="flex gap-1 border border-border rounded-md">
-              <Button
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                size="icon"
-                className="rounded-r-none"
-                onClick={() => setViewMode("grid")}
-                aria-label="Grid view"
-              >
-                <Grid3x3 className="size-4" />
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "secondary" : "ghost"}
-                size="icon"
-                className="rounded-l-none"
-                onClick={() => setViewMode("list")}
-                aria-label="List view"
-              >
-                <List className="size-4" />
-              </Button>
+            {/* View Mode Toggle and Refresh */}
+            <div className="flex items-center gap-1">
+              {/* View mode toggle */}
+              <div className="inline-flex rounded-md">
+                <Button
+                  variant={viewMode === "grid" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="rounded-r-none"
+                  onClick={() => setViewMode("grid")}
+                  aria-label="Grid view"
+                >
+                  <Grid3x3 className="size-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="rounded-l-none"
+                  onClick={() => setViewMode("list")}
+                  aria-label="List view"
+                >
+                  <List className="size-4" />
+                </Button>
+              </div>
+              
+              {/* Refresh catalog button (online tab only, Electron only) */}
+              {tab === "online" && onlineModsQuery.isElectron && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefreshCatalog}
+                  disabled={catalogStatus.data?.status === "building" || clearCatalogMutation.isPending}
+                  aria-label="Refresh mod catalog"
+                  title="Refresh mod catalog"
+                >
+                  <RefreshCw className={`size-4 ${clearCatalogMutation.isPending || catalogStatus.data?.status === "building" ? "animate-spin" : ""}`} />
+                </Button>
+              )}
             </div>
 
             {/* Mobile Filter Button (Sheet Trigger) */}

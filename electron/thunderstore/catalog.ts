@@ -313,15 +313,18 @@ function updatePackageCount(db: Database.Database): void {
 /**
  * Builds catalog from Thunderstore chunks with progressive loading
  * Inserts packages in batches and commits between batches so queries can run during build
+ * @param db - Database instance
+ * @param packageIndexUrl - URL for the package index
+ * @param indexResult - Pre-fetched index result (optional, will fetch if not provided)
  */
-async function buildCatalog(db: Database.Database, packageIndexUrl: string): Promise<void> {
+async function buildCatalog(db: Database.Database, packageIndexUrl: string, indexResult?: { content: string[], hash: string }): Promise<void> {
   const logger = getLogger()
   logger.info(`[Catalog] Building catalog for ${packageIndexUrl}`)
   
   try {
-    // Fetch the package index to get chunk URLs
-    const indexResult = await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
-    const chunkUrls = indexResult.content
+    // Fetch the package index to get chunk URLs (if not provided)
+    const index = indexResult || await fetchGzipJson<PackageListingIndex>(packageIndexUrl)
+    const chunkUrls = index.content
     
     logger.info(`[Catalog] Found ${chunkUrls.length} chunks to process with concurrency limit of ${MAX_CHUNK_CONCURRENCY}`)
     
@@ -331,6 +334,7 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string): Pro
     // Fetch and insert chunks progressively
     let totalInserted = 0
     let chunksProcessed = 0
+    let firstBatchProcessed = false
     
     // Process chunks in batches
     for (let i = 0; i < chunkUrls.length; i += MAX_CHUNK_CONCURRENCY) {
@@ -347,6 +351,14 @@ async function buildCatalog(db: Database.Database, packageIndexUrl: string): Pro
       const batchPackages: ThunderstorePackage[] = []
       for (const result of batchResults) {
         batchPackages.push(...result.content)
+      }
+      
+      // CRITICAL FIX: Clear old data ONLY before inserting first batch
+      // This ensures queries always see either old data or new data, never empty catalog
+      if (!firstBatchProcessed) {
+        logger.info(`[Catalog] First batch ready (${batchPackages.length} packages), clearing old data...`)
+        db.exec("DELETE FROM packages")
+        firstBatchProcessed = true
       }
       
       // Insert this batch of packages with batch commits
@@ -468,11 +480,8 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
         logger.info(`[Catalog] No catalog found, starting background build...`)
       }
 
-      // Clear existing data
-      db.exec("DELETE FROM packages")
-
-      // Set initial metadata with building status
-      // Note: totalPackages tracks total CHUNKS (stable denominator for UI).
+      // Set metadata to building status BUT keep old data until first batch is ready
+      // This prevents queries from seeing an empty catalog during the initial fetch
       setMetadata(db, {
         packageIndexUrl,
         indexHash: currentIndexHash,
@@ -480,14 +489,29 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
         status: "building",
         packagesIndexed: 0,
         totalPackages: totalChunks,
-        packageCount: 0,
+        packageCount: metadata?.packageCount || 0, // Keep old count until we have new data
       })
 
       // Start background build (don't await)
-      const buildPromise = buildCatalog(db, packageIndexUrl)
+      // The build function will handle clearing old data when first batch is ready
+      const buildPromise = buildCatalog(db, packageIndexUrl, indexResult)
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error)
           logger.error(`[Catalog] Background build failed: ${message}`)
+          // Mark as error so queries don't get stuck
+          try {
+            setMetadata(db, {
+              packageIndexUrl,
+              indexHash: currentIndexHash,
+              status: "error",
+              errorMessage: message,
+              packagesIndexed: 0,
+              totalPackages: 0,
+              packageCount: 0,
+            })
+          } catch {
+            // Best effort
+          }
         })
         .finally(() => {
           // Remove from active builds when done
@@ -496,7 +520,7 @@ export async function ensureCatalogUpToDate(packageIndexUrl: string): Promise<vo
 
       activeBuildPromises.set(packageIndexUrl, buildPromise)
 
-      logger.info(`[Catalog] Background build started, queries can run against partial data`)
+      logger.info(`[Catalog] Background build started, old data available until first batch ready`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       getLogger().error(`[Catalog] Failed to ensure catalog: ${message}`)
