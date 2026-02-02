@@ -8,6 +8,7 @@ import type { AppContext } from "./context"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies, resolveDependenciesRecursive } from "../thunderstore/dependencies"
 import { clearCatalog, getCategories, getCatalogStatus } from "../thunderstore/catalog"
+import { clearAllCache } from "../thunderstore/cache"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
 import { resolveGamePaths } from "../downloads/path-resolver"
@@ -225,6 +226,16 @@ const thunderstoreRouter = t.router({
     )
     .mutation(async ({ input }) => {
       await clearCatalog(input.packageIndexUrl)
+      return { success: true }
+    }),
+
+  /**
+   * Clear all deprecated JSON cache files
+   * Removes all cached package lists from thunderstore-cache folder
+   */
+  clearAllCache: publicProcedure
+    .mutation(async () => {
+      await clearAllCache()
       return { success: true }
     }),
 
