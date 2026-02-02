@@ -257,6 +257,9 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
+  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
+  const selectMod = useAppStore((s) => s.selectMod)
 
   const [selectedDepMod, setSelectedDepMod] = useState<Mod | null>(null)
   const [showDepModDialog, setShowDepModDialog] = useState(false)
@@ -376,6 +379,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
     if (onBack) {
       onBack()
     }
+  }
+
+  const handleAuthorClick = () => {
+    setSearchQuery(`author:"${mod.author}"`)
+    setModLibraryTab("online")
+    selectMod(null) // Close inspector
   }
 
   const handleDepClick = (depMod: Mod) => {
@@ -503,7 +512,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               <h2 className="text-base font-semibold text-balance line-clamp-2">
                 {mod.name}
               </h2>
-              <p className="text-xs text-muted-foreground">{t("mod_inspector_by_author", { author: mod.author })}</p>
+              <button
+                onClick={handleAuthorClick}
+                className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded"
+              >
+                {t("mod_inspector_by_author", { author: mod.author })}
+              </button>
             </div>
           </div>
         </div>
@@ -520,7 +534,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               <h2 className="text-base font-semibold text-balance line-clamp-2">
                 {mod.name}
               </h2>
-              <p className="text-xs text-muted-foreground">{t("mod_inspector_by_author", { author: mod.author })}</p>
+              <button
+                onClick={handleAuthorClick}
+                className="text-xs text-muted-foreground hover:text-foreground hover:underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded"
+              >
+                {t("mod_inspector_by_author", { author: mod.author })}
+              </button>
             </div>
           </div>
         </div>
