@@ -26,6 +26,7 @@ import { DependencyDownloadDialog } from "@/components/features/dependencies/dep
 import { useThunderstoreReadme } from "@/lib/queries/useThunderstoreReadme"
 import { useOnlinePackage, useOnlineDependenciesRecursive } from "@/lib/queries/useOnlineMods"
 import { isVersionGreater, compareVersions } from "@/lib/version-utils"
+import { openExternalUrl } from "@/lib/external-link"
 
 
 function formatBytes(bytes: number): string {
@@ -796,7 +797,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             )}
 
             {!isLoadingReadme && !isReadmeError && readmeHtml && (
-              <HtmlReadme html={readmeHtml} />
+              <HtmlReadme html={readmeHtml} onOpenLink={openExternalUrl} />
             )}
           </div>
         </TabsContent>
@@ -980,11 +981,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
             className="w-full justify-start gap-2"
             onClick={() => {
               const thunderstoreUrl = `https://thunderstore.io/c/${mod.gameId}/p/${mod.author}/${mod.name}/`
-              if (window.electron?.openExternal) {
-                window.electron.openExternal(thunderstoreUrl)
-              } else {
-                window.open(thunderstoreUrl, "_blank", "noopener,noreferrer")
-              }
+              openExternalUrl(thunderstoreUrl)
             }}
           >
             <ExternalLink className="size-4" />
@@ -996,11 +993,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
               size="sm"
               className="w-full justify-start gap-2"
               onClick={() => {
-                if (window.electron?.openExternal) {
-                  window.electron.openExternal(mod.websiteUrl!)
-                } else {
-                  window.open(mod.websiteUrl, "_blank", "noopener,noreferrer")
-                }
+                openExternalUrl(mod.websiteUrl!)
               }}
             >
               <ExternalLink className="size-4" />

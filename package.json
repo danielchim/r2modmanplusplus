@@ -1,7 +1,7 @@
 {
   "name": "r2modmanplusplus",
   "private": true,
-  "version": "0.0.1769595890.1",
+  "version": "0.0.1",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -104,12 +104,12 @@
     }
   },
   "buildInfo": {
-    "version": "0.0.1769595890.1",
+    "version": "0.0.1",
     "major": "0",
     "minor": "0",
-    "build": "1769595890",
+    "build": "1770042281",
     "revision": "1",
     "mode": "UAT",
-    "buildTime": "2026-02-02T14:21:44.967Z"
+    "buildTime": "2026-02-02T14:24:41.374Z"
   }
 }

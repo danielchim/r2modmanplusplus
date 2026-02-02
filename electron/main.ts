@@ -32,6 +32,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: "r2modmanplusplus",
+    autoHideMenuBar: true, // Hide menu bar by default, show on Alt key press (Windows/Linux)
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,

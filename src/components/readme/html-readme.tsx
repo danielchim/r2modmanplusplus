@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useRef } from "react"
 import DOMPurify from "dompurify"
+import { openExternalUrl } from "@/lib/external-link"
 
 import type { Config } from "dompurify"
 
@@ -100,7 +101,7 @@ export function HtmlReadme({ html, onOpenLink }: HtmlReadmeProps) {
             if (onOpenLink) {
               onOpenLink(url.href)
             } else {
-              window.open(url.href, "_blank", "noopener,noreferrer")
+              openExternalUrl(url.href)
             }
           }
         } catch {

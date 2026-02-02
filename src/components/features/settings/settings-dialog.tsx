@@ -10,6 +10,7 @@ import { DebuggingPanel } from "./panels/debugging-panel"
 import { ModpacksPanel } from "./panels/modpacks-panel"
 import { OtherPanel } from "./panels/other-panel"
 import { GameSettingsPanel } from "./panels/game-settings-panel"
+import { AboutPanel } from "./panels/about-panel"
 import { AddGameDialog } from "@/components/features/add-game-dialog"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { cn } from "@/lib/utils"
@@ -32,6 +33,7 @@ const staticNavigationSections = [
   {
     titleKey: "advanced" as const,
     items: [
+      { id: "about", labelKey: "about" as const, component: AboutPanel },
       { id: "debugging", labelKey: "debugging" as const, component: DebuggingPanel },
     ],
   },
