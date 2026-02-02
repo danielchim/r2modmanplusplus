@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X } from "lucide-react"
+import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, List, Loader2, X, Filter } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
@@ -840,6 +840,22 @@ export function ModsLibrary() {
     setSearchQuery("")
     searchInputRef.current?.focus()
   }, [setSearchQuery])
+  
+  // Insert token helpers for filter dropdown
+  const handleInsertToken = useCallback((token: string) => {
+    const currentQuery = searchQuery
+    const newQuery = currentQuery ? `${currentQuery} ${token}` : token
+    setSearchQuery(newQuery)
+    // Focus input after inserting token
+    setTimeout(() => searchInputRef.current?.focus(), 50)
+  }, [searchQuery, setSearchQuery])
+  
+  const handleClearTokens = useCallback(() => {
+    // Remove all recognized tokens, keep only text
+    const parsed = parseModSearch(searchQuery)
+    setSearchQuery(parsed.textQuery)
+    searchInputRef.current?.focus()
+  }, [searchQuery, setSearchQuery])
 
   const handleOpenGameFolder = async () => {
     if (!installFolder) return
@@ -1306,6 +1322,97 @@ export function ModsLibrary() {
                 </button>
               )}
             </div>
+            {/* Filter Criteria Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-border bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
+                  />
+                }
+              >
+                <Filter className="size-4" />
+                <span className="hidden sm:inline">Add Filter</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[240px]">
+                <DropdownMenuLabel>Insert Filter Token</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => handleInsertToken("author:")}>
+                    <span className="font-mono text-xs">author:</span>
+                    <span className="ml-auto text-xs text-muted-foreground">Filter by author</span>
+                  </DropdownMenuItem>
+                  
+                  {/* Category submenu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full"
+                        />
+                      }
+                    >
+                      <span className="font-mono text-xs">category:</span>
+                      <ChevronDown className="ml-auto size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="right" align="start" className="max-h-[300px] overflow-y-auto">
+                      {categories.slice(0, 20).map((cat) => (
+                        <DropdownMenuItem
+                          key={cat}
+                          onClick={() => handleInsertToken(`category:"${cat}"`)}
+                        >
+                          {cat}
+                        </DropdownMenuItem>
+                      ))}
+                      {categories.length > 20 && (
+                        <DropdownMenuItem disabled>
+                          <span className="text-xs text-muted-foreground">+ {categories.length - 20} more...</span>
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  
+                  <DropdownMenuItem onClick={() => handleInsertToken("kind:mod")}>
+                    <span className="font-mono text-xs">kind:mod</span>
+                    <span className="ml-auto text-xs text-muted-foreground">Show only mods</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleInsertToken("kind:modpack")}>
+                    <span className="font-mono text-xs">kind:modpack</span>
+                    <span className="ml-auto text-xs text-muted-foreground">Show only modpacks</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Sort Options</DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => handleInsertToken("sort:name")}>
+                    <span className="font-mono text-xs">sort:name</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleInsertToken("sort:updated")}>
+                    <span className="font-mono text-xs">sort:updated</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleInsertToken("sort:downloads")}>
+                    <span className="font-mono text-xs">sort:downloads</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleInsertToken("dir:asc")}>
+                    <span className="font-mono text-xs">dir:asc</span>
+                    <span className="ml-auto text-xs text-muted-foreground">Ascending</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleInsertToken("dir:desc")}>
+                    <span className="font-mono text-xs">dir:desc</span>
+                    <span className="ml-auto text-xs text-muted-foreground">Descending</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleClearTokens}>
+                  <X className="size-4 mr-2" />
+                  Clear all tokens
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* View Mode Toggle */}
             <div className="flex gap-1 border border-border rounded-md">
               <Button
