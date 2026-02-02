@@ -762,6 +762,27 @@ export function ModsLibrary() {
     }
   }, [tab, catalogStatus.data?.status, onlineModsQuery, onlineModsQuery.data?.pages])
 
+  // Refetch online mods when catalog finishes building
+  const prevCatalogStatusRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const currentStatus = catalogStatus.data?.status
+    const prevStatus = prevCatalogStatusRef.current
+
+    // Detect transition from "building" to "ready"
+    if (
+      tab === "online" &&
+      onlineModsQuery.isElectron &&
+      prevStatus === "building" &&
+      currentStatus === "ready"
+    ) {
+      // Catalog just finished building - refetch to show new data
+      onlineModsQuery.refetch()
+    }
+
+    // Update ref for next comparison
+    prevCatalogStatusRef.current = currentStatus
+  }, [tab, catalogStatus.data?.status, onlineModsQuery])
+
   // Fetch categories from catalog (Electron only, falls back to MOD_CATEGORIES)
   const onlineCategoriesQuery = useOnlineCategories(
     selectedGameId || "",
