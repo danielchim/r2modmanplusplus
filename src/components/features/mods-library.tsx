@@ -1143,24 +1143,24 @@ export function ModsLibrary() {
 
   // Determine launch button state and tooltip
   let launchDisabled = true
-  let launchTooltip = "Install folder not set"
-  
+  let launchTooltip = t("dashboard_install_folder_not_set")
+
   const isRunning = launchStatus.data?.running ?? false
   const isLaunching = launchMutation.isPending
-  
+
   if (installFolder) {
     if (binaryVerification.isLoading) {
       launchDisabled = true
-      launchTooltip = "Verifying game files..."
+      launchTooltip = t("dashboard_verifying_game_files")
     } else if (!binaryVerification.data?.ok) {
       launchDisabled = true
-      launchTooltip = binaryVerification.data?.reason || "Game binary not found"
+      launchTooltip = binaryVerification.data?.reason || t("dashboard_game_binary_not_found")
     } else if (isRunning) {
       launchDisabled = true
-      launchTooltip = "Game is running"
+      launchTooltip = t("dashboard_game_is_running")
     } else if (isLaunching) {
       launchDisabled = true
-      launchTooltip = "Launching..."
+      launchTooltip = t("dashboard_launching")
     } else {
       launchDisabled = false
       launchTooltip = ""
