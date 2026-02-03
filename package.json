@@ -16,7 +16,12 @@
     "preview:electron": "electron-vite preview",
     "dist": "pnpm build:electron && electron-builder",
     "dist:win": "pnpm build:electron && electron-builder --win",
-    "dist:mac": "pnpm build:electron && electron-builder --mac"
+    "dist:mac": "pnpm build:electron && electron-builder --mac",
+    "dist:linux": "pnpm build:electron && electron-builder --linux",
+    "dist:win-x64": "pnpm build:electron && electron-builder --win --x64",
+    "dist:win-arm64": "pnpm build:electron && electron-builder --win --arm64",
+    "dist:linux-x64": "pnpm build:electron && electron-builder --linux --x64",
+    "dist:linux-arm64": "pnpm build:electron && electron-builder --linux --arm64"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
@@ -87,21 +92,22 @@
       "out/**/*",
       "package.json"
     ],
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
       ],
       "category": "public.app-category.utilities"
     },
     "win": {
       "target": [
-        "nsis"
+        { "target": "nsis", "arch": ["x64", "arm64"] }
       ]
     },
     "linux": {
       "target": [
-        "AppImage"
+        { "target": "AppImage", "arch": ["x64", "arm64"] }
       ],
       "category": "Utility"
     }
