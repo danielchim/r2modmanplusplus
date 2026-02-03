@@ -30,7 +30,6 @@ jobs:
 
   build:
     name: Build (${{ matrix.os }})
-    needs: lint-and-typecheck
     strategy:
       fail-fast: false
       matrix:

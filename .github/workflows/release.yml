@@ -49,7 +49,7 @@ jobs:
 
   build-mac:
     name: Build macOS (arm64)
-    needs: [prepare, lint-and-typecheck]
+    needs: prepare
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
 
   build-windows:
     name: Build Windows (${{ matrix.arch }})
-    needs: [prepare, lint-and-typecheck]
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -112,7 +112,7 @@ jobs:
 
   build-linux:
     name: Build Linux (${{ matrix.arch }})
-    needs: [prepare, lint-and-typecheck]
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -145,7 +145,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [prepare, build-mac, build-windows, build-linux]
+    needs: [prepare, lint-and-typecheck, build-mac, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
