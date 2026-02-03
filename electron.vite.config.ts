@@ -8,7 +8,7 @@ import { vitePluginVersion } from "./scripts/vite-plugin-version.js"
 export default defineConfig(({ command }) => {
   return {
     main: {
-      plugins: [externalizeDepsPlugin()],
+      plugins: [externalizeDepsPlugin(), vitePluginVersion()],
       build: {
         outDir: "out/main",
         rollupOptions: {
