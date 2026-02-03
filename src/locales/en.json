@@ -147,6 +147,7 @@
   "dashboard_verifying_game_files": "Verifying game files...",
   "dashboard_game_binary_not_found": "Game binary not found",
   "dashboard_game_is_running": "Game is running",
+  "dashboard_launching": "Launching...",
   "dashboard_profiles_and_sync": "Profiles & Sync",
   "dashboard_current_profile": "Current Profile",
   "dashboard_import_profile_code": "Import Profile Code",

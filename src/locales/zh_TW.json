@@ -147,6 +147,7 @@
     "dashboard_verifying_game_files": "正在驗證遊戲檔案...",
     "dashboard_game_binary_not_found": "未找到遊戲執行檔",
     "dashboard_game_is_running": "遊戲正在執行",
+    "dashboard_launching": "正在啟動...",
     "dashboard_profiles_and_sync": "設定檔與同步",
     "dashboard_current_profile": "目前設定檔",
     "dashboard_import_profile_code": "匯入設定檔代碼",
