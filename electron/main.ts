@@ -32,6 +32,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: "r2modmanplusplus",
+    show: false, // Don't show window until content is ready
     autoHideMenuBar: true, // Hide menu bar by default, show on Alt key press (Windows/Linux)
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
@@ -45,6 +46,11 @@ function createWindow() {
     router: appRouter,
     createContext,
     windows: [win],
+  })
+
+  // Show window when content is ready to avoid white flash
+  win.once("ready-to-show", () => {
+    win?.show()
   })
 
   // Test active push message to Renderer-process.
