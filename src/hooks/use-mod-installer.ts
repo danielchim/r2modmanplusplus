@@ -7,14 +7,13 @@ import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "./use-download-actions"
-import { useModManagementStore } from "@/store/mod-management-store"
+import { useModManagementActions } from "@/data"
 
 export function useModInstaller() {
   const { startDownload } = useDownloadActions()
   const installModMutation = trpc.profiles.installMod.useMutation()
   const uninstallModMutation = trpc.profiles.uninstallMod.useMutation()
-  const markInstalled = useModManagementStore((s) => s.installMod)
-  const markUninstalled = useModManagementStore((s) => s.uninstallMod)
+  const { installMod: markInstalled, uninstallMod: markUninstalled } = useModManagementActions()
   
   /**
    * Installs a downloaded mod to a profile

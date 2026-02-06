@@ -54,7 +54,7 @@ export type GlobalSettings = {
 }
 
 export type GameSettings = {
-  installFolder: string
+  gameInstallFolder: string
   modDownloadFolder: string
   cacheFolder: string
   modCacheFolder: string

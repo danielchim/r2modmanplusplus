@@ -3,10 +3,14 @@ import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FolderPathControl } from "../folder-path-control"
-import { useProfileStore } from "@/store/profile-store"
-import { useSettingsStore } from "@/store/settings-store"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useGameManagementStore } from "@/store/game-management-store"
+import {
+  useSettingsData,
+  useSettingsActions,
+  useProfileData,
+  useProfileActions,
+  useModManagementActions,
+  useGameManagementActions,
+} from "@/data"
 import { useAppStore } from "@/store/app-store"
 import { openFolder } from "@/lib/desktop"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
@@ -20,24 +24,19 @@ interface GameSettingsPanelProps {
 
 export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
   const { t } = useTranslation()
-  const activeProfileIdByGame = useProfileStore((s) => s.activeProfileIdByGame)
-  const profilesByGame = useProfileStore((s) => s.profilesByGame)
-  const resetGameProfilesToDefault = useProfileStore((s) => s.resetGameProfilesToDefault)
-  const removeGameProfiles = useProfileStore((s) => s.removeGameProfiles)
-  
+  const { profilesByGame, activeProfileIdByGame } = useProfileData()
+  const profileMut = useProfileActions()
+
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
   const unmanageGameMutation = trpc.games.unmanageGameCleanup.useMutation()
   const cleanupInjectedMutation = trpc.launch.cleanupInjected.useMutation()
-  
-  const { dataFolder } = useSettingsStore((s) => s.global)
-  const getPerGame = useSettingsStore((s) => s.getPerGame)
-  const updatePerGame = useSettingsStore((s) => s.updatePerGame)
-  const deletePerGame = useSettingsStore((s) => s.deletePerGame)
-  
-  const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
-  
-  const removeManagedGame = useGameManagementStore((s) => s.removeManagedGame)
-  
+
+  const { global: globalSettings, getPerGame } = useSettingsData()
+  const settingsMut = useSettingsActions()
+
+  const modMut = useModManagementActions()
+  const gameMut = useGameManagementActions()
+
   const selectGame = useAppStore((s) => s.selectGame)
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
 
@@ -71,13 +70,13 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
   }
 
   const handleLaunchParametersChange = (value: string) => {
-    updatePerGame(gameId, { launchParameters: value })
+    settingsMut.updatePerGame(gameId, { launchParameters: value })
   }
 
   const handleBrowseProfileFolder = () => {
     const profileId = activeProfileIdByGame[gameId]
     if (profileId) {
-      const profilePath = `${dataFolder}/${gameId}/profiles/${profileId}`
+      const profilePath = `${globalSettings.dataFolder}/${gameId}/profiles/${profileId}`
       openFolder(profilePath)
     }
   }
@@ -88,24 +87,21 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     )
     if (confirmed) {
       try {
-        // Get all profiles for this game
         const profiles = profilesByGame[gameId] || []
-        
+
         let totalFilesRemoved = 0
-        
-        // Delete BepInEx folder for each profile
+
         for (const profile of profiles) {
           const result = await resetProfileMutation.mutateAsync({
             gameId,
             profileId: profile.id,
           })
           totalFilesRemoved += result.filesRemoved
-          deleteProfileState(profile.id)
+          await modMut.deleteProfileState(profile.id)
         }
-        
-        // Reset profiles to Default only
-        resetGameProfilesToDefault(gameId)
-        
+
+        await profileMut.resetGameProfilesToDefault(gameId)
+
         toast.success(`${game.name} installation reset`, {
           description: `${totalFilesRemoved} files removed, reset to Default profile`,
         })
@@ -124,37 +120,30 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
     )
     if (confirmed) {
       try {
-        // First cleanup injected files
         const cleanupResult = await cleanupInjectedMutation.mutateAsync({
           gameId,
         })
-        
-        // Then delete all game files (profiles + downloads + caches)
+
         const result = await unmanageGameMutation.mutateAsync({
           gameId,
         })
-        
-        // Get all profiles for this game
+
         const profiles = profilesByGame[gameId] || []
-        
-        // Clear state for each profile
-        profiles.forEach((profile) => {
-          deleteProfileState(profile.id)
-        })
-        
-        // Remove all game data from stores
-        removeGameProfiles(gameId)
-        deletePerGame(gameId)
-        const nextDefaultGameId = removeManagedGame(gameId)
-        
-        // Update selected game
+
+        for (const profile of profiles) {
+          await modMut.deleteProfileState(profile.id)
+        }
+
+        await profileMut.removeGameProfiles(gameId)
+        await settingsMut.deletePerGame(gameId)
+        const nextDefaultGameId = await gameMut.removeManagedGame(gameId)
+
         selectGame(nextDefaultGameId)
-        
-        // Close settings if no games remain
+
         if (!nextDefaultGameId) {
           setSettingsOpen(false)
         }
-        
+
         toast.success(`${game.name} removed`, {
           description: `Cleaned up ${cleanupResult.restored + cleanupResult.removed} injected files, ${result.totalRemoved} total files removed`,
         })
@@ -166,7 +155,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
       }
     }
   }
-  
+
   const handleCleanupInjected = async () => {
     const confirmed = confirm(
       `Clean up injected files from ${game.name}?\n\nThis will:\n- Remove BepInEx/Doorstop files from the game install folder\n- Restore backed-up original files\n- Skip files that were modified after injection\n\nThe game must be closed before proceeding.`
@@ -176,7 +165,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         const result = await cleanupInjectedMutation.mutateAsync({
           gameId,
         })
-        
+
         toast.success("Injected files cleaned up", {
           description: `Restored ${result.restored} files, removed ${result.removed} files, skipped ${result.skipped} modified files`,
         })
@@ -206,7 +195,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             <FolderPathControl
               value={perGameSettings.gameInstallFolder}
               placeholder={t("settings_game_install_folder_placeholder")}
-              onChangePath={(nextPath) => updatePerGame(gameId, { gameInstallFolder: nextPath })}
+              onChangePath={(nextPath) => settingsMut.updatePerGame(gameId, { gameInstallFolder: nextPath })}
               className="w-full"
             />
           }
@@ -219,7 +208,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             <FolderPathControl
               value={perGameSettings.modDownloadFolder}
               placeholder={t("settings_game_placeholder_global")}
-              onChangePath={(nextPath) => updatePerGame(gameId, { modDownloadFolder: nextPath })}
+              onChangePath={(nextPath) => settingsMut.updatePerGame(gameId, { modDownloadFolder: nextPath })}
               className="w-full"
             />
           }
@@ -232,7 +221,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             <FolderPathControl
               value={perGameSettings.modCacheFolder}
               placeholder={t("settings_game_placeholder_global")}
-              onChangePath={(nextPath) => updatePerGame(gameId, { modCacheFolder: nextPath })}
+              onChangePath={(nextPath) => settingsMut.updatePerGame(gameId, { modCacheFolder: nextPath })}
               className="w-full"
             />
           }
@@ -291,7 +280,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
               </Button>
             }
           />
-          
+
           <SettingsRow
             title={t("settings_game_reset_title")}
             description={t("settings_game_reset_description")}

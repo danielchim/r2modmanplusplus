@@ -1,21 +1,20 @@
 /**
  * DownloadBridge - Single IPC subscription point for download events
- * 
+ *
  * This component solves the N-duplicate-subscriptions problem by:
  * 1. Mounting exactly once in the app bootstrap
  * 2. Being the ONLY place that subscribes to window.electron IPC events
  * 3. Updating Zustand store when events arrive (store notifies all components)
  * 4. Syncing settings to main process when they change
- * 
- * Before: Each component calling useDownloadActions() created a subscription → N subscriptions
- * After: One bridge component → 1 subscription → massive perf improvement
  */
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { useDownloadStore } from "@/store/download-store"
+// Keep store imports for imperative getState() inside IPC callbacks
 import { useSettingsStore } from "@/store/settings-store"
 import { useProfileStore } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
+import { useSettingsData } from "@/data"
 import { trpc } from "@/lib/trpc"
 
 type DownloadUpdateEvent = {
@@ -36,21 +35,14 @@ type DownloadProgressEvent = {
 
 export function DownloadBridge() {
   const updateTask = useDownloadStore((s) => s._updateTask)
-  
-  // Get individual settings for syncing to main process
-  const maxConcurrent = useSettingsStore((s) => s.global.maxConcurrentDownloads)
-  const speedLimitEnabled = useSettingsStore((s) => s.global.speedLimitEnabled)
-  const speedLimitBps = useSettingsStore((s) => s.global.speedLimitBps)
-  
-  // Get path settings for syncing to main process
-  const dataFolder = useSettingsStore((s) => s.global.dataFolder)
-  const modDownloadFolder = useSettingsStore((s) => s.global.modDownloadFolder)
-  const cacheFolder = useSettingsStore((s) => s.global.cacheFolder)
-  const perGame = useSettingsStore((s) => s.perGame)
-  
+
+  // Reactive settings via data hooks (for syncing to main process)
+  const { global: globalSettings, perGame } = useSettingsData()
+  const { maxConcurrentDownloads: maxConcurrent, speedLimitEnabled, speedLimitBps, dataFolder, modDownloadFolder, cacheFolder } = globalSettings
+
   const updateSettingsMutation = trpc.downloads.updateSettings.useMutation()
   const installModMutation = trpc.profiles.installMod.useMutation()
-  
+
   // Sync settings to main process when they change
   useEffect(() => {
     // Filter perGame to only include path-related settings
@@ -62,7 +54,7 @@ export function DownloadBridge() {
         modCacheFolder: settings.modCacheFolder || "",
       }
     }
-    
+
     updateSettingsMutation.mutate({
       maxConcurrent,
       speedLimitBps: speedLimitEnabled ? speedLimitBps : 0,
@@ -77,17 +69,17 @@ export function DownloadBridge() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxConcurrent, speedLimitEnabled, speedLimitBps, dataFolder, modDownloadFolder, cacheFolder, perGame])
-  
+
   // Single IPC subscription (with StrictMode guard to prevent double-subscription)
   const subscriptionActiveRef = useRef(false)
-  
+
   useEffect(() => {
     // Guard against StrictMode double-mounting
     if (subscriptionActiveRef.current) return
     if (!window.electron) return
-    
+
     subscriptionActiveRef.current = true
-    
+
     // Handler for download status updates (queued → downloading → paused → completed/error)
     const handleDownloadUpdated = (data: unknown) => {
       const event = data as DownloadUpdateEvent
@@ -115,7 +107,7 @@ export function DownloadBridge() {
         progress,
       })
     }
-    
+
     // Handler for download completion
     const handleDownloadCompleted = async (data: unknown) => {
       const event = data as {
@@ -135,21 +127,21 @@ export function DownloadBridge() {
         archivePath: event.result?.archivePath,
         extractedPath: event.result?.extractedPath,
       })
-      
+
       // Get task info for toast and auto-install
       const task = useDownloadStore.getState().getTask(event.downloadId)
       if (!task) return
-      
+
       // Check if auto-install is enabled (read from store directly to get latest value)
       const autoInstallEnabled = useSettingsStore.getState().global.autoInstallMods
       if (autoInstallEnabled && event.result?.extractedPath) {
         // Get active profile for this game
         const activeProfileId = useProfileStore.getState().activeProfileIdByGame[task.gameId]
-        
+
         if (activeProfileId) {
           // Check if mod is already installed
           const isAlreadyInstalled = useModManagementStore.getState().isModInstalled(activeProfileId, task.modId)
-          
+
           if (!isAlreadyInstalled) {
             try {
               // Auto-install the mod
@@ -162,10 +154,10 @@ export function DownloadBridge() {
                 version: task.modVersion,
                 extractedPath: event.result.extractedPath,
               })
-              
+
               // Mark as installed in state
               useModManagementStore.getState().installMod(activeProfileId, task.modId, task.modVersion)
-              
+
               // Show success toast
               toast.success(`${task.modName} installed`, {
                 description: `v${task.modVersion} - ${result.filesCopied} files copied to profile`,
@@ -196,7 +188,7 @@ export function DownloadBridge() {
         })
       }
     }
-    
+
     // Handler for download failure
     const handleDownloadFailed = (data: unknown) => {
       const event = data as { downloadId: string; error: string }
@@ -205,7 +197,7 @@ export function DownloadBridge() {
         error: event.error,
         speedBps: 0,
       })
-      
+
       // Show error toast
       const task = useDownloadStore.getState().getTask(event.downloadId)
       if (task) {
@@ -214,13 +206,13 @@ export function DownloadBridge() {
         })
       }
     }
-    
+
     // Subscribe to all IPC events
     const unsubUpdated = window.electron.onDownloadUpdated(handleDownloadUpdated)
     const unsubProgress = window.electron.onDownloadProgress(handleDownloadProgress)
     const unsubCompleted = window.electron.onDownloadCompleted(handleDownloadCompleted)
     const unsubFailed = window.electron.onDownloadFailed(handleDownloadFailed)
-    
+
     // Cleanup: unsubscribe all
     return () => {
       subscriptionActiveRef.current = false
@@ -230,7 +222,7 @@ export function DownloadBridge() {
       unsubFailed()
     }
   }, [updateTask])
-  
+
   // This is an invisible bridge component
   return null
 }

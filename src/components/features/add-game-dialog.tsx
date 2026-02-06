@@ -17,9 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/store/app-store"
-import { useGameManagementStore } from "@/store/game-management-store"
-import { useProfileStore } from "@/store/profile-store"
-import { useSettingsStore } from "@/store/settings-store"
+import { useGameManagementActions, useProfileActions, useSettingsActions } from "@/data"
 import { ECOSYSTEM_GAMES, type EcosystemGame } from "@/lib/ecosystem-games"
 import { selectFolder } from "@/lib/desktop"
 import { CreateProfileDialog } from "./create-profile-dialog"
@@ -43,16 +41,10 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
 
-  const addManagedGame = useGameManagementStore((s) => s.addManagedGame)
-  const appendRecentManagedGame = useGameManagementStore(
-    (s) => s.appendRecentManagedGame
-  )
-  const setDefaultGameId = useGameManagementStore((s) => s.setDefaultGameId)
-  const ensureDefaultProfile = useProfileStore((s) => s.ensureDefaultProfile)
-  const createProfile = useProfileStore((s) => s.createProfile)
-  const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
+  const { addManagedGame, appendRecentManagedGame, setDefaultGameId } = useGameManagementActions()
+  const { ensureDefaultProfile, createProfile, setActiveProfile } = useProfileActions()
   const selectGame = useAppStore((s) => s.selectGame)
-  const updatePerGameSettings = useSettingsStore((s) => s.updatePerGame)
+  const { updatePerGame: updatePerGameSettings } = useSettingsActions()
 
   const filteredGames = ECOSYSTEM_GAMES.filter((game) =>
     game.name.toLowerCase().includes(query.toLowerCase())
