@@ -2,6 +2,15 @@
 
 This directory contains technical documentation for r2modmanPlusPlus.
 
+## Important: Architecture Migration in Progress
+
+The application is migrating from Zustand + localStorage to SQLite database for state management. See **[architecture-database-migration.md](./architecture-database-migration.md)** for complete details about this transition.
+
+**Impact on Documentation:**
+- Launch system documentation remains accurate (architecture-agnostic)
+- State access patterns are transitioning (Zustand → tRPC/database)
+- Game/profile/mod queries will use database-backed tRPC endpoints in the target architecture
+
 ## Modded Launch System
 
 The modded launch system enables users to launch games with BepInEx mod loader injection.

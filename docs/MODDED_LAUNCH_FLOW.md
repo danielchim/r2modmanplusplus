@@ -2,6 +2,14 @@
 
 This document describes the complete flow from clicking "Start Modded" to launching a modded game in r2modmanPlusPlus.
 
+## Architectural Context
+
+**State Management Migration:** The application is currently migrating from Zustand + localStorage to a SQLite database in the main process. See `docs/architecture-database-migration.md` for complete details.
+
+- **Current State (Transitional):** Game, profile, and mod data may be in Zustand stores (localStorage) or database depending on migration progress
+- **Target State:** All persistent data (games, profiles, mods, settings) will be stored in SQLite and accessed via tRPC endpoints
+- **Launch System:** The modded launch flow is database-agnostic and works with both architectures. It receives game/profile IDs and paths via tRPC parameters.
+
 ## Overview
 
 The modded launch system uses BepInEx with Doorstop injection to load mods into Unity games. The flow involves:
@@ -470,7 +478,9 @@ The same doorstop files remain in the game folder; only the config is toggled.
 ### Frontend (Renderer)
 - `src/components/features/game-dashboard.tsx` - Main UI with launch buttons
 - `src/lib/trpc.ts` - tRPC client setup
-- `src/store/profile-store.ts` - Profile state management
+- `src/store/profile-store.ts` - Profile state management (transitioning to database, see `docs/architecture-database-migration.md`)
+
+**Note:** State management is migrating from Zustand + localStorage to SQLite. Profile and game selection may use database-backed tRPC queries (`trpc.profiles.list`, `trpc.games.list`) instead of Zustand stores.
 
 ### Backend (Main Process)
 - `electron/trpc/router.ts` - tRPC API endpoints

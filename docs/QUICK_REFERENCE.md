@@ -1,5 +1,13 @@
 # Quick Reference: Modded Launch System
 
+## Architectural Context
+
+**State Management Migration:** The application is migrating from Zustand + localStorage to SQLite (see `docs/architecture-database-migration.md`). This affects how you retrieve game/profile data but not the launch API itself.
+
+- **Current (Transitional):** Use Zustand stores or tRPC queries depending on migration progress
+- **Target:** All game/profile queries will use tRPC (e.g., `trpc.profiles.list.useQuery({ gameId })`)
+- **Launch API:** Unchanged - receives gameId, profileId, paths as parameters
+
 ## For Developers
 
 ### Adding a New Game

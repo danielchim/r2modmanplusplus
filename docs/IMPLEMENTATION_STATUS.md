@@ -4,6 +4,14 @@
 
 The **complete end-to-end modded launch flow is fully implemented** in r2modmanPlusPlus. This document confirms the implementation status and provides guidance for testing.
 
+## Architectural Context
+
+**State Management Migration:** The application is migrating from Zustand + localStorage to SQLite database (see `docs/architecture-database-migration.md`). The launch system is **architecture-agnostic** and compatible with both:
+- **Current:** Zustand stores + localStorage for game/profile/mod data
+- **Target:** SQLite database accessed via tRPC endpoints
+
+The launch system receives gameId, profileId, and paths as parameters, so no changes are needed during the state migration.
+
 ## Implementation Completeness
 
 ✅ **All stages are implemented:**
