@@ -3,9 +3,8 @@ import { useTranslation } from "react-i18next"
 import { Plus, Upload, Download as DownloadIcon, ChevronDown, Settings, FolderOpen, FileCode, FileDown, Edit, Trash2 } from "lucide-react"
 
 import { useAppStore } from "@/store/app-store"
-import { useProfileStore, type Profile } from "@/store/profile-store"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useSettingsStore } from "@/store/settings-store"
+import { useProfileData, useProfileActions, useModManagementData, useModManagementActions, useSettingsData } from "@/data"
+import type { Profile } from "@/store/profile-store"
 import { trpc } from "@/lib/trpc"
 import { getExeNames, getEcosystemEntry, getModloaderPackageForGame } from "@/lib/ecosystem"
 import { useCatalogStatus } from "@/lib/queries/useOnlineMods"
@@ -44,22 +43,13 @@ export function GameDashboard() {
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
   
-  const activeProfileId = useProfileStore(
-    (s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined
-  )
-  const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
-  const createProfile = useProfileStore((s) => s.createProfile)
-  const renameProfile = useProfileStore((s) => s.renameProfile)
-  const deleteProfile = useProfileStore((s) => s.deleteProfile)
-  const ensureDefaultProfile = useProfileStore((s) => s.ensureDefaultProfile)
-  // Avoid returning new [] in selector - return undefined and default outside
-  const profilesFromStore = useProfileStore((s) => selectedGameId ? s.profilesByGame[selectedGameId] : undefined)
-  const profiles = profilesFromStore ?? EMPTY_PROFILES
-  
-  const deleteProfileState = useModManagementStore((s) => s.deleteProfileState)
-  const uninstallAllMods = useModManagementStore((s) => s.uninstallAllMods)
-  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
-  const installMod = useModManagementStore((s) => s.installMod)
+  const { activeProfileIdByGame, profilesByGame } = useProfileData()
+  const profileMut = useProfileActions()
+  const { installedModsByProfile } = useModManagementData()
+  const modMut = useModManagementActions()
+
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
+  const profiles = (selectedGameId ? profilesByGame[selectedGameId] : undefined) ?? EMPTY_PROFILES
   
   const resetProfileMutation = trpc.profiles.resetProfile.useMutation()
   const launchMutation = trpc.launch.start.useMutation()
@@ -69,8 +59,8 @@ export function GameDashboard() {
   const installedModCount = installedModsSet?.size ?? 0
   
   // Check if game binary can be found
-  const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
-  const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
+  const { getPerGame } = useSettingsData()
+  const installFolder = selectedGameId ? getPerGame(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
   const exeNames = selectedGameId ? getExeNames(selectedGameId) : []
   const ecosystem = selectedGameId ? getEcosystemEntry(selectedGameId) : null
@@ -165,9 +155,9 @@ export function GameDashboard() {
   // Auto-ensure default profile when install folder becomes valid
   useEffect(() => {
     if (profilesEnabled && selectedGameId) {
-      ensureDefaultProfile(selectedGameId)
+      profileMut.ensureDefaultProfile(selectedGameId)
     }
-  }, [profilesEnabled, selectedGameId, ensureDefaultProfile])
+  }, [profilesEnabled, selectedGameId, profileMut])
   
   // Early return if no game selected - MUST be after all hooks
   if (!selectedGameId) {
@@ -233,7 +223,7 @@ export function GameDashboard() {
         mode: "modded",
         installFolder,
         exePath: binaryVerification.data.exePath,
-        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        launchParameters: getPerGame(selectedGameId).launchParameters || "",
         packageIndexUrl,
         modloaderPackage: modloaderPackage || undefined,
       })
@@ -292,7 +282,7 @@ export function GameDashboard() {
        // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
        const installedId = installResult.packageUuid4 || installResult.packageId
        if (installedId && installResult.version) {
-         installMod(activeProfileId, installedId, installResult.version)
+         modMut.installMod(activeProfileId, installedId, installResult.version)
        }
       
       toast.success("Base dependencies installed", {
@@ -313,7 +303,7 @@ export function GameDashboard() {
         mode: "modded",
         installFolder,
         exePath: binaryVerification.data.exePath,
-        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        launchParameters: getPerGame(selectedGameId).launchParameters || "",
         packageIndexUrl,
         modloaderPackage: modloaderPackage || undefined,
       })
@@ -360,7 +350,7 @@ export function GameDashboard() {
          // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
          const installedId = installResult.packageUuid4 || installResult.packageId
          if (installedId && installResult.version) {
-           installMod(activeProfileId, installedId, installResult.version)
+           modMut.installMod(activeProfileId, installedId, installResult.version)
          }
         
         toast.success("Base dependencies installed", {
@@ -390,7 +380,7 @@ export function GameDashboard() {
         mode: "vanilla",
         installFolder,
         exePath: binaryVerification.data.exePath,
-        launchParameters: getPerGameSettings(selectedGameId).launchParameters || "",
+        launchParameters: getPerGame(selectedGameId).launchParameters || "",
         packageIndexUrl,
         modloaderPackage: modloaderPackage || undefined,
       })
@@ -413,20 +403,20 @@ export function GameDashboard() {
   }
 
   const handleCreateProfile = (profileName: string) => {
-    createProfile(selectedGameId, profileName)
+    profileMut.createProfile(selectedGameId, profileName)
     toast.success("Profile created")
   }
 
   const handleRenameProfile = (newName: string) => {
     if (!activeProfileId) return
-    renameProfile(selectedGameId, activeProfileId, newName)
+    profileMut.renameProfile(selectedGameId, activeProfileId, newName)
     toast.success("Profile renamed")
   }
   
   const handleDeleteProfile = async () => {
     if (!activeProfileId) return
     
-    const result = deleteProfile(selectedGameId, activeProfileId)
+    const result = await profileMut.deleteProfile(selectedGameId, activeProfileId)
     if (!result.deleted) {
       toast.error("Cannot delete default profile")
       setDeleteProfileOpen(false)
@@ -441,7 +431,7 @@ export function GameDashboard() {
       })
       
       // Clear state
-      deleteProfileState(activeProfileId)
+      modMut.deleteProfileState(activeProfileId)
       
       toast.success("Profile deleted", {
         description: `${resetResult.filesRemoved} files removed from disk`,
@@ -467,7 +457,7 @@ export function GameDashboard() {
       })
       
       // Clear mod state for this profile (but keep the profile itself)
-      uninstallAllMods(activeProfileId)
+      modMut.uninstallAllMods(activeProfileId)
       
       toast.success("All mods uninstalled", {
         description: `${result.filesRemoved} files removed from profile`,
@@ -559,7 +549,7 @@ export function GameDashboard() {
               <DropdownMenuLabel className="px-3 py-2">{t("common_all_profiles")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={activeProfileId ?? ""}
-                onValueChange={(profileId) => setActiveProfile(selectedGameId, profileId)}
+                onValueChange={(profileId) => profileMut.setActiveProfile(selectedGameId, profileId)}
               >
                 {gameProfiles.map((profile) => (
                   <DropdownMenuRadioItem

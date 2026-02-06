@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils"
 import { useDownloadStore, type DownloadTask } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModInstaller } from "@/hooks/use-mod-installer"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useProfileStore } from "@/store/profile-store"
+import { useModManagementData, useProfileData } from "@/data"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { openFolder } from "@/lib/desktop"
 
@@ -83,8 +82,8 @@ export function DownloadsPage() {
   } = useDownloadActions()
   
   const { installDownloadedMod, isInstalling } = useModInstaller()
-  const activeProfileIdByGame = useProfileStore((s) => s.activeProfileIdByGame)
-  const isModInstalled = useModManagementStore((s) => s.isModInstalled)
+  const { activeProfileIdByGame } = useProfileData()
+  const { isModInstalled } = useModManagementData()
   
   const allTasks = Object.values(tasks)
   const activeTasks = getAllActiveTasks()

@@ -5,9 +5,7 @@ import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModActions } from "@/hooks/use-mod-actions"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useProfileStore } from "@/store/profile-store"
-import { useSettingsStore } from "@/store/settings-store"
+import { useProfileData, useModManagementData, useModManagementActions, useSettingsData } from "@/data"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
 import { Button } from "@/components/ui/button"
@@ -251,13 +249,14 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const { t } = useTranslation()
   const { startDownload, pauseDownload, resumeDownload, cancelDownload } = useDownloadActions()
 
-  const toggleMod = useModManagementStore((s) => s.toggleMod)
+  const { toggleMod } = useModManagementActions()
   const { uninstallMod } = useModActions()
-  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
-  
+  const { installedModsByProfile, enabledModsByProfile, uninstallingMods, installedModVersionsByProfile: installedVersionsByProfile } = useModManagementData()
+  const { global: { enforceDependencyVersions } } = useSettingsData()
+
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
+  const { activeProfileIdByGame } = useProfileData()
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const selectMod = useAppStore((s) => s.selectMod)
@@ -281,14 +280,10 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   // Subscribe to the specific task so component re-renders on changes
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])
 
-  // Subscribe to the Sets directly, not derived booleans
-  const installedSet = useModManagementStore((s) => 
-    activeProfileId ? s.installedModsByProfile[activeProfileId] : undefined
-  )
-  const enabledSet = useModManagementStore((s) => 
-    activeProfileId ? s.enabledModsByProfile[activeProfileId] : undefined
-  )
-  const uninstallingSet = useModManagementStore((s) => s.uninstallingMods)
+  // Derive Sets from data hooks
+  const installedSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
+  const enabledSet = activeProfileId ? enabledModsByProfile[activeProfileId] : undefined
+  const uninstallingSet = uninstallingMods
 
   // Derive booleans from Sets
   const installed = installedSet ? installedSet.has(mod.id) : false
@@ -1012,8 +1007,9 @@ export function ModInspector() {
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectMod = useAppStore((s) => s.selectMod)
   
-  const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
-  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
+  const { activeProfileIdByGame } = useProfileData()
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
+  const { installedModVersionsByProfile: installedVersionsByProfile } = useModManagementData()
   const { uninstallMod } = useModActions()
 
   // Check if this is a Thunderstore mod (UUID format: 36 chars with hyphens)

@@ -1,305 +1,387 @@
 /**
  * React hooks – the stable API that components import.
  *
- * Reads:    currently backed by Zustand selectors for zero-latency reactivity.
- * Writes:   always go through the async service interface.
+ * Data hooks:   useSuspenseQuery → return type is always T (never undefined).
+ *               This matches the Zustand selector return shapes exactly,
+ *               so components only need to swap the hook call.
+ * Action hooks: call async service functions directly.
+ *               DataBridge handles cache invalidation when Zustand changes.
  *
- * When we migrate to DB, reads switch to React Query (useQuery) and writes
- * switch to useMutation.  Component call-sites stay the same.
+ * Pattern for component migration:
+ *   Before: const x = useProfileStore((s) => s.profilesByGame)
+ *   After:  const { profilesByGame } = useProfileData()
  */
 
-import { useMemo, useCallback } from "react"
+import { useEffect, useMemo, useCallback } from "react"
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { useProfileStore } from "@/store/profile-store"
+import type { Profile } from "@/store/profile-store"
 import { useModManagementStore } from "@/store/mod-management-store"
-import { gameService, settingsService, profileService, modService } from "./index"
-import type {
-  ManagedGame,
-  InstalledMod,
-  GlobalSettings,
-  GameSettings,
-  EffectiveGameSettings,
-  Profile,
-} from "./interfaces"
+import {
+  gameService,
+  settingsService,
+  profileService,
+  modService,
+} from "./services"
+import type { GlobalSettings, GameSettings } from "./interfaces"
 
 // ---------------------------------------------------------------------------
-// Game hooks
+// Query keys
 // ---------------------------------------------------------------------------
 
-export function useGames(): { data: ManagedGame[] } {
-  const managedGameIds = useGameManagementStore((s) => s.managedGameIds)
-  const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
-
-  const data = useMemo(
-    () =>
-      managedGameIds.map(
-        (id): ManagedGame => ({
-          id,
-          isDefault: id === defaultGameId,
-          lastAccessedAt: null,
-        }),
-      ),
-    [managedGameIds, defaultGameId],
-  )
-
-  return { data }
+export const dataKeys = {
+  gameManagement: ["store", "gameManagement"] as const,
+  settings: ["store", "settings"] as const,
+  profiles: ["store", "profiles"] as const,
+  modManagement: ["store", "modManagement"] as const,
 }
 
-export function useDefaultGame(): { data: ManagedGame | null } {
-  const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
+// ---------------------------------------------------------------------------
+// DataBridge – subscribe to Zustand stores and invalidate React Query cache
+// ---------------------------------------------------------------------------
 
-  const data = useMemo((): ManagedGame | null => {
-    if (!defaultGameId) return null
-    return { id: defaultGameId, isDefault: true, lastAccessedAt: null }
-  }, [defaultGameId])
+export function DataBridge() {
+  const queryClient = useQueryClient()
 
-  return { data }
+  useEffect(() => {
+    const unsubs = [
+      useGameManagementStore.subscribe(() => {
+        queryClient.invalidateQueries({ queryKey: dataKeys.gameManagement })
+      }),
+      useSettingsStore.subscribe(() => {
+        queryClient.invalidateQueries({ queryKey: dataKeys.settings })
+      }),
+      useProfileStore.subscribe(() => {
+        queryClient.invalidateQueries({ queryKey: dataKeys.profiles })
+      }),
+      useModManagementStore.subscribe(() => {
+        queryClient.invalidateQueries({ queryKey: dataKeys.modManagement })
+      }),
+    ]
+    return () => unsubs.forEach((fn) => fn())
+  }, [queryClient])
+
+  return null
 }
 
-export function useRecentGames(limit = 10): { data: ManagedGame[] } {
-  const recentIds = useGameManagementStore((s) => s.recentManagedGameIds)
-  const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
+// ===========================================================================
+// Game Management
+// ===========================================================================
 
-  const data = useMemo(
-    () =>
-      recentIds
-        .slice(-limit)
-        .reverse()
-        .map(
-          (id): ManagedGame => ({
-            id,
-            isDefault: id === defaultGameId,
-            lastAccessedAt: null,
-          }),
-        ),
-    [recentIds, defaultGameId, limit],
-  )
-
-  return { data }
+type GameManagementData = {
+  managedGameIds: string[]
+  recentManagedGameIds: string[]
+  defaultGameId: string | null
 }
 
-export function useGameMutations() {
+export function useGameManagementData(): GameManagementData {
+  const { data } = useSuspenseQuery({
+    queryKey: dataKeys.gameManagement,
+    queryFn: async (): Promise<GameManagementData> => {
+      const s = useGameManagementStore.getState()
+      return {
+        managedGameIds: s.managedGameIds,
+        recentManagedGameIds: s.recentManagedGameIds,
+        defaultGameId: s.defaultGameId,
+      }
+    },
+    initialData: (): GameManagementData => {
+      const s = useGameManagementStore.getState()
+      return {
+        managedGameIds: s.managedGameIds,
+        recentManagedGameIds: s.recentManagedGameIds,
+        defaultGameId: s.defaultGameId,
+      }
+    },
+    staleTime: Infinity,
+  })
+  return data
+}
+
+export function useGameManagementActions() {
   return useMemo(
     () => ({
-      add: (gameId: string) => gameService.add(gameId),
-      remove: (gameId: string) => gameService.remove(gameId),
-      setDefault: (gameId: string | null) => gameService.setDefault(gameId),
-      touch: (gameId: string) => gameService.touch(gameId),
+      addManagedGame: (gameId: string) => gameService.add(gameId),
+      removeManagedGame: (gameId: string) => gameService.remove(gameId),
+      setDefaultGameId: (gameId: string | null) =>
+        gameService.setDefault(gameId),
+      appendRecentManagedGame: (gameId: string) => gameService.touch(gameId),
     }),
-    [],
+    []
   )
 }
 
-// ---------------------------------------------------------------------------
-// Settings hooks
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Settings
+// ===========================================================================
 
-export function useGlobalSettings(): { data: GlobalSettings } {
-  const global = useSettingsStore((s) => s.global)
-  return { data: global }
+type SettingsData = {
+  global: GlobalSettings
+  perGame: Record<string, GameSettings>
+  /** Derived helper matching store's getPerGame(). */
+  getPerGame: (gameId: string) => GameSettings
 }
 
-export function useGameSettings(gameId: string | null): { data: GameSettings | null } {
-  const perGame = useSettingsStore((s) => s.perGame)
-
-  const data = useMemo((): GameSettings | null => {
-    if (!gameId) return null
-    return useSettingsStore.getState().getPerGame(gameId)
-  }, [gameId, perGame])
-
-  return { data }
+const defaultGameSettings: GameSettings = {
+  gameInstallFolder: "",
+  modDownloadFolder: "",
+  cacheFolder: "",
+  modCacheFolder: "",
+  launchParameters: "",
+  onlineModListCacheDate: null,
 }
 
-export function useEffectiveGameSettings(
-  gameId: string | null,
-): { data: EffectiveGameSettings | null } {
-  const global = useSettingsStore((s) => s.global)
-  const perGame = useSettingsStore((s) => s.perGame)
+export function useSettingsData(): SettingsData {
+  const { data } = useSuspenseQuery({
+    queryKey: dataKeys.settings,
+    queryFn: async () => {
+      const s = useSettingsStore.getState()
+      return {
+        global: { ...s.global },
+        perGame: { ...s.perGame } as Record<string, GameSettings>,
+      }
+    },
+    initialData: () => {
+      const s = useSettingsStore.getState()
+      return {
+        global: { ...s.global },
+        perGame: { ...s.perGame } as Record<string, GameSettings>,
+      }
+    },
+    staleTime: Infinity,
+  })
 
-  const data = useMemo((): EffectiveGameSettings | null => {
-    if (!gameId) return null
-    const pg = useSettingsStore.getState().getPerGame(gameId)
-    return {
-      ...pg,
-      modDownloadFolder: pg.modDownloadFolder || global.modDownloadFolder,
-      cacheFolder: pg.cacheFolder || global.cacheFolder,
-    }
-  }, [gameId, global, perGame])
+  const getPerGame = useCallback(
+    (gameId: string): GameSettings => ({
+      ...defaultGameSettings,
+      ...data.perGame[gameId],
+    }),
+    [data.perGame]
+  )
 
-  return { data }
+  return { global: data.global, perGame: data.perGame, getPerGame }
 }
 
-export function useSettingsMutations() {
+export function useSettingsActions() {
   return useMemo(
     () => ({
       updateGlobal: (updates: Partial<GlobalSettings>) =>
         settingsService.updateGlobal(updates),
-      updateForGame: (gameId: string, updates: Partial<GameSettings>) =>
+      updatePerGame: (gameId: string, updates: Partial<GameSettings>) =>
         settingsService.updateForGame(gameId, updates),
-      resetForGame: (gameId: string) => settingsService.resetForGame(gameId),
-      deleteForGame: (gameId: string) => settingsService.deleteForGame(gameId),
+      resetPerGame: (gameId: string) => settingsService.resetForGame(gameId),
+      deletePerGame: (gameId: string) =>
+        settingsService.deleteForGame(gameId),
     }),
-    [],
+    []
   )
 }
 
-// ---------------------------------------------------------------------------
-// Profile hooks
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Profiles
+// ===========================================================================
 
-export function useProfiles(gameId: string | null): { data: Profile[] } {
-  const profilesByGame = useProfileStore((s) => s.profilesByGame)
-
-  const data = useMemo(
-    () => (gameId ? profilesByGame[gameId] ?? [] : []),
-    [gameId, profilesByGame],
-  )
-
-  return { data }
+type ProfileData = {
+  profilesByGame: Record<string, Profile[]>
+  activeProfileIdByGame: Record<string, string>
 }
 
-export function useActiveProfile(gameId: string | null): { data: Profile | null } {
-  const profilesByGame = useProfileStore((s) => s.profilesByGame)
-  const activeMap = useProfileStore((s) => s.activeProfileIdByGame)
-
-  const data = useMemo((): Profile | null => {
-    if (!gameId) return null
-    const activeId = activeMap[gameId]
-    if (!activeId) return null
-    const profiles = profilesByGame[gameId] ?? []
-    return profiles.find((p) => p.id === activeId) ?? null
-  }, [gameId, profilesByGame, activeMap])
-
-  return { data }
+export function useProfileData(): ProfileData {
+  const { data } = useSuspenseQuery({
+    queryKey: dataKeys.profiles,
+    queryFn: async (): Promise<ProfileData> => {
+      const s = useProfileStore.getState()
+      return {
+        profilesByGame: s.profilesByGame,
+        activeProfileIdByGame: s.activeProfileIdByGame,
+      }
+    },
+    initialData: (): ProfileData => {
+      const s = useProfileStore.getState()
+      return {
+        profilesByGame: s.profilesByGame,
+        activeProfileIdByGame: s.activeProfileIdByGame,
+      }
+    },
+    staleTime: Infinity,
+  })
+  return data
 }
 
-export function useProfileMutations() {
+export function useProfileActions() {
   return useMemo(
     () => ({
-      ensureDefault: (gameId: string) => profileService.ensureDefault(gameId),
-      create: (gameId: string, name: string) => profileService.create(gameId, name),
-      rename: (gameId: string, profileId: string, newName: string) =>
-        profileService.rename(gameId, profileId, newName),
-      remove: (gameId: string, profileId: string) =>
-        profileService.remove(gameId, profileId),
-      setActive: (gameId: string, profileId: string) =>
+      ensureDefaultProfile: (gameId: string) =>
+        profileService.ensureDefault(gameId),
+      setActiveProfile: (gameId: string, profileId: string) =>
         profileService.setActive(gameId, profileId),
-      reset: (gameId: string) => profileService.reset(gameId),
-      removeAll: (gameId: string) => profileService.removeAll(gameId),
+      createProfile: (gameId: string, name: string) =>
+        profileService.create(gameId, name),
+      renameProfile: (
+        gameId: string,
+        profileId: string,
+        newName: string
+      ) => profileService.rename(gameId, profileId, newName),
+      deleteProfile: (gameId: string, profileId: string) =>
+        profileService.remove(gameId, profileId),
+      resetGameProfilesToDefault: (gameId: string) =>
+        profileService.reset(gameId),
+      removeGameProfiles: (gameId: string) =>
+        profileService.removeAll(gameId),
     }),
-    [],
+    []
   )
 }
 
-// ---------------------------------------------------------------------------
-// Mod hooks
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Mod Management
+// ===========================================================================
 
-export function useInstalledMods(profileId: string | null): { data: InstalledMod[] } {
-  const installedByProfile = useModManagementStore((s) => s.installedModsByProfile)
-  const enabledByProfile = useModManagementStore((s) => s.enabledModsByProfile)
-  const versionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  const warningsByProfile = useModManagementStore((s) => s.dependencyWarningsByProfile)
-
-  const data = useMemo((): InstalledMod[] => {
-    if (!profileId) return []
-    const installed = installedByProfile[profileId]
-    if (!installed) return []
-
-    const enabled = enabledByProfile[profileId]
-    const versions = versionsByProfile[profileId] ?? {}
-    const warnings = warningsByProfile[profileId] ?? {}
-
-    return Array.from(installed).map(
-      (modId): InstalledMod => ({
-        modId,
-        installedVersion: versions[modId] ?? "",
-        enabled: enabled ? enabled.has(modId) : false,
-        dependencyWarnings: warnings[modId] ?? [],
-      }),
-    )
-  }, [profileId, installedByProfile, enabledByProfile, versionsByProfile, warningsByProfile])
-
-  return { data }
+type ModManagementData = {
+  installedModsByProfile: Record<string, Set<string>>
+  enabledModsByProfile: Record<string, Set<string>>
+  installedModVersionsByProfile: Record<string, Record<string, string>>
+  dependencyWarningsByProfile: Record<string, Record<string, string[]>>
+  uninstallingMods: Set<string>
+  // Derived helpers (matching store method signatures)
+  isModInstalled: (profileId: string, modId: string) => boolean
+  isModEnabled: (profileId: string, modId: string) => boolean
+  getInstalledModIds: (profileId: string) => string[]
+  getInstalledVersion: (
+    profileId: string,
+    modId: string
+  ) => string | undefined
+  getDependencyWarnings: (profileId: string, modId: string) => string[]
 }
 
-export function useIsModInstalled(
-  profileId: string | null,
-  modId: string,
-): boolean {
-  const installedByProfile = useModManagementStore((s) => s.installedModsByProfile)
+export function useModManagementData(): ModManagementData {
+  const { data } = useSuspenseQuery({
+    queryKey: dataKeys.modManagement,
+    queryFn: async () => {
+      const s = useModManagementStore.getState()
+      return {
+        installedModsByProfile: s.installedModsByProfile,
+        enabledModsByProfile: s.enabledModsByProfile,
+        installedModVersionsByProfile: s.installedModVersionsByProfile,
+        dependencyWarningsByProfile: s.dependencyWarningsByProfile,
+        uninstallingMods: s.uninstallingMods,
+      }
+    },
+    initialData: () => {
+      const s = useModManagementStore.getState()
+      return {
+        installedModsByProfile: s.installedModsByProfile,
+        enabledModsByProfile: s.enabledModsByProfile,
+        installedModVersionsByProfile: s.installedModVersionsByProfile,
+        dependencyWarningsByProfile: s.dependencyWarningsByProfile,
+        uninstallingMods: s.uninstallingMods,
+      }
+    },
+    staleTime: Infinity,
+    structuralSharing: false, // Sets don't survive structural sharing
+  })
 
-  return useMemo(() => {
-    if (!profileId) return false
-    const set = installedByProfile[profileId]
-    return set ? set.has(modId) : false
-  }, [profileId, modId, installedByProfile])
+  // Derived helpers matching store methods
+  const isModInstalled = useCallback(
+    (profileId: string, modId: string) => {
+      const set = data.installedModsByProfile[profileId]
+      return set ? set.has(modId) : false
+    },
+    [data.installedModsByProfile]
+  )
+
+  const isModEnabled = useCallback(
+    (profileId: string, modId: string) => {
+      const set = data.enabledModsByProfile[profileId]
+      return set ? set.has(modId) : false
+    },
+    [data.enabledModsByProfile]
+  )
+
+  const getInstalledModIds = useCallback(
+    (profileId: string) => {
+      const set = data.installedModsByProfile[profileId]
+      return set ? Array.from(set) : []
+    },
+    [data.installedModsByProfile]
+  )
+
+  const getInstalledVersion = useCallback(
+    (profileId: string, modId: string) => {
+      const map = data.installedModVersionsByProfile[profileId]
+      return map ? map[modId] : undefined
+    },
+    [data.installedModVersionsByProfile]
+  )
+
+  const getDependencyWarnings = useCallback(
+    (profileId: string, modId: string) => {
+      const map = data.dependencyWarningsByProfile[profileId]
+      return map ? map[modId] || [] : []
+    },
+    [data.dependencyWarningsByProfile]
+  )
+
+  return {
+    ...data,
+    isModInstalled,
+    isModEnabled,
+    getInstalledModIds,
+    getInstalledVersion,
+    getDependencyWarnings,
+  }
 }
 
-export function useIsModEnabled(
-  profileId: string | null,
-  modId: string,
-): boolean {
-  const enabledByProfile = useModManagementStore((s) => s.enabledModsByProfile)
-
-  return useMemo(() => {
-    if (!profileId) return false
-    const set = enabledByProfile[profileId]
-    return set ? set.has(modId) : false
-  }, [profileId, modId, enabledByProfile])
-}
-
-export function useModMutations() {
+export function useModManagementActions() {
   return useMemo(
     () => ({
-      install: (profileId: string, modId: string, version: string) =>
+      installMod: (profileId: string, modId: string, version: string) =>
         modService.install(profileId, modId, version),
-      uninstall: (profileId: string, modId: string) =>
+      uninstallMod: (profileId: string, modId: string) =>
         modService.uninstall(profileId, modId),
-      uninstallAll: (profileId: string) => modService.uninstallAll(profileId),
-      enable: (profileId: string, modId: string) =>
+      uninstallAllMods: (profileId: string) =>
+        modService.uninstallAll(profileId),
+      enableMod: (profileId: string, modId: string) =>
         modService.enable(profileId, modId),
-      disable: (profileId: string, modId: string) =>
+      disableMod: (profileId: string, modId: string) =>
         modService.disable(profileId, modId),
-      toggle: (profileId: string, modId: string) =>
+      toggleMod: (profileId: string, modId: string) =>
         modService.toggle(profileId, modId),
-      setDependencyWarnings: (profileId: string, modId: string, warnings: string[]) =>
-        modService.setDependencyWarnings(profileId, modId, warnings),
+      setDependencyWarnings: (
+        profileId: string,
+        modId: string,
+        warnings: string[]
+      ) => modService.setDependencyWarnings(profileId, modId, warnings),
       clearDependencyWarnings: (profileId: string, modId: string) =>
         modService.clearDependencyWarnings(profileId, modId),
       deleteProfileState: (profileId: string) =>
         modService.deleteProfileState(profileId),
     }),
-    [],
+    []
   )
 }
 
-// ---------------------------------------------------------------------------
-// Convenience: combined mutation hook for common "unmanage game" flow
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Convenience: combined mutation for "unmanage game" flow
+// ===========================================================================
 
 export function useUnmanageGame() {
-  const gameMut = useGameMutations()
-  const settingsMut = useSettingsMutations()
-  const profileMut = useProfileMutations()
-  const modMut = useModMutations()
+  const gameMut = useGameManagementActions()
+  const settingsMut = useSettingsActions()
+  const profileMut = useProfileActions()
+  const modMut = useModManagementActions()
 
   return useCallback(
     async (gameId: string) => {
-      // 1. Remove all profiles' mod state
-      const profiles = useProfileStore.getState().profilesByGame[gameId] ?? []
+      const profiles =
+        useProfileStore.getState().profilesByGame[gameId] ?? []
       await Promise.all(profiles.map((p) => modMut.deleteProfileState(p.id)))
-
-      // 2. Remove profiles
-      await profileMut.removeAll(gameId)
-
-      // 3. Remove per-game settings
-      await settingsMut.deleteForGame(gameId)
-
-      // 4. Remove game itself (returns next default game id)
-      return gameMut.remove(gameId)
+      await profileMut.removeGameProfiles(gameId)
+      await settingsMut.deletePerGame(gameId)
+      return gameMut.removeManagedGame(gameId)
     },
-    [gameMut, settingsMut, profileMut, modMut],
+    [gameMut, settingsMut, profileMut, modMut]
   )
 }

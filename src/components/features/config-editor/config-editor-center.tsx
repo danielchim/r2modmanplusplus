@@ -12,7 +12,7 @@ import { parseBepInExConfig, parseIniConfig, updateConfigValue, updateIniValue, 
 import { logger } from "@/lib/logger"
 import { trpc } from "@/lib/trpc"
 import { useAppStore } from "@/store/app-store"
-import { useProfileStore } from "@/store/profile-store"
+import { useProfileData } from "@/data"
 import { toast } from "sonner"
 
 // Lazy load Monaco editor
@@ -33,9 +33,8 @@ type FileFormat = "cfg" | "yaml" | "yml" | "json" | "ini" | "txt"
 export function ConfigEditorCenter() {
   const { t } = useTranslation()
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  const activeProfileId = useProfileStore((s) => 
-    selectedGameId ? s.activeProfileIdByGame[selectedGameId] : null
-  )
+  const { activeProfileIdByGame } = useProfileData()
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] ?? null : null
   
   const [selectedRelativePath, setSelectedRelativePath] = useState<string | null>(null)
   const [mode, setMode] = useState<"gui" | "raw">("gui")

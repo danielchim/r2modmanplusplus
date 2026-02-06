@@ -4,9 +4,8 @@ import { memo } from "react"
 import { useTranslation } from "react-i18next"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useProfileStore } from "@/store/profile-store"
 import { useDownloadStore } from "@/store/download-store"
+import { useProfileData, useModManagementData, useModManagementActions } from "@/data"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModActions } from "@/hooks/use-mod-actions"
 import { cn } from "@/lib/utils"
@@ -26,25 +25,21 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   
-  const toggleMod = useModManagementStore((s) => s.toggleMod)
+  const { toggleMod } = useModManagementActions()
   const { uninstallMod } = useModActions()
-  const getDependencyWarnings = useModManagementStore((s) => s.getDependencyWarnings)
-  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  
-  const activeProfileId = useProfileStore((s) => selectedGameId ? s.activeProfileIdByGame[selectedGameId] : undefined)
+  const { installedModsByProfile, enabledModsByProfile, uninstallingMods, getDependencyWarnings, installedModVersionsByProfile: installedVersionsByProfile } = useModManagementData()
+
+  const { activeProfileIdByGame } = useProfileData()
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
   
   const { startDownload } = useDownloadActions()
 
   const isSelected = selectedModId === mod.id
   
-  // Subscribe to the Sets directly, not derived booleans
-  const installedSet = useModManagementStore((s) => 
-    activeProfileId ? s.installedModsByProfile[activeProfileId] : undefined
-  )
-  const enabledSet = useModManagementStore((s) => 
-    activeProfileId ? s.enabledModsByProfile[activeProfileId] : undefined
-  )
-  const uninstallingSet = useModManagementStore((s) => s.uninstallingMods)
+  // Derive Sets from data hooks
+  const installedSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
+  const enabledSet = activeProfileId ? enabledModsByProfile[activeProfileId] : undefined
+  const uninstallingSet = uninstallingMods
   
   // Subscribe to download task
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])

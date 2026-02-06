@@ -1,24 +1,17 @@
 /**
  * Data layer entry point.
  *
- * Swap the implementation here when migrating from Zustand to DB/tRPC:
- *
- *   - import { createTrpcGameService, ... } from "./trpc"
- *   + export const gameService = createTrpcGameService(trpcClient)
+ * Swap the service implementations in services.ts when migrating from
+ * Zustand to DB/tRPC.
  */
 
-import {
-  createZustandGameService,
-  createZustandSettingsService,
-  createZustandProfileService,
-  createZustandModService,
-} from "./zustand"
-
-// Service singletons – one swap point for the entire app
-export const gameService = createZustandGameService()
-export const settingsService = createZustandSettingsService()
-export const profileService = createZustandProfileService()
-export const modService = createZustandModService()
+// Re-export service singletons (for imperative access in non-hook code)
+export {
+  gameService,
+  settingsService,
+  profileService,
+  modService,
+} from "./services"
 
 // Re-export types & interfaces for convenience
 export type {
@@ -34,27 +27,23 @@ export type {
   IModService,
 } from "./interfaces"
 
-// Re-export hooks
+// Re-export hooks + DataBridge
 export {
-  // Game
-  useGames,
-  useDefaultGame,
-  useRecentGames,
-  useGameMutations,
+  // Bridge (mount once near app root)
+  DataBridge,
+  dataKeys,
+  // Game Management
+  useGameManagementData,
+  useGameManagementActions,
   // Settings
-  useGlobalSettings,
-  useGameSettings,
-  useEffectiveGameSettings,
-  useSettingsMutations,
-  // Profile
-  useProfiles,
-  useActiveProfile,
-  useProfileMutations,
-  // Mod
-  useInstalledMods,
-  useIsModInstalled,
-  useIsModEnabled,
-  useModMutations,
+  useSettingsData,
+  useSettingsActions,
+  // Profiles
+  useProfileData,
+  useProfileActions,
+  // Mod Management
+  useModManagementData,
+  useModManagementActions,
   // Compound
   useUnmanageGame,
 } from "./hooks"

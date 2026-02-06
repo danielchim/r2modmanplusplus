@@ -7,6 +7,7 @@ import "./index.css"
 import "./lib/i18n"
 import { createRouter } from "./router"
 import { AppBootstrap } from "./components/app-bootstrap"
+import { DataBridge } from "./data"
 import { queryClient } from "./lib/query-client"
 import { TRPCProvider } from "./lib/trpc"
 
@@ -34,6 +35,7 @@ createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <TRPCProvider queryClient={queryClient}>
+        <DataBridge />
         <AppBootstrap />
         <RouterProvider router={router} />
         {import.meta.env.DEV && (

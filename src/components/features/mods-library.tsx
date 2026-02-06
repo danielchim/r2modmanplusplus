@@ -4,9 +4,8 @@ import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, Li
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
-import { useProfileStore, type Profile } from "@/store/profile-store"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useSettingsStore } from "@/store/settings-store"
+import type { Profile } from "@/store/profile-store"
+import { useProfileData, useProfileActions, useModManagementData, useModManagementActions, useSettingsData } from "@/data"
 import { MODS } from "@/mocks/mods"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
@@ -503,27 +502,22 @@ export function ModsLibrary() {
   const setTab = useAppStore((s) => s.setModLibraryTab)
   
   // Subscribe to the installed mods Set directly for real-time updates
-  const activeProfileId = useProfileStore((s) =>
-    selectedGameId ? s.activeProfileIdByGame[selectedGameId] ?? null : null
-  )
-  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
-  const installedModVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  const installMod = useModManagementStore((s) => s.installMod)
+  const { activeProfileIdByGame, profilesByGame: profilesByGameFromData } = useProfileData()
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] ?? null : null
+  const { installedModsByProfile, installedModVersionsByProfile } = useModManagementData()
+  const { installMod } = useModManagementActions()
   // Use stable fallback to avoid new Set() every render
   const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
   const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
   const installedVersionsMap = activeProfileId ? installedModVersionsByProfile[activeProfileId] : undefined
   
   // Avoid returning new [] in selector - return undefined and default outside
-  const profilesFromStore = useProfileStore((s) =>
-    selectedGameId ? s.profilesByGame[selectedGameId] ?? undefined : undefined
-  )
+  const profilesFromStore = selectedGameId ? profilesByGameFromData[selectedGameId] ?? undefined : undefined
   const profiles = profilesFromStore ?? EMPTY_PROFILES
-  const createProfile = useProfileStore((s) => s.createProfile)
-  const setActiveProfile = useProfileStore((s) => s.setActiveProfile)
+  const { createProfile, setActiveProfile } = useProfileActions()
   
   // Check if profiles are enabled (requires install folder)
-  const getPerGameSettings = useSettingsStore((s) => s.getPerGame)
+  const { getPerGame: getPerGameSettings } = useSettingsData()
   const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
   const exeNames = selectedGameId ? getExeNames(selectedGameId) : []
