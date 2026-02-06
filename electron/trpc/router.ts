@@ -57,10 +57,18 @@ const desktopRouter = t.router({
   /**
    * Open native folder selection dialog
    * Returns selected folder path or null if cancelled
+   * On macOS, also allows selecting .app bundles
    */
   selectFolder: publicProcedure.query(async () => {
+    // On macOS, allow selecting .app bundles in addition to directories
+    // .app bundles are technically directories but appear as files to users
+    const properties: ("openDirectory" | "openFile")[] = ["openDirectory"]
+    if (process.platform === "darwin") {
+      properties.push("openFile")
+    }
+
     const result = await dialog.showOpenDialog({
-      properties: ["openDirectory"],
+      properties,
     })
 
     if (result.canceled) {

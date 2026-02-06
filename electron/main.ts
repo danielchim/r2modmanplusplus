@@ -130,14 +130,21 @@ app.whenReady().then(() => {
 
 // IPC Handlers for desktop features
 ipcMain.handle("dialog:selectFolder", async () => {
+  // On macOS, allow selecting .app bundles in addition to directories
+  // .app bundles are technically directories but appear as files to users
+  const properties: ("openDirectory" | "openFile")[] = ["openDirectory"]
+  if (process.platform === "darwin") {
+    properties.push("openFile")
+  }
+
   const result = await dialog.showOpenDialog({
-    properties: ["openDirectory"],
+    properties,
   })
-  
+
   if (result.canceled) {
     return null
   }
-  
+
   return result.filePaths[0]
 })
 

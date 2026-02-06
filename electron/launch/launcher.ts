@@ -296,15 +296,15 @@ async function injectLoaderFiles(
  */
 export async function launchGame(options: LaunchOptions): Promise<LaunchResult> {
   const { gameId, profileId, mode, installFolder, exePath, profileRoot, packageIndexUrl, modloaderPackage } = options
-  
+
   const logger = getLogger()
   logger.info(`Launching game ${gameId} in ${mode} mode`, { profileId, exePath })
-  
+
   try {
-    // Step 1: Ensure BepInEx pack is available (Windows only)
+    // Step 1: Ensure BepInEx pack is available (Windows only for now)
     if (process.platform === "win32") {
       const bepInExResult = await ensureBepInExPack(gameId, packageIndexUrl, modloaderPackage)
-      
+
       if (!bepInExResult.available) {
         logger.error(`BepInEx preparation failed for ${gameId}: ${bepInExResult.error}`)
         return {
@@ -312,39 +312,50 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
           error: bepInExResult.error || "Failed to prepare BepInEx",
         }
       }
-      
+
       logger.debug(`BepInEx pack ready at ${bepInExResult.bootstrapRoot}`)
-      
+
       // Step 2: Copy BepInEx to profile root (idempotent)
       await copyBepInExToProfile(bepInExResult.bootstrapRoot!, profileRoot)
-      
+
       // Step 3: Inject loader files into game install folder
       await injectLoaderFiles(gameId, installFolder, profileRoot, mode)
+    } else if (process.platform === "darwin") {
+      // macOS support - BepInEx injection for macOS .app bundles
+      // TODO: Implement BepInEx injection for macOS if needed
+      logger.info("Launching on macOS (BepInEx injection not yet implemented)")
     } else {
-      logger.warn("Launch attempted on non-Windows platform")
+      logger.warn(`Launch attempted on unsupported platform: ${process.platform}`)
       return {
         success: false,
-        error: "Launch is only supported on Windows",
+        error: `Launch is only supported on Windows and macOS, not ${process.platform}`,
       }
     }
-    
+
     // Step 4: Build launch arguments
     const args = await buildLaunchArgs(options.launchParameters)
-    
-    logger.debug(`Spawning game process: ${exePath}`, { args })
-    
-    // Step 5: Spawn the game process
+
+    // Step 5: Determine correct working directory
+    // For macOS .app bundles, cwd should be the parent directory, not the .app itself
+    let cwd = installFolder
+    if (process.platform === "darwin" && installFolder.endsWith(".app")) {
+      cwd = join(installFolder, "..")
+    }
+
+    logger.debug(`Spawning game process: ${exePath}`, { args, cwd })
+
+    // Step 6: Spawn the game process
     const child = spawn(exePath, args, {
-      cwd: installFolder,
+      cwd,
       detached: true,
       stdio: "ignore",
     })
-    
+
     // Unref so parent doesn't wait
     child.unref()
-    
+
     const pid = child.pid
-    
+
     if (!pid) {
       logger.error("Failed to get process ID after spawn")
       return {
@@ -352,12 +363,12 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
         error: "Failed to get process ID",
       }
     }
-    
-    // Step 6: Track the process
+
+    // Step 7: Track the process
     trackProcess(gameId, pid)
-    
+
     logger.info(`Game launched successfully: ${gameId}`, { pid })
-    
+
     return {
       success: true,
       pid,
@@ -365,7 +376,7 @@ export async function launchGame(options: LaunchOptions): Promise<LaunchResult> 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error(`Launch failed for ${gameId}: ${message}`, { error })
-    
+
     return {
       success: false,
       error: `Launch failed: ${message}`,
