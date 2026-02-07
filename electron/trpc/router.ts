@@ -1,10 +1,9 @@
-import { initTRPC } from "@trpc/server"
 import { app, dialog, shell } from "electron"
 import { promises as fs } from "fs"
 import { join } from "path"
-import superjson from "superjson"
 import { z } from "zod"
-import type { AppContext } from "./context"
+import { t, publicProcedure } from "./trpc"
+import { dataRouter } from "./data"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies, resolveDependenciesRecursive } from "../thunderstore/dependencies"
 import { clearCatalog, getCategories, getCatalogStatus } from "../thunderstore/catalog"
@@ -19,20 +18,6 @@ import { launchGame, type LaunchMode } from "../launch/launcher"
 import { cleanupInjected } from "../launch/injection-tracker"
 import { checkBaseDependencies, installBaseDependencies } from "../launch/base-dependencies"
 import { getLogger } from "../file-logger"
-
-/**
- * Initialize tRPC with SuperJSON for rich data serialization
- * (Date, Map, Set, BigInt, etc.)
- */
-const t = initTRPC.context<AppContext>().create({
-  isServer: true,
-  transformer: superjson,
-})
-
-/**
- * Base procedure - all procedures inherit from this
- */
-const publicProcedure = t.procedure
 
 /**
  * Desktop/filesystem procedures
@@ -1073,6 +1058,7 @@ export const appRouter = t.router({
   launch: launchRouter,
   logs: logsRouter,
   config: configRouter,
+  data: dataRouter,
 })
 
 /**
