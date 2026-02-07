@@ -21,7 +21,9 @@
     "dist:win-x64": "pnpm build:electron && electron-builder --win --x64",
     "dist:win-arm64": "pnpm build:electron && electron-builder --win --arm64",
     "dist:linux-x64": "pnpm build:electron && electron-builder --linux --x64",
-    "dist:linux-arm64": "pnpm build:electron && electron-builder --linux --arm64"
+    "dist:linux-arm64": "pnpm build:electron && electron-builder --linux --arm64",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
@@ -38,6 +40,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",
+    "drizzle-orm": "^0.45.1",
     "electron-trpc-experimental": "1.0.0-alpha.1",
     "i18next": "^25.8.0",
     "lucide-react": "^0.562.0",
@@ -69,6 +72,7 @@
     "@types/semver": "^7.7.1",
     "@types/yauzl": "^2.10.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "drizzle-kit": "^0.31.8",
     "electron": "^40.0.0",
     "electron-builder": "^26.4.0",
     "electron-vite": "^5.0.0",
@@ -95,19 +99,41 @@
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64"] },
-        { "target": "zip", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.utilities"
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64", "arm64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64", "arm64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "Utility"
     }
