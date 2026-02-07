@@ -6,7 +6,7 @@ import { t, publicProcedure } from "./trpc"
 import { dataRouter } from "./data"
 import { searchPackages, getPackage } from "../thunderstore/search"
 import { resolveDependencies, resolveDependenciesRecursive } from "../thunderstore/dependencies"
-import { clearCatalog, getCategories, getCatalogStatus } from "../thunderstore/catalog"
+import { clearCatalog, getCategories, getCatalogStatus, ensureCatalogUpToDate, resolvePackagesByOwnerName } from "../thunderstore/catalog"
 import { clearAllCache } from "../thunderstore/cache"
 import { getDownloadManager } from "../downloads/manager"
 import { setPathSettings, getPathSettings } from "../downloads/settings-state"
@@ -18,6 +18,10 @@ import { launchGame, type LaunchMode } from "../launch/launcher"
 import { cleanupInjected } from "../launch/injection-tracker"
 import { checkBaseDependencies, installBaseDependencies } from "../launch/base-dependencies"
 import { getLogger } from "../file-logger"
+import { resolveActiveProfileId } from "./data/profiles"
+import { getDb } from "../db"
+import { profileMod } from "../db/schema"
+import { eq, or, and } from "drizzle-orm"
 
 /**
  * Desktop/filesystem procedures
@@ -407,7 +411,7 @@ const profilesRouter = t.router({
     .mutation(async ({ input }) => {
       const settings = getPathSettings()
       const paths = resolveGamePaths(input.gameId, settings)
-      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      const profileRoot = join(paths.profilesRoot, input.profileId)
       
       const result = await installModToProfile(
         input.extractedPath,
@@ -438,7 +442,7 @@ const profilesRouter = t.router({
     .mutation(async ({ input }) => {
       const settings = getPathSettings()
       const paths = resolveGamePaths(input.gameId, settings)
-      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      const profileRoot = join(paths.profilesRoot, input.profileId)
       
       const filesRemoved = await uninstallModFromProfile(
         profileRoot,
@@ -465,7 +469,7 @@ const profilesRouter = t.router({
     .mutation(async ({ input }) => {
       const settings = getPathSettings()
       const paths = resolveGamePaths(input.gameId, settings)
-      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      const profileRoot = join(paths.profilesRoot, input.profileId)
       
       const filesRemoved = await resetProfileBepInEx(profileRoot)
       
@@ -576,7 +580,7 @@ const launchRouter = t.router({
     .mutation(async ({ input }) => {
       const settings = getPathSettings()
       const paths = resolveGamePaths(input.gameId, settings)
-      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      const profileRoot = join(paths.profilesRoot, input.profileId)
       
       const result = await launchGame({
         gameId: input.gameId,
@@ -608,20 +612,134 @@ const launchRouter = t.router({
   
   /**
    * Check if base dependencies are installed for a profile
+   * Verifies both filesystem (doorstop DLLs, BepInEx/core, etc.) and DB state (profile_mod entry)
    */
   checkBaseDependencies: publicProcedure
     .input(
       z.object({
         gameId: z.string(),
-        profileId: z.string(),
+        packageIndexUrl: z.string(),
+        modloaderPackage: z.object({
+          owner: z.string(),
+          name: z.string(),
+          rootFolder: z.string(),
+        }).optional(),
       })
     )
     .query(async ({ input }) => {
+      const logger = getLogger()
+      logger.info(`[checkBaseDependencies] Starting check for game: ${input.gameId}`)
+      logger.debug(`[checkBaseDependencies] Package index URL: ${input.packageIndexUrl}`)
+      logger.debug(`[checkBaseDependencies] Modloader package: ${input.modloaderPackage ? `${input.modloaderPackage.owner}-${input.modloaderPackage.name}` : 'default (BepInEx-BepInExPack)'}`)
+      
+      const missing: string[] = []
+      
+      // Step 1: Resolve active profile
+      logger.debug(`[checkBaseDependencies] Step 1: Resolving active profile...`)
+      const activeProfileId = await resolveActiveProfileId(input.gameId)
+      
+      if (!activeProfileId) {
+        logger.error(`[checkBaseDependencies] ❌ No active or default profile found for game: ${input.gameId}`)
+        return {
+          needsInstall: true,
+          missing: ["No active profile for this game"],
+        }
+      }
+      
+      logger.info(`[checkBaseDependencies] ✓ Active profile resolved: ${activeProfileId}`)
+      
+      // Step 2: Check filesystem for base dependencies
+      logger.debug(`[checkBaseDependencies] Step 2: Checking filesystem...`)
       const settings = getPathSettings()
       const paths = resolveGamePaths(input.gameId, settings)
-      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      const profileRoot = join(paths.profilesRoot, activeProfileId)
+      logger.debug(`[checkBaseDependencies] Profile root path: ${profileRoot}`)
       
-      return await checkBaseDependencies(profileRoot)
+      const filesystemCheck = await checkBaseDependencies(profileRoot)
+      
+      if (filesystemCheck.missing.length > 0) {
+        logger.warn(`[checkBaseDependencies] ❌ Filesystem check failed`, { missing: filesystemCheck.missing })
+        missing.push(...filesystemCheck.missing)
+      } else {
+        logger.info(`[checkBaseDependencies] ✓ Filesystem check passed`)
+      }
+      
+      // Step 3: Resolve modloader package identity from catalog
+      logger.debug(`[checkBaseDependencies] Step 3: Resolving modloader package from catalog...`)
+      const packageOwner = input.modloaderPackage?.owner || "BepInEx"
+      const packageName = input.modloaderPackage?.name || "BepInExPack"
+      const packageId = `${packageOwner}-${packageName}`
+      logger.debug(`[checkBaseDependencies] Package ID: ${packageId}`)
+      
+      let modloaderUuid4: string | undefined = undefined
+      
+      try {
+        await ensureCatalogUpToDate(input.packageIndexUrl)
+        const packageMap = resolvePackagesByOwnerName(input.packageIndexUrl, [packageId])
+        const pkg = packageMap.get(packageId)
+        modloaderUuid4 = pkg?.uuid4
+        
+        if (modloaderUuid4) {
+          logger.info(`[checkBaseDependencies] ✓ Resolved UUID4: ${modloaderUuid4}`)
+        } else {
+          logger.warn(`[checkBaseDependencies] ⚠ Package ${packageId} not found in catalog (will fall back to packageId for DB check)`)
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        logger.warn(`[checkBaseDependencies] ⚠ Failed to resolve ${packageId} from catalog: ${errorMsg}`)
+        // Continue without uuid4 - DB check will fall back to packageId only
+      }
+      
+      // Step 4: Check DB for modloader entry in profile_mod
+      logger.debug(`[checkBaseDependencies] Step 4: Checking DB for modloader registration...`)
+      const db = getDb()
+      const modIds = [modloaderUuid4, packageId].filter((id): id is string => !!id)
+      logger.debug(`[checkBaseDependencies] Checking for modIds in profile_mod: [${modIds.join(', ')}]`)
+      
+      if (modIds.length > 0) {
+        const dbRows = await db
+          .select({ modId: profileMod.modId })
+          .from(profileMod)
+          .where(
+            and(
+              eq(profileMod.profileId, activeProfileId),
+              or(...modIds.map(id => eq(profileMod.modId, id)))
+            )
+          )
+          .limit(1)
+        
+        if (!dbRows[0]) {
+          logger.error(`[checkBaseDependencies] ❌ Modloader not found in profile_mod table`)
+          logger.error(`[checkBaseDependencies]    Profile: ${activeProfileId}`)
+          logger.error(`[checkBaseDependencies]    Expected mod IDs: [${modIds.join(', ')}]`)
+          
+          // Query all mods in this profile for debugging
+          const allMods = await db
+            .select({ modId: profileMod.modId })
+            .from(profileMod)
+            .where(eq(profileMod.profileId, activeProfileId))
+          
+          logger.error(`[checkBaseDependencies]    Found ${allMods.length} mods in profile: [${allMods.map(m => m.modId).join(', ')}]`)
+          
+          missing.push(`Modloader package (${packageId}) not registered in profile`)
+        } else {
+          logger.info(`[checkBaseDependencies] ✓ Modloader found in profile_mod: ${dbRows[0].modId}`)
+        }
+      } else {
+        logger.error(`[checkBaseDependencies] ❌ No mod IDs to check (both uuid4 and packageId unavailable)`)
+      }
+      
+      // Final result
+      if (missing.length > 0) {
+        logger.error(`[checkBaseDependencies] ❌ Check FAILED with ${missing.length} missing items`, { missing })
+      } else {
+        logger.info(`[checkBaseDependencies] ✅ Check PASSED - all dependencies installed`)
+      }
+      
+      return {
+        needsInstall: missing.length > 0,
+        missing,
+      }
     }),
   
   /**
@@ -643,7 +761,7 @@ const launchRouter = t.router({
     .mutation(async ({ input }) => {
       const settings = getPathSettings()
       const paths = resolveGamePaths(input.gameId, settings)
-      const profileRoot = `${paths.profilesRoot}/${input.profileId}`
+      const profileRoot = join(paths.profilesRoot, input.profileId)
       
       return await installBaseDependencies(
         input.gameId,

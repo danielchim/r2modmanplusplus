@@ -83,10 +83,30 @@ export async function checkBaseDependencies(
   if (!(await pathExists(coreDir))) {
     missing.push("BepInEx/core directory")
   } else {
-    // Check for preloader DLL
+    // Check for preloader DLL (can be directly in core or in subdirectories)
     try {
       const coreEntries = await fs.readdir(coreDir)
-      const hasPreloader = coreEntries.some(name => isPreloaderDll(name))
+      let hasPreloader = coreEntries.some(name => isPreloaderDll(name))
+      
+      // If not found in root, check subdirectories
+      if (!hasPreloader) {
+        for (const entry of coreEntries) {
+          const subPath = join(coreDir, entry)
+          try {
+            const stat = await fs.stat(subPath)
+            if (stat.isDirectory()) {
+              const subEntries = await fs.readdir(subPath)
+              if (subEntries.some(name => isPreloaderDll(name))) {
+                hasPreloader = true
+                break
+              }
+            }
+          } catch {
+            // Ignore errors reading subdirectories
+          }
+        }
+      }
+      
       if (!hasPreloader) {
         missing.push("BepInEx Preloader DLL")
       }

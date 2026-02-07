@@ -363,22 +363,31 @@ export async function copyBepInExToProfile(
   bootstrapRoot: string,
   profileRoot: string
 ): Promise<void> {
-  console.log(`[BepInExBootstrap] Copying BepInEx to profile: ${profileRoot}`)
+  console.log(`[BepInExBootstrap] Checking BepInEx setup for profile: ${profileRoot}`)
   
   await ensureDir(profileRoot)
   const packRoot = await resolvePackRoot(bootstrapRoot)
   
-  // Copy BepInEx folder
-  const bepInExSrc = join(packRoot, "BepInEx")
+  // Check if BepInEx folder exists at all
   const bepInExDest = join(profileRoot, "BepInEx")
+  const bepInExExists = await pathExists(bepInExDest)
   
-  if (await pathExists(bepInExSrc)) {
-    await copyDirectory(bepInExSrc, bepInExDest)
+  if (bepInExExists) {
+    console.log(`[BepInExBootstrap] BepInEx folder already exists in profile, skipping copy to preserve mod structure`)
   } else {
-    throw new Error(`BepInEx folder not found in pack root ${packRoot}`)
+    console.log(`[BepInExBootstrap] BepInEx folder missing, copying from bootstrap`)
+    // Copy BepInEx folder (only on first setup)
+    const bepInExSrc = join(packRoot, "BepInEx")
+    
+    if (await pathExists(bepInExSrc)) {
+      await copyDirectory(bepInExSrc, bepInExDest)
+      console.log(`[BepInExBootstrap] BepInEx folder copied from bootstrap`)
+    } else {
+      throw new Error(`BepInEx folder not found in pack root ${packRoot}`)
+    }
   }
   
-  // Copy root Doorstop files (winhttp.dll, doorstop_config.ini, etc.)
+  // Always copy/update root Doorstop files (winhttp.dll, doorstop_config.ini, etc.)
   const entries = await fs.readdir(packRoot, { withFileTypes: true })
   
   for (const entry of entries) {
@@ -389,5 +398,5 @@ export async function copyBepInExToProfile(
     }
   }
   
-  console.log(`[BepInExBootstrap] BepInEx copied to profile from ${packRoot}`)
+  console.log(`[BepInExBootstrap] BepInEx setup complete for profile`)
 }

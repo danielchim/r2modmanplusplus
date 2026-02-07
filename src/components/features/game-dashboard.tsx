@@ -202,9 +202,12 @@ export function GameDashboard() {
     
     try {
       // Check if base dependencies are installed
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
       const depsCheck = await trpcUtils.launch.checkBaseDependencies.fetch({
         gameId: selectedGameId,
-        profileId: activeProfileId,
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
       })
       
       if (depsCheck.needsInstall) {
@@ -215,8 +218,6 @@ export function GameDashboard() {
       }
       
       // Dependencies are installed, proceed with launch
-      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
-      
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,

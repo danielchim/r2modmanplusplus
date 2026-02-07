@@ -79,6 +79,7 @@ export interface LaunchResult {
 
 /**
  * Finds the BepInEx Preloader DLL in the profile's BepInEx/core directory
+ * Searches both directly in core/ and in subdirectories (e.g., core/BepInEx-BepInExPack/)
  */
 async function findPreloaderDll(profileRoot: string): Promise<string> {
   const coreDir = join(profileRoot, "BepInEx", "core")
@@ -88,13 +89,36 @@ async function findPreloaderDll(profileRoot: string): Promise<string> {
   }
   
   const coreEntries = await fs.readdir(coreDir)
+  
+  // First check directly in core directory (flat structure)
   const preloaderFile = coreEntries.find(name => isPreloaderDll(name))
   
-  if (!preloaderFile) {
-    throw new Error(`BepInEx Preloader DLL not found in ${coreDir}`)
+  if (preloaderFile) {
+    console.log(`[Launcher] Found preloader DLL in core root: ${preloaderFile}`)
+    return join(coreDir, preloaderFile)
   }
   
-  return join(coreDir, preloaderFile)
+  // Check subdirectories (namespaced structure: BepInEx/core/<modId>/)
+  console.log(`[Launcher] No preloader DLL in core root, checking subdirectories...`)
+  for (const entry of coreEntries) {
+    const subPath = join(coreDir, entry)
+    try {
+      const stat = await fs.stat(subPath)
+      if (stat.isDirectory()) {
+        const subEntries = await fs.readdir(subPath)
+        const subPreloader = subEntries.find(name => isPreloaderDll(name))
+        if (subPreloader) {
+          const fullPath = join(subPath, subPreloader)
+          console.log(`[Launcher] Found preloader DLL in subdirectory: ${entry}/${subPreloader}`)
+          return fullPath
+        }
+      }
+    } catch {
+      // Ignore errors reading subdirectories
+    }
+  }
+  
+  throw new Error(`BepInEx Preloader DLL not found in ${coreDir} or its subdirectories`)
 }
 
 /**
@@ -218,10 +242,29 @@ async function validateProfileArtifacts(profileRoot: string): Promise<string | n
   }
   
   const coreEntries = await fs.readdir(coreDir)
-  const hasPreloader = coreEntries.some(name => isPreloaderDll(name))
+  let hasPreloader = coreEntries.some(name => isPreloaderDll(name))
+  
+  // If not found in root, check subdirectories
+  if (!hasPreloader) {
+    for (const entry of coreEntries) {
+      const subPath = join(coreDir, entry)
+      try {
+        const stat = await fs.stat(subPath)
+        if (stat.isDirectory()) {
+          const subEntries = await fs.readdir(subPath)
+          if (subEntries.some(name => isPreloaderDll(name))) {
+            hasPreloader = true
+            break
+          }
+        }
+      } catch {
+        // Ignore errors reading subdirectories
+      }
+    }
+  }
   
   if (!hasPreloader) {
-    return "Profile is missing BepInEx Preloader DLL in BepInEx/core/"
+    return "Profile is missing BepInEx Preloader DLL in BepInEx/core/ or its subdirectories"
   }
   
   return null // All validations passed
