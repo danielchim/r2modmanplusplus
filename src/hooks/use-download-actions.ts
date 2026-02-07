@@ -6,13 +6,16 @@ import { useCallback } from "react"
 import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
 import { useDownloadStore } from "@/store/download-store"
-import { useSettingsStore } from "@/store/settings-store"
+import { useSettingsData } from "@/data"
 
 export function useDownloadActions() {
   const enqueueMutation = trpc.downloads.enqueue.useMutation()
   const cancelMutation = trpc.downloads.cancel.useMutation()
   const pauseMutation = trpc.downloads.pause.useMutation()
   const resumeMutation = trpc.downloads.resume.useMutation()
+  
+  // Use reactive settings from data layer (works in both Zustand and DB mode)
+  const { global: globalSettings } = useSettingsData()
   
   const startDownload = useCallback(
     (params: {
@@ -26,10 +29,9 @@ export function useDownloadActions() {
     }) => {
       const downloadId = `${params.gameId}:${params.modId}:${params.modVersion}`
       
-      // Read settings at the moment of action (no effect needed)
-      const settings = useSettingsStore.getState().global
-      const preferredCdn = settings.preferredThunderstoreCdn
-      const downloadCacheEnabled = settings.downloadCacheEnabled
+      // Read settings at the moment of action from reactive data
+      const preferredCdn = globalSettings.preferredThunderstoreCdn
+      const downloadCacheEnabled = globalSettings.downloadCacheEnabled
       
       // Optimistically add task to store
       useDownloadStore.getState()._addTask({
@@ -64,7 +66,7 @@ export function useDownloadActions() {
         ignoreCache: !downloadCacheEnabled,
       })
     },
-    [enqueueMutation]
+    [enqueueMutation, globalSettings]
   )
   
   const pauseDownload = useCallback(

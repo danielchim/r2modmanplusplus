@@ -5,6 +5,7 @@ import { profile } from "../../db/schema"
 import { eq, and, asc } from "drizzle-orm"
 import { randomUUID } from "crypto"
 import { isoToEpoch } from "./games"
+import { getLogger } from "../../file-logger"
 
 type Profile = {
   id: string
@@ -18,6 +19,58 @@ function rowToProfile(r: typeof profile.$inferSelect): Profile {
     name: r.name,
     createdAt: isoToEpoch(r.createdAt) ?? Date.now(),
   }
+}
+
+/**
+ * Resolves the active profile ID for a game, with fallback to default profile.
+ * Returns profileId or null if neither exists.
+ */
+export async function resolveActiveProfileId(gameId: string): Promise<string | null> {
+  const db = getDb()
+  const logger = getLogger()
+  
+  logger.debug(`[resolveActiveProfileId] Resolving for game: ${gameId}`)
+  
+  // First try active profile
+  const activeRows = await db
+    .select({ id: profile.id })
+    .from(profile)
+    .where(and(eq(profile.gameId, gameId), eq(profile.isActive, true)))
+    .limit(1)
+  
+  if (activeRows[0]) {
+    logger.info(`[resolveActiveProfileId] ✓ Found active profile: ${activeRows[0].id}`)
+    return activeRows[0].id
+  }
+  
+  logger.debug(`[resolveActiveProfileId] No active profile found, trying default...`)
+  
+  // Fall back to default profile
+  const defaultRows = await db
+    .select({ id: profile.id })
+    .from(profile)
+    .where(and(eq(profile.gameId, gameId), eq(profile.isDefault, true)))
+    .limit(1)
+  
+  if (defaultRows[0]) {
+    logger.info(`[resolveActiveProfileId] ✓ Found default profile: ${defaultRows[0].id}`)
+    return defaultRows[0].id
+  }
+  
+  logger.error(`[resolveActiveProfileId] ❌ No active or default profile exists for game: ${gameId}`)
+  
+  // List all profiles for this game for debugging
+  const allProfiles = await db
+    .select({ id: profile.id, name: profile.name, isActive: profile.isActive, isDefault: profile.isDefault })
+    .from(profile)
+    .where(eq(profile.gameId, gameId))
+  
+  logger.error(`[resolveActiveProfileId] Total profiles for this game: ${allProfiles.length}`)
+  if (allProfiles.length > 0) {
+    logger.error(`[resolveActiveProfileId] Profiles:`, { profiles: allProfiles })
+  }
+  
+  return null
 }
 
 export const dataProfilesRouter = t.router({

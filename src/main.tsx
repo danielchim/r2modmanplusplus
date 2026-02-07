@@ -36,7 +36,9 @@ createRoot(rootEl).render(
     <QueryClientProvider client={queryClient}>
       <TRPCProvider queryClient={queryClient}>
         <DataBridge />
-        <AppBootstrap />
+        <Suspense fallback={null}>
+          <AppBootstrap />
+        </Suspense>
         <RouterProvider router={router} />
         {import.meta.env.DEV && (
           <Suspense fallback={null}>

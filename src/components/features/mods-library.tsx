@@ -940,9 +940,12 @@ export function ModsLibrary() {
     
     try {
       // Check if base dependencies are installed
+      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
+      
       const depsCheck = await trpcUtils.launch.checkBaseDependencies.fetch({
         gameId: selectedGameId,
-        profileId: activeProfileId,
+        packageIndexUrl,
+        modloaderPackage: modloaderPackage || undefined,
       })
       
       if (depsCheck.needsInstall) {
@@ -951,8 +954,6 @@ export function ModsLibrary() {
         setInstallDepsOpen(true)
         return
       }
-      
-      const modloaderPackage = selectedGameId ? getModloaderPackageForGame(selectedGameId) : null
       
       const result = await launchMutation.mutateAsync({
         gameId: selectedGameId,

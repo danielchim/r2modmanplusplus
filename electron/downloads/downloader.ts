@@ -4,8 +4,8 @@
  */
 import { promises as fs } from "fs"
 import { createHash } from "crypto"
-import { dirname } from "path"
-import { pathExists, ensureDir, safeUnlink } from "./fs-utils"
+import { dirname, join } from "path"
+import { pathExists, ensureDir, safeUnlink, removeDir } from "./fs-utils"
 import { extractZip } from "./zip-extractor"
 import { getLogger } from "../file-logger"
 
@@ -98,10 +98,14 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
   
   const logger = getLogger()
   const modId = `${author}-${name}@${version}`
-  
+
+  // Marker file for cache validation
+  const markerPath = join(extractPath, "_extracted.ok")
+
   // Check cache hit (if not ignoring cache)
-  if (!ignoreCache && await pathExists(extractPath)) {
-    logger.info(`Download cache hit for ${modId}`)
+  // Cache is valid ONLY if both extractPath and marker exist
+  if (!ignoreCache && await pathExists(extractPath) && await pathExists(markerPath)) {
+    logger.info(`Download cache hit for ${modId}`, { extractPath, markerExists: true })
     return {
       extractedPath: extractPath,
       archivePath: archivePath,
@@ -109,9 +113,24 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
       fromCache: true,
     }
   }
-  
+
+  // Cache invalid or missing - log the reason
+  const extractPathExists = await pathExists(extractPath)
+  const markerExists = await pathExists(markerPath)
+  logger.info(`Cache miss for ${modId} - re-extracting`, {
+    extractPathExists,
+    markerExists,
+    ignoreCache
+  })
+
+  // Clean up any partial extraction before starting
+  if (extractPathExists) {
+    logger.info(`Removing stale/partial extraction for ${modId}`)
+    await removeDir(extractPath)
+  }
+
   logger.info(`Starting download for ${modId}`, { downloadUrl, archivePath })
-  
+
   // Ensure parent directories exist
   await ensureDir(extractPath)
   await ensureDir(dirname(archivePath))
@@ -187,12 +206,15 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
       await fs.rename(tempArchivePath, archivePath)
       
       logger.info(`Download completed for ${modId}, extracting...`, { bytesDownloaded })
-      
+
       // Extract zip
       await extractZip(archivePath, extractPath)
-      
-      logger.info(`Extraction completed for ${modId}`, { extractPath })
-      
+
+      // Write marker to indicate successful extraction
+      await fs.writeFile(markerPath, "ok\n", "utf-8")
+
+      logger.info(`Extraction completed for ${modId}`, { extractPath, markerWritten: true })
+
       return {
         extractedPath: extractPath,
         archivePath: archivePath,
@@ -204,11 +226,20 @@ export async function downloadMod(options: DownloadOptions): Promise<DownloadRes
       // Cleanup on error
       await fileHandle.close()
       await safeUnlink(tempArchivePath)
+
+      // Ensure marker doesn't exist on failure
+      await safeUnlink(markerPath)
+      // Optionally clean up partial extraction
+      await removeDir(extractPath)
+
       throw error
     }
   } catch (error: unknown) {
     // Cleanup temp file on any error
     await safeUnlink(tempArchivePath)
+
+    // Ensure no marker exists after failure
+    await safeUnlink(markerPath)
     
     if (error instanceof Error) {
       if (error.name === "AbortError" || error.message.includes("aborted")) {
