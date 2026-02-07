@@ -1,9 +1,12 @@
 /**
- * Service singletons – separated from index.ts to break circular dependency
- * with hooks.ts.
+ * Service singletons – conditionally backed by Zustand or tRPC/DB based on
+ * the VITE_DATASOURCE build flag.
  *
- * Swap the implementation here when migrating from Zustand to DB/tRPC.
+ * Vite replaces `import.meta.env.VITE_DATASOURCE` at compile time, so the
+ * unused branch is tree-shaken in production builds.
  */
+
+import { isDbMode } from "./datasource"
 
 import {
   createZustandGameService,
@@ -12,7 +15,25 @@ import {
   createZustandModService,
 } from "./zustand"
 
-export const gameService = createZustandGameService()
-export const settingsService = createZustandSettingsService()
-export const profileService = createZustandProfileService()
-export const modService = createZustandModService()
+import {
+  createTRPCGameService,
+  createTRPCSettingsService,
+  createTRPCProfileService,
+  createTRPCModService,
+} from "./trpc-services"
+
+export const gameService = isDbMode
+  ? createTRPCGameService()
+  : createZustandGameService()
+
+export const settingsService = isDbMode
+  ? createTRPCSettingsService()
+  : createZustandSettingsService()
+
+export const profileService = isDbMode
+  ? createTRPCProfileService()
+  : createZustandProfileService()
+
+export const modService = isDbMode
+  ? createTRPCModService()
+  : createZustandModService()
