@@ -7,6 +7,8 @@ import { initializeDownloadManager } from "./downloads/manager"
 import { getPathSettings } from "./downloads/settings-state"
 import { closeAllCatalogs } from "./thunderstore/catalog"
 import { initializeLogger, destroyLogger } from "./file-logger"
+import { initializeDb, closeDb } from "./db"
+import { runMigrations } from "./db/migrate"
 
 // The built directory structure
 //
@@ -74,6 +76,8 @@ function createWindow() {
 
 // Clean up resources before app quits
 app.on("before-quit", () => {
+  // Close user data DB
+  closeDb()
   // Close all SQLite catalog connections
   closeAllCatalogs()
   // Flush and close logger
@@ -103,6 +107,11 @@ app.whenReady().then(() => {
   // Initialize file logger
   const logger = initializeLogger()
   logger.info("Application started", { version: app.getVersion(), platform: process.platform })
+
+  // Initialize user data database and run migrations
+  initializeDb()
+  runMigrations()
+  logger.info("Database initialized")
   
   // Initialize download manager with settings fetcher from shared state
   const downloadManager = initializeDownloadManager(

@@ -5,12 +5,12 @@
 import { useCallback } from "react"
 import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
-import { useModManagementStore } from "@/store/mod-management-store"
+import { useModManagementActions } from "@/data"
 import { useAppStore } from "@/store/app-store"
 
 export function useModActions() {
   const uninstallModMutation = trpc.profiles.uninstallMod.useMutation()
-  const markUninstalled = useModManagementStore((s) => s.uninstallMod)
+  const { uninstallMod: markUninstalled } = useModManagementActions()
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   
   /**

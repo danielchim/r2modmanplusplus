@@ -16,9 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { analyzeModDependencies, type DependencyStatus } from "@/lib/dependency-utils"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useProfileStore } from "@/store/profile-store"
-import { useSettingsStore } from "@/store/settings-store"
+import { useModManagementData, useModManagementActions, useProfileData, useSettingsData } from "@/data"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useOnlineDependenciesRecursive } from "@/lib/queries/useOnlineMods"
 import { MODS } from "@/mocks/mods"
@@ -102,11 +100,11 @@ function getStatusVariant(status: DependencyStatus): "default" | "secondary" | "
 
 export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({ mod, requestedVersion, open, onOpenChange }: DependencyDownloadDialogProps) {
   const { t } = useTranslation()
-  const activeProfileId = useProfileStore((s) => mod ? s.activeProfileIdByGame[mod.gameId] : undefined)
-  const installedVersionsByProfile = useModManagementStore((s) => s.installedModVersionsByProfile)
-  const installedModsByProfile = useModManagementStore((s) => s.installedModsByProfile)
-  const setDependencyWarnings = useModManagementStore((s) => s.setDependencyWarnings)
-  const enforceDependencyVersions = useSettingsStore((s) => s.global.enforceDependencyVersions)
+  const { activeProfileIdByGame } = useProfileData()
+  const activeProfileId = mod ? activeProfileIdByGame[mod.gameId] : undefined
+  const { installedModVersionsByProfile, installedModsByProfile } = useModManagementData()
+  const { setDependencyWarnings } = useModManagementActions()
+  const { global: { enforceDependencyVersions } } = useSettingsData()
   const { startDownload } = useDownloadActions()
   
   // null means "auto-select everything that needs downloading"
@@ -118,7 +116,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
   const isThunderstoreMod = mod ? (mod.id.length === 36 && mod.id.includes("-")) : false
 
   // Get installed versions for the active profile
-  const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
+  const installedVersionsForProfile = activeProfileId ? installedModVersionsByProfile[activeProfileId] : undefined
 
   // Use recursive online dependency resolution for Thunderstore mods in Electron
   const recursiveDepsQuery = useOnlineDependenciesRecursive({
@@ -204,7 +202,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
     }
 
     // Fallback to non-recursive mock catalog analysis
-    const installedVersions = installedVersionsByProfile[activeProfileId] || {}
+    const installedVersions = installedModVersionsByProfile[activeProfileId] || {}
     const depInfos = analyzeModDependencies({
       mod,
       mods: MODS,
@@ -248,7 +246,7 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       childrenByKey: {} as Record<string, string[]>,
       isLoadingDeps: false,
     }
-  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.isLoading, recursiveDepsQuery.data, installedVersionsByProfile, enforceDependencyVersions])
+  }, [mod, activeProfileId, isThunderstoreMod, recursiveDepsQuery.isElectron, recursiveDepsQuery.isLoading, recursiveDepsQuery.data, installedModVersionsByProfile, enforceDependencyVersions])
   
   // Flatten all deps for easier access
   const allDeps = useMemo(() => {

@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { createTRPCReact } from "@trpc/react-query"
+import { createTRPCClient as createVanillaClient } from "@trpc/client"
 import { ipcLink } from "electron-trpc-experimental/renderer"
 import superjson from "superjson"
 import type { AppRouter } from "../../electron/trpc/router"
@@ -28,6 +29,24 @@ export function createTRPCClient() {
   }
 
   return trpc.createClient({
+    links: [
+      ipcLink({
+        transformer: superjson,
+      }),
+    ],
+  })
+}
+
+/**
+ * Vanilla (non-React) tRPC client for imperative use in service singletons.
+ * Returns null if not running in Electron.
+ */
+export function createVanillaTRPCClient() {
+  if (!hasElectronTRPC()) {
+    return null
+  }
+
+  return createVanillaClient<AppRouter>({
     links: [
       ipcLink({
         transformer: superjson,

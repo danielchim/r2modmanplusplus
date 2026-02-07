@@ -4,8 +4,11 @@ import { Home, Globe, Settings as SettingsIcon, Download, User, ChevronDown, Plu
 import { Link, useRouterState } from "@tanstack/react-router"
 
 import { useAppStore } from "@/store/app-store"
-import { useProfileStore } from "@/store/profile-store"
-import { useGameManagementStore } from "@/store/game-management-store"
+import {
+  useProfileData,
+  useGameManagementData,
+  useGameManagementActions,
+} from "@/data"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,21 +40,19 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const settingsOpen = useAppStore((s) => s.settingsOpen)
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const activeProfileId = useProfileStore((s) =>
-    selectedGameId ? s.activeProfileIdByGame[selectedGameId] ?? null : null
-  )
-  const profilesByGame = useProfileStore((s) => s.profilesByGame)
-  const recentManagedGameIds = useGameManagementStore((s) => s.recentManagedGameIds)
-  const defaultGameId = useGameManagementStore((s) => s.defaultGameId)
-  const managedGameIds = useGameManagementStore((s) => s.managedGameIds)
-  const setDefaultGameId = useGameManagementStore((s) => s.setDefaultGameId)
-  
+
+  const { activeProfileIdByGame, profilesByGame } = useProfileData()
+  const { recentManagedGameIds, defaultGameId, managedGameIds } = useGameManagementData()
+  const { setDefaultGameId } = useGameManagementActions()
+
+  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] ?? null : null
+
   // Get active profile name
-  const activeProfile = selectedGameId && activeProfileId 
+  const activeProfile = selectedGameId && activeProfileId
     ? profilesByGame[selectedGameId]?.find(p => p.id === activeProfileId)
     : null
   const activeProfileName = activeProfile?.name ?? t("rail_no_profile")
-  
+
   // Force open Add Game dialog on first run or after all games are removed
   useEffect(() => {
     const noGames = defaultGameId === null && managedGameIds.length === 0
@@ -60,14 +61,14 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
       setAddGameOpen(true)
     }
   }, [defaultGameId, managedGameIds.length, settingsOpen])
-  
+
   const selectedGame = selectedGameId ? ECOSYSTEM_GAMES.find((g) => g.id === selectedGameId) : null
-  
+
   // Managed games for the dropdown
   const managedGames = managedGameIds
     .map((id) => ECOSYSTEM_GAMES.find((g) => g.id === id))
     .filter((g): g is typeof ECOSYSTEM_GAMES[number] => g !== undefined)
-  
+
   // Recently managed games (newest first, max 3, filtered to managed only)
   const recentGames = recentManagedGameIds
     .filter((id) => managedGameIds.includes(id))
@@ -79,8 +80,8 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
 
   return (
     <>
-      <AddGameDialog 
-        open={addGameOpen} 
+      <AddGameDialog
+        open={addGameOpen}
         onOpenChange={setAddGameOpen}
         forceOpen={defaultGameId === null && managedGameIds.length === 0}
       />
@@ -112,8 +113,8 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              className="w-[288px] max-h-[80vh] flex flex-col rounded-xl shadow-xl py-2 ring-1 ring-border/80" 
+            <DropdownMenuContent
+              className="w-[288px] max-h-[80vh] flex flex-col rounded-xl shadow-xl py-2 ring-1 ring-border/80"
               align="start"
               sideOffset={-90}
             >
@@ -135,9 +136,9 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                   </div>
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
-              
+
               <DropdownMenuSeparator className="mx-0 my-2" />
-              
+
               {/* Games List Section - Scrollable */}
               <div className="overflow-y-auto flex-1 min-h-0">
                 <DropdownMenuGroup>
@@ -157,9 +158,9 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                       }}
                     >
                       {managedGames.map((game) => (
-                        <DropdownMenuRadioItem 
-                          key={game.id} 
-                          value={game.id} 
+                        <DropdownMenuRadioItem
+                          key={game.id}
+                          value={game.id}
                           className="mx-1 gap-3 rounded-md px-3 py-2"
                         >
                           <img
@@ -173,12 +174,12 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                     </DropdownMenuRadioGroup>
                   )}
                 </DropdownMenuGroup>
-                
+
                 <DropdownMenuSeparator className="mx-0 my-2" />
-                
+
                 {/* Add Game Section */}
                 <DropdownMenuGroup>
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     className="mx-1 gap-3 rounded-md px-3 py-2"
                     onClick={() => {
                       setMenuOpen(false)
