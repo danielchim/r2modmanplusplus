@@ -5,7 +5,7 @@ import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModActions } from "@/hooks/use-mod-actions"
-import { useProfileData, useModManagementData, useModManagementActions, useSettingsData } from "@/data"
+import { useActiveProfileId, useInstalledMods, useToggleMod, useGlobalSettings } from "@/data"
 import { MODS } from "@/mocks/mods"
 import type { Mod } from "@/types/mod"
 import { Button } from "@/components/ui/button"
@@ -249,14 +249,12 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   const { t } = useTranslation()
   const { startDownload, pauseDownload, resumeDownload, cancelDownload } = useDownloadActions()
 
-  const { toggleMod } = useModManagementActions()
+  const toggleMod = useToggleMod()
   const { uninstallMod } = useModActions()
-  const { installedModsByProfile, enabledModsByProfile, uninstallingMods, installedModVersionsByProfile: installedVersionsByProfile } = useModManagementData()
-  const { global: { enforceDependencyVersions } } = useSettingsData()
-
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  const { activeProfileIdByGame } = useProfileData()
-  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
+  const activeProfileId = useActiveProfileId(selectedGameId)
+  const { mods: installedModsList, isModInstalled, isModEnabled, getInstalledVersion } = useInstalledMods(activeProfileId)
+  const { enforceDependencyVersions } = useGlobalSettings()
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const selectMod = useAppStore((s) => s.selectMod)
@@ -267,8 +265,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   // Use lazy initialization to set installed version by default (rerender-lazy-state-init)
   const [selectedVersion, setSelectedVersion] = useState<string>(() => {
-    const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
-    return installedVersion || mod.version
+    return getInstalledVersion(mod.id) || mod.version
   })
 
   // Fetch readme from Thunderstore API
@@ -280,21 +277,21 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
   // Subscribe to the specific task so component re-renders on changes
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])
 
-  // Derive Sets from data hooks
-  const installedSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
-  const enabledSet = activeProfileId ? enabledModsByProfile[activeProfileId] : undefined
-  const uninstallingSet = uninstallingMods
-
-  // Derive booleans from Sets
-  const installed = installedSet ? installedSet.has(mod.id) : false
-  const enabled = enabledSet ? enabledSet.has(mod.id) : false
-  const isUninstalling = uninstallingSet.has(mod.id)
+  const installed = isModInstalled(mod.id)
+  const enabled = isModEnabled(mod.id)
+  const isUninstalling = false
 
   // Get the actually installed version (not just mod.version which is the latest)
-  const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
+  const installedVersion = getInstalledVersion(mod.id)
 
-  // Extract primitive dependencies for useMemo (rerender-dependencies)
-  const installedVersionsForProfile = activeProfileId ? installedVersionsByProfile[activeProfileId] : undefined
+  // Build installed versions map for dependency analysis
+  const installedVersionsForProfile = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const m of installedModsList) {
+      map[m.modId] = m.installedVersion
+    }
+    return map
+  }, [installedModsList])
 
   // Derive version state for CTA (Call-to-Action) logic
   const hasKnownInstalledVersion = installed && typeof installedVersion === "string" && installedVersion.length > 0
@@ -1007,9 +1004,8 @@ export function ModInspector() {
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const selectMod = useAppStore((s) => s.selectMod)
   
-  const { activeProfileIdByGame } = useProfileData()
-  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
-  const { installedModVersionsByProfile: installedVersionsByProfile } = useModManagementData()
+  const activeProfileId = useActiveProfileId(selectedGameId)
+  const { mods: installedModsList } = useInstalledMods(activeProfileId)
   const { uninstallMod } = useModActions()
 
   // Check if this is a Thunderstore mod (UUID format: 36 chars with hyphens)
@@ -1052,7 +1048,7 @@ export function ModInspector() {
 
   // If mod not found and selectedModId exists: show fallback for unknown installed mods
   if (!mod && selectedModId) {
-    const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[selectedModId] : undefined
+    const installedVersion = installedModsList.find(m => m.modId === selectedModId)?.installedVersion
     
     // Show minimal "Unknown mod" inspector
     return (

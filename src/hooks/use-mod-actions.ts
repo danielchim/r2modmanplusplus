@@ -5,16 +5,16 @@
 import { useCallback } from "react"
 import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
-import { useModManagementActions } from "@/data"
+import { useMarkModUninstalled } from "@/data"
 import { useAppStore } from "@/store/app-store"
 
 export function useModActions() {
   const uninstallModMutation = trpc.profiles.uninstallMod.useMutation()
-  const { uninstallMod: markUninstalledMut } = useModManagementActions()
+  const markUninstalled = useMarkModUninstalled()
   const selectedGameId = useAppStore((s) => s.selectedGameId)
 
   // Extract stable .mutateAsync reference (React Query guarantees referential stability)
-  const markUninstalledAsync = markUninstalledMut.mutateAsync
+  const markUninstalledAsync = markUninstalled.mutateAsync
 
   /**
    * Uninstalls a mod from a profile

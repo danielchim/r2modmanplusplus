@@ -1,19 +1,11 @@
 /**
  * Data layer entry point.
  *
- * Swap the service implementations in services.ts when migrating from
- * Zustand to DB/tRPC.
+ * All database access goes through tRPC → Electron main process → SQLite.
+ * Query hooks fetch data; mutation hooks modify data and invalidate caches.
  */
 
-// Re-export service singletons (for imperative access in non-hook code)
-export {
-  gameService,
-  settingsService,
-  profileService,
-  modService,
-} from "./services"
-
-// Re-export types & interfaces for convenience
+// Types
 export type {
   ManagedGame,
   Profile,
@@ -21,29 +13,56 @@ export type {
   GlobalSettings,
   GameSettings,
   EffectiveGameSettings,
-  IGameService,
-  ISettingsService,
-  IProfileService,
-  IModService,
-} from "./interfaces"
+} from "./types"
 
-// Re-export hooks + DataBridge
+// Query key registry (for advanced cache control)
+export { queryKeys } from "./query-keys"
+
+// Vanilla tRPC client (for imperative / non-React code)
+export { getClient } from "./trpc-client"
+
+// Query hooks
 export {
-  // Bridge (mount once near app root)
-  DataBridge,
-  dataKeys,
-  // Game Management
-  useGameManagementData,
-  useGameManagementActions,
+  useGames,
+  useGlobalSettings,
+  useGameSettings,
+  useAllSettings,
+  useProfiles,
+  useActiveProfileId,
+  useProfileModCounts,
+  useInstalledMods,
+} from "./queries"
+
+// Mutation hooks
+export {
+  // Games
+  useAddGame,
+  useRemoveGame,
+  useSetDefaultGame,
+  useTouchGame,
   // Settings
-  useSettingsData,
-  useSettingsActions,
+  useUpdateGlobalSettings,
+  useUpdateGameSettings,
+  useResetGameSettings,
+  useDeleteGameSettings,
   // Profiles
-  useProfileData,
-  useProfileActions,
-  // Mod Management
-  useModManagementData,
-  useModManagementActions,
+  useEnsureDefaultProfile,
+  useSetActiveProfile,
+  useCreateProfile,
+  useRenameProfile,
+  useDeleteProfile,
+  useResetGameProfiles,
+  useRemoveGameProfiles,
+  // Mods
+  useMarkModInstalled,
+  useMarkModUninstalled,
+  useUninstallAllMods,
+  useEnableMod,
+  useDisableMod,
+  useToggleMod,
+  useSetDependencyWarnings,
+  useClearDependencyWarnings,
+  useDeleteProfileModState,
   // Compound
   useUnmanageGame,
-} from "./hooks"
+} from "./mutations"

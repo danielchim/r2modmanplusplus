@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useSettingsData, useSettingsActions } from "@/data"
+import { useGlobalSettings, useUpdateGlobalSettings } from "@/data"
 import { SettingsRow } from "../settings-row"
 import { FolderPathControl } from "../folder-path-control"
 
@@ -10,8 +10,8 @@ interface PanelProps {
 export function LocationsPanel(_props: PanelProps) {
   void _props
   const { t } = useTranslation()
-  const { dataFolder, steamFolder, modDownloadFolder, cacheFolder } = useSettingsData().global
-  const { updateGlobal } = useSettingsActions()
+  const { dataFolder, steamFolder, modDownloadFolder, cacheFolder } = useGlobalSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   return (
     <div>

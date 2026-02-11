@@ -7,17 +7,18 @@ import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
 import { useDownloadStore } from "@/store/download-store"
 import { useDownloadActions } from "./use-download-actions"
-import { useModManagementActions } from "@/data"
+import { useMarkModInstalled, useMarkModUninstalled } from "@/data"
 
 export function useModInstaller() {
   const { startDownload } = useDownloadActions()
   const installModMutation = trpc.profiles.installMod.useMutation()
   const uninstallModMutation = trpc.profiles.uninstallMod.useMutation()
-  const { installMod: markInstalledMut, uninstallMod: markUninstalledMut } = useModManagementActions()
+  const markInstalled = useMarkModInstalled()
+  const markUninstalled = useMarkModUninstalled()
 
   // Extract stable references (React Query's .mutate/.mutateAsync are referentially stable)
-  const markInstalledFire = markInstalledMut.mutate
-  const markUninstalledAsync = markUninstalledMut.mutateAsync
+  const markInstalledFire = markInstalled.mutate
+  const markUninstalledAsync = markUninstalled.mutateAsync
 
   /**
    * Installs a downloaded mod to a profile

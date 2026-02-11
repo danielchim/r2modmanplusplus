@@ -17,7 +17,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/store/app-store"
-import { useGameManagementActions, useProfileActions, useSettingsActions } from "@/data"
+import {
+  useAddGame,
+  useTouchGame,
+  useSetDefaultGame,
+  useEnsureDefaultProfile,
+  useCreateProfile,
+  useSetActiveProfile,
+  useUpdateGameSettings,
+} from "@/data"
 import { ECOSYSTEM_GAMES, type EcosystemGame } from "@/lib/ecosystem-games"
 import { selectFolder } from "@/lib/desktop"
 import { CreateProfileDialog } from "./create-profile-dialog"
@@ -42,10 +50,14 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [isAddingGame, setIsAddingGame] = useState(false)
 
-  const { addManagedGame, appendRecentManagedGame, setDefaultGameId } = useGameManagementActions()
-  const { ensureDefaultProfile, createProfile, setActiveProfile } = useProfileActions()
+  const addGame = useAddGame()
+  const touchGame = useTouchGame()
+  const setDefaultGame = useSetDefaultGame()
+  const ensureDefaultProfile = useEnsureDefaultProfile()
+  const createProfile = useCreateProfile()
+  const setActiveProfile = useSetActiveProfile()
+  const updateGameSettings = useUpdateGameSettings()
   const selectGame = useAppStore((s) => s.selectGame)
-  const { updatePerGame: updatePerGameSettings } = useSettingsActions()
 
   const filteredGames = ECOSYSTEM_GAMES.filter((game) =>
     game.name.toLowerCase().includes(query.toLowerCase())
@@ -81,16 +93,16 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
       const isValidPath = installFolder.trim().length > 0
 
       // Add to managed games
-      await addManagedGame.mutateAsync(pickedGame.id)
-      await appendRecentManagedGame.mutateAsync(pickedGame.id)
+      await addGame.mutateAsync(pickedGame.id)
+      await touchGame.mutateAsync(pickedGame.id)
 
       // Set as default game (latest added becomes default)
-      await setDefaultGameId.mutateAsync(pickedGame.id)
+      await setDefaultGame.mutateAsync(pickedGame.id)
 
       // Only create profiles if install folder is valid (non-empty)
       if (isValidPath) {
         if (installFolder.trim()) {
-          await updatePerGameSettings.mutateAsync({ gameId: pickedGame.id, updates: { gameInstallFolder: installFolder } })
+          await updateGameSettings.mutateAsync({ gameId: pickedGame.id, updates: { gameInstallFolder: installFolder } })
         }
 
         // Ensure default profile exists

@@ -4,8 +4,11 @@ import { Search, SlidersHorizontal, MoreVertical, ChevronDown, Plus, Grid3x3, Li
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { useAppStore } from "@/store/app-store"
-import type { Profile } from "@/store/profile-store"
-import { useProfileData, useProfileActions, useModManagementData, useModManagementActions, useSettingsData } from "@/data"
+import {
+  useActiveProfileId, useProfiles, useProfileModCounts, useInstalledMods,
+  useCreateProfile, useSetActiveProfile, useMarkModInstalled, useAllSettings,
+  type Profile,
+} from "@/data"
 import { MODS } from "@/mocks/mods"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { MOD_CATEGORIES } from "@/mocks/mod-categories"
@@ -18,8 +21,6 @@ import type { Mod } from "@/types/mod"
 import { toast } from "sonner"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
-// Stable fallback constants to avoid creating new references in selectors
-const EMPTY_PROFILES: readonly Profile[] = []
 const EMPTY_SET = new Set<string>()
 
 // Helper: Check if a modId is a Thunderstore UUID (36 chars with hyphens)
@@ -501,23 +502,32 @@ export function ModsLibrary() {
   const tab = useAppStore((s) => s.modLibraryTab)
   const setTab = useAppStore((s) => s.setModLibraryTab)
   
-  // Subscribe to the installed mods Set directly for real-time updates
-  const { activeProfileIdByGame, profilesByGame: profilesByGameFromData } = useProfileData()
-  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] ?? null : null
-  const { installedModsByProfile, installedModVersionsByProfile } = useModManagementData()
-  const { installMod } = useModManagementActions()
-  // Use stable fallback to avoid new Set() every render
-  const installedModsSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
-  const installedModsSetOrEmpty = installedModsSet ?? EMPTY_SET
-  const installedVersionsMap = activeProfileId ? installedModVersionsByProfile[activeProfileId] : undefined
-  
-  // Avoid returning new [] in selector - return undefined and default outside
-  const profilesFromStore = selectedGameId ? profilesByGameFromData[selectedGameId] ?? undefined : undefined
-  const profiles = profilesFromStore ?? EMPTY_PROFILES
-  const { createProfile, setActiveProfile } = useProfileActions()
-  
+  // Subscribe to installed mods for real-time updates
+  const activeProfileId = useActiveProfileId(selectedGameId)
+  const { mods: installedModsList, modIds: installedModIds } = useInstalledMods(activeProfileId)
+  const markModInstalled = useMarkModInstalled()
+  const profileModCounts = useProfileModCounts(selectedGameId)
+
+  // Build sets/maps from installed mods data
+  const installedModsSetOrEmpty = useMemo(
+    () => (installedModIds.length > 0 ? new Set(installedModIds) : EMPTY_SET),
+    [installedModIds],
+  )
+  const installedVersionsMap = useMemo(() => {
+    if (installedModsList.length === 0) return undefined
+    const map: Record<string, string> = {}
+    for (const m of installedModsList) {
+      map[m.modId] = m.installedVersion
+    }
+    return map
+  }, [installedModsList])
+
+  const profiles = useProfiles(selectedGameId)
+  const createProfile = useCreateProfile()
+  const setActiveProfile = useSetActiveProfile()
+
   // Check if profiles are enabled (requires install folder)
-  const { getPerGame: getPerGameSettings } = useSettingsData()
+  const { getPerGame: getPerGameSettings } = useAllSettings()
   const installFolder = selectedGameId ? getPerGameSettings(selectedGameId).gameInstallFolder : ""
   const profilesEnabled = installFolder?.trim().length > 0
   const exeNames = selectedGameId ? getExeNames(selectedGameId) : []
@@ -859,7 +869,7 @@ export function ModsLibrary() {
   const currentGame = ECOSYSTEM_GAMES.find((g) => g.id === selectedGameId)
   const gameProfiles = profiles.map(profile => ({
     ...profile,
-    modCount: installedModsByProfile[profile.id]?.size ?? 0
+    modCount: profileModCounts[profile.id] ?? 0
   }))
   const currentProfile = gameProfiles.find((p) => p.id === activeProfileId)
 
@@ -1018,7 +1028,7 @@ export function ModsLibrary() {
       // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
       const installedId = installResult.packageUuid4 || installResult.packageId
       if (installedId && installResult.version) {
-        installMod.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
+        markModInstalled.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
       }
 
       toast.success("Base dependencies installed", {
@@ -1085,7 +1095,7 @@ export function ModsLibrary() {
         // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
         const installedId = installResult.packageUuid4 || installResult.packageId
         if (installedId && installResult.version) {
-          installMod.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
+          markModInstalled.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
         }
 
         toast.success("Base dependencies installed")

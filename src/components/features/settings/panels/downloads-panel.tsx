@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useSettingsData, useSettingsActions } from "@/data"
+import { useGlobalSettings, useUpdateGlobalSettings } from "@/data"
 import { SettingsRow } from "../settings-row"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
@@ -37,8 +37,8 @@ function formatSpeed(bps: number, unit: "Bps" | "bps", t: (key: string) => strin
 
 export function DownloadsPanel(_props: PanelProps) {
   const { t } = useTranslation()
-  const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled, autoInstallMods } = useSettingsData().global
-  const { updateGlobal } = useSettingsActions()
+  const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled, autoInstallMods } = useGlobalSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   // Logarithmic slider mapping (10 KB/s to 200 MB/s)
   const minBps = 10 * 1024 // 10 KB/s

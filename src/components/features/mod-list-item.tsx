@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next"
 import { Download, Trash2, Loader2, Pause, AlertTriangle } from "lucide-react"
 import { useAppStore } from "@/store/app-store"
 import { useDownloadStore } from "@/store/download-store"
-import { useProfileData, useModManagementData, useModManagementActions } from "@/data"
+import { useActiveProfileId, useInstalledMods, useToggleMod } from "@/data"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModActions } from "@/hooks/use-mod-actions"
 import { cn } from "@/lib/utils"
@@ -25,32 +25,24 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
   const selectedModId = useAppStore((s) => s.selectedModId)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   
-  const { toggleMod } = useModManagementActions()
+  const toggleMod = useToggleMod()
   const { uninstallMod } = useModActions()
-  const { installedModsByProfile, enabledModsByProfile, uninstallingMods, getDependencyWarnings, installedModVersionsByProfile: installedVersionsByProfile } = useModManagementData()
-
-  const { activeProfileIdByGame } = useProfileData()
-  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] : undefined
+  const activeProfileId = useActiveProfileId(selectedGameId)
+  const { isModInstalled, isModEnabled, getInstalledVersion, getDependencyWarnings } = useInstalledMods(activeProfileId)
   
   const { startDownload } = useDownloadActions()
 
   const isSelected = selectedModId === mod.id
   
-  // Derive Sets from data hooks
-  const installedSet = activeProfileId ? installedModsByProfile[activeProfileId] : undefined
-  const enabledSet = activeProfileId ? enabledModsByProfile[activeProfileId] : undefined
-  const uninstallingSet = uninstallingMods
-  
   // Subscribe to download task
   const downloadTask = useDownloadStore((s) => s.tasks[mod.id])
-  
-  // Derive booleans from Sets
-  const isInstalled = installedSet ? installedSet.has(mod.id) : false
-  const isEnabled = enabledSet ? enabledSet.has(mod.id) : false
-  const isUninstalling = uninstallingSet.has(mod.id)
+
+  const isInstalled = isModInstalled(mod.id)
+  const isEnabled = isModEnabled(mod.id)
+  const isUninstalling = false
   
   // Check for dependency warnings
-  const depWarnings = activeProfileId ? getDependencyWarnings(activeProfileId, mod.id) : []
+  const depWarnings = getDependencyWarnings(mod.id)
   const hasWarnings = isInstalled && depWarnings.length > 0
   
   // Check download states
@@ -59,8 +51,7 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
   const isPaused = downloadTask?.status === "paused"
   const hasDownloadTask = isDownloading || isQueued || isPaused
 
-  // Get the actually installed version
-  const installedVersion = activeProfileId ? installedVersionsByProfile[activeProfileId]?.[mod.id] : undefined
+  const installedVersion = getInstalledVersion(mod.id)
   const hasUpdate = isInstalled && installedVersion && isVersionGreater(mod.version, installedVersion)
 
   // Early return if no game selected (shouldn't happen, but type-safe)

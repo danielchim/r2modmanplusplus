@@ -9,12 +9,9 @@
  */
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 import { useDownloadStore } from "@/store/download-store"
-// Keep store imports for imperative getState() inside IPC callbacks
-import { useSettingsStore } from "@/store/settings-store"
-import { useProfileStore } from "@/store/profile-store"
-import { useModManagementStore } from "@/store/mod-management-store"
-import { useSettingsData } from "@/data"
+import { useAllSettings, getClient, queryKeys } from "@/data"
 import { trpc } from "@/lib/trpc"
 
 type DownloadUpdateEvent = {
@@ -35,9 +32,10 @@ type DownloadProgressEvent = {
 
 export function DownloadBridge() {
   const updateTask = useDownloadStore((s) => s._updateTask)
+  const qc = useQueryClient()
 
   // Reactive settings via data hooks (for syncing to main process)
-  const { global: globalSettings, perGame } = useSettingsData()
+  const { global: globalSettings, perGame } = useAllSettings()
   const { maxConcurrentDownloads: maxConcurrent, speedLimitEnabled, speedLimitBps, dataFolder, modDownloadFolder, cacheFolder } = globalSettings
 
   const updateSettingsMutation = trpc.downloads.updateSettings.useMutation()
@@ -132,57 +130,71 @@ export function DownloadBridge() {
       const task = useDownloadStore.getState().getTask(event.downloadId)
       if (!task) return
 
-      // Check if auto-install is enabled (read from store directly to get latest value)
-      const autoInstallEnabled = useSettingsStore.getState().global.autoInstallMods
-      if (autoInstallEnabled && event.result?.extractedPath) {
-        // Get active profile for this game
-        const activeProfileId = useProfileStore.getState().activeProfileIdByGame[task.gameId]
+      const client = getClient()
 
-        if (activeProfileId) {
-          // Check if mod is already installed
-          const isAlreadyInstalled = useModManagementStore.getState().isModInstalled(activeProfileId, task.modId)
+      // Check if auto-install is enabled
+      try {
+        const globalSettings = await client.data.settings.getGlobal.query()
+        const autoInstallEnabled = globalSettings.autoInstallMods
 
-          if (!isAlreadyInstalled) {
-            try {
-              // Auto-install the mod
-              const result = await installModMutation.mutateAsync({
-                gameId: task.gameId,
-                profileId: activeProfileId,
-                modId: task.modId,
-                author: task.modAuthor,
-                name: task.modName,
-                version: task.modVersion,
-                extractedPath: event.result.extractedPath,
-              })
+        if (autoInstallEnabled && event.result?.extractedPath) {
+          // Get active profile for this game
+          const activeProfile = await client.data.profiles.getActive.query({ gameId: task.gameId })
+          const activeProfileId = activeProfile?.id ?? null
 
-              // Mark as installed in state
-              useModManagementStore.getState().installMod(activeProfileId, task.modId, task.modVersion)
+          if (activeProfileId) {
+            // Check if mod is already installed
+            const installedMods = await client.data.mods.listInstalled.query({ profileId: activeProfileId })
+            const isAlreadyInstalled = installedMods.some(m => m.modId === task.modId)
 
-              // Show success toast
-              toast.success(`${task.modName} installed`, {
-                description: `v${task.modVersion} - ${result.filesCopied} files copied to profile`,
-              })
-            } catch (error) {
-              // Show error toast if auto-install fails
-              const message = error instanceof Error ? error.message : "Unknown error"
-              toast.error(`Auto-install failed: ${task.modName}`, {
-                description: message,
+            if (!isAlreadyInstalled) {
+              try {
+                // Auto-install the mod
+                const result = await installModMutation.mutateAsync({
+                  gameId: task.gameId,
+                  profileId: activeProfileId,
+                  modId: task.modId,
+                  author: task.modAuthor,
+                  name: task.modName,
+                  version: task.modVersion,
+                  extractedPath: event.result.extractedPath,
+                })
+
+                // Mark as installed in DB
+                await client.data.mods.install.mutate({
+                  profileId: activeProfileId,
+                  modId: task.modId,
+                  version: task.modVersion,
+                })
+                // Invalidate cache
+                qc.invalidateQueries({ queryKey: queryKeys.mods.root })
+
+                toast.success(`${task.modName} installed`, {
+                  description: `v${task.modVersion} - ${result.filesCopied} files copied to profile`,
+                })
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "Unknown error"
+                toast.error(`Auto-install failed: ${task.modName}`, {
+                  description: message,
+                })
+              }
+            } else {
+              toast.success(`${task.modName} downloaded`, {
+                description: `v${task.modVersion} - already installed`,
               })
             }
           } else {
-            // Mod already installed, just show download success
             toast.success(`${task.modName} downloaded`, {
-              description: `v${task.modVersion} - already installed`,
+              description: `v${task.modVersion} - no active profile`,
             })
           }
         } else {
-          // No active profile, show download success
           toast.success(`${task.modName} downloaded`, {
-            description: `v${task.modVersion} - no active profile`,
+            description: `v${task.modVersion} is ready to install`,
           })
         }
-      } else {
-        // Auto-install disabled or no extracted path, show regular download success
+      } catch {
+        // If settings fetch fails, just show download success
         toast.success(`${task.modName} downloaded`, {
           description: `v${task.modVersion} is ready to install`,
         })
@@ -221,7 +233,7 @@ export function DownloadBridge() {
       unsubCompleted()
       unsubFailed()
     }
-  }, [updateTask])
+  }, [updateTask, qc])
 
   // This is an invisible bridge component
   return null

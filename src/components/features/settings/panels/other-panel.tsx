@@ -2,7 +2,7 @@ import { useMemo } from "react"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { useSettingsData, useSettingsActions } from "@/data"
+import { useGlobalSettings, useUpdateGlobalSettings } from "@/data"
 import { useTranslation } from "react-i18next"
 import { logger } from "@/lib/logger"
 import {
@@ -26,8 +26,8 @@ export function OtherPanel(_props: PanelProps) {
   void _props
   const { t, i18n } = useTranslation()
 
-  const { theme, language, cardDisplayType, funkyMode, enforceDependencyVersions } = useSettingsData().global
-  const { updateGlobal } = useSettingsActions()
+  const { theme, language, cardDisplayType, funkyMode, enforceDependencyVersions } = useGlobalSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   const availableLanguages = useMemo(
     () => Object.keys(i18n.options.resources ?? {}) as string[],
