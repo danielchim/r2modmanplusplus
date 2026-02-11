@@ -362,12 +362,12 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       .map(dep => `${dep.author}-${dep.name}${dep.requiredVersion ? `-${dep.requiredVersion}` : ""}`)
     
     if (unresolvedDeps.length > 0) {
-      setDependencyWarnings(activeProfileId, mod.id, unresolvedDeps)
+      setDependencyWarnings.mutate({ profileId: activeProfileId, modId: mod.id, warnings: unresolvedDeps })
     }
-    
+
     onOpenChange(false)
   }
-  
+
   const handleDownloadSelected = () => {
     if (!activeProfileId) return
     
@@ -423,13 +423,13 @@ export const DependencyDownloadDialog = memo(function DependencyDownloadDialog({
       .map(dep => `${dep.author}-${dep.name}${dep.requiredVersion ? `-${dep.requiredVersion}` : ""}`)
     
     if (unresolvedDeps.length > 0) {
-      setDependencyWarnings(activeProfileId, mod.id, unresolvedDeps)
+      setDependencyWarnings.mutate({ profileId: activeProfileId, modId: mod.id, warnings: unresolvedDeps })
     }
-    
+
     onOpenChange(false)
   }
 
-  
+
   const handleCancel = () => {
     onOpenChange(false)
   }

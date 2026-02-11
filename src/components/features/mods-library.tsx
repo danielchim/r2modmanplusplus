@@ -865,7 +865,7 @@ export function ModsLibrary() {
 
   const handleCreateProfile = (profileName: string) => {
     if (!selectedGameId) return
-    createProfile(selectedGameId, profileName)
+    createProfile.mutate({ gameId: selectedGameId, name: profileName })
   }
 
   const handleToggleCategory = useCallback((category: string) => {
@@ -1018,9 +1018,9 @@ export function ModsLibrary() {
       // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
       const installedId = installResult.packageUuid4 || installResult.packageId
       if (installedId && installResult.version) {
-        installMod(activeProfileId, installedId, installResult.version)
+        installMod.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
       }
-      
+
       toast.success("Base dependencies installed", {
         description: `${installResult.filesInstalled || 0} components installed successfully`,
       })
@@ -1085,9 +1085,9 @@ export function ModsLibrary() {
         // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
         const installedId = installResult.packageUuid4 || installResult.packageId
         if (installedId && installResult.version) {
-          installMod(activeProfileId, installedId, installResult.version)
+          installMod.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
         }
-        
+
         toast.success("Base dependencies installed")
       }
     } catch (error) {
@@ -1300,7 +1300,7 @@ export function ModsLibrary() {
                       <DropdownMenuLabel className="px-3 py-2">{t("common_all_profiles")}</DropdownMenuLabel>
                       <DropdownMenuRadioGroup
                         value={activeProfileId ?? ""}
-                        onValueChange={(profileId) => setActiveProfile(selectedGameId, profileId)}
+                        onValueChange={(profileId) => setActiveProfile.mutate({ gameId: selectedGameId, profileId })}
                       >
                         {gameProfiles.map((profile) => (
                           <DropdownMenuRadioItem

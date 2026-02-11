@@ -152,7 +152,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                       value={selectedGameId ?? undefined}
                       onValueChange={(nextId) => {
                         selectGame(nextId)
-                        setDefaultGameId(nextId)
+                        setDefaultGameId.mutate(nextId)
                         setMenuOpen(false)
                         onNavigate?.()
                       }}
@@ -289,7 +289,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                 key={`recent-${game.id}`}
                 onClick={() => {
                   selectGame(game.id)
-                  setDefaultGameId(game.id)
+                  setDefaultGameId.mutate(game.id)
                   onNavigate?.()
                 }}
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import { Loader2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -17,6 +18,7 @@ type DeleteProfileDialogProps = {
   onConfirm: () => void
   disabled?: boolean
   disabledReason?: string
+  loading?: boolean
 }
 
 export function DeleteProfileDialog({
@@ -26,10 +28,11 @@ export function DeleteProfileDialog({
   onConfirm,
   disabled = false,
   disabledReason,
+  loading = false,
 }: DeleteProfileDialogProps) {
   const { t } = useTranslation()
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={loading ? undefined : onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("dialog_delete_profile_title")}</AlertDialogTitle>
@@ -45,12 +48,13 @@ export function DeleteProfileDialog({
           </div>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
+          <AlertDialogCancel disabled={loading}>{t("common_cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            disabled={disabled}
+            disabled={disabled || loading}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
+            {loading && <Loader2 className="size-4 mr-2 animate-spin" />}
             Delete Profile
           </AlertDialogAction>
         </AlertDialogFooter>

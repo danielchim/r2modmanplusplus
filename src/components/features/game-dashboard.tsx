@@ -40,6 +40,8 @@ export function GameDashboard() {
   const [installDepsOpen, setInstallDepsOpen] = useState(false)
   const [depsMissing, setDepsMissing] = useState<string[]>([])
   const [isInstallingDeps, setIsInstallingDeps] = useState(false)
+  const [isDeletingProfile, setIsDeletingProfile] = useState(false)
+  const [isUninstallingAll, setIsUninstallingAll] = useState(false)
   const selectedGameId = useAppStore((s) => s.selectedGameId)
   const openSettingsToGame = useAppStore((s) => s.openSettingsToGame)
   
@@ -153,11 +155,12 @@ export function GameDashboard() {
   }, [])
   
   // Auto-ensure default profile when install folder becomes valid
+  const ensureDefaultProfile = profileMut.ensureDefaultProfile.mutate
   useEffect(() => {
     if (profilesEnabled && selectedGameId) {
-      profileMut.ensureDefaultProfile(selectedGameId)
+      ensureDefaultProfile(selectedGameId)
     }
-  }, [profilesEnabled, selectedGameId, profileMut])
+  }, [profilesEnabled, selectedGameId, ensureDefaultProfile])
   
   // Early return if no game selected - MUST be after all hooks
   if (!selectedGameId) {
@@ -282,9 +285,9 @@ export function GameDashboard() {
        // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
        const installedId = installResult.packageUuid4 || installResult.packageId
        if (installedId && installResult.version) {
-         modMut.installMod(activeProfileId, installedId, installResult.version)
+         modMut.installMod.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
        }
-      
+
       toast.success("Base dependencies installed", {
         description: `${installResult.filesInstalled || 0} components installed successfully`,
       })
@@ -350,7 +353,7 @@ export function GameDashboard() {
          // Use UUID so metadata loads; fallback to owner-name if UUID is missing.
          const installedId = installResult.packageUuid4 || installResult.packageId
          if (installedId && installResult.version) {
-           modMut.installMod(activeProfileId, installedId, installResult.version)
+           modMut.installMod.mutate({ profileId: activeProfileId, modId: installedId, version: installResult.version })
          }
         
         toast.success("Base dependencies installed", {
@@ -403,36 +406,38 @@ export function GameDashboard() {
   }
 
   const handleCreateProfile = (profileName: string) => {
-    profileMut.createProfile(selectedGameId, profileName)
+    profileMut.createProfile.mutate({ gameId: selectedGameId, name: profileName })
     toast.success("Profile created")
   }
 
   const handleRenameProfile = (newName: string) => {
     if (!activeProfileId) return
-    profileMut.renameProfile(selectedGameId, activeProfileId, newName)
+    profileMut.renameProfile.mutate({ gameId: selectedGameId, profileId: activeProfileId, newName })
     toast.success("Profile renamed")
   }
   
   const handleDeleteProfile = async () => {
     if (!activeProfileId) return
-    
-    const result = await profileMut.deleteProfile(selectedGameId, activeProfileId)
-    if (!result.deleted) {
-      toast.error("Cannot delete default profile")
-      setDeleteProfileOpen(false)
-      return
-    }
-    
+    setIsDeletingProfile(true)
+
     try {
+      const result = await profileMut.deleteProfile.mutateAsync({ gameId: selectedGameId, profileId: activeProfileId })
+      if (!result.deleted) {
+        toast.error("Cannot delete default profile")
+        setDeleteProfileOpen(false)
+        setIsDeletingProfile(false)
+        return
+      }
+
       // Delete profile BepInEx folder from disk
       const resetResult = await resetProfileMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
       })
-      
+
       // Clear state
-      modMut.deleteProfileState(activeProfileId)
-      
+      modMut.deleteProfileState.mutate(activeProfileId)
+
       toast.success("Profile deleted", {
         description: `${resetResult.filesRemoved} files removed from disk`,
       })
@@ -441,24 +446,26 @@ export function GameDashboard() {
       toast.error("Failed to delete profile files", {
         description: message,
       })
+    } finally {
+      setIsDeletingProfile(false)
+      setDeleteProfileOpen(false)
     }
-    
-    setDeleteProfileOpen(false)
   }
 
   const handleUninstallAll = async () => {
     if (!activeProfileId) return
-    
+    setIsUninstallingAll(true)
+
     try {
       // Delete profile BepInEx folder (all installed mods)
       const result = await resetProfileMutation.mutateAsync({
         gameId: selectedGameId,
         profileId: activeProfileId,
       })
-      
+
       // Clear mod state for this profile (but keep the profile itself)
-      modMut.uninstallAllMods(activeProfileId)
-      
+      modMut.uninstallAllMods.mutate(activeProfileId)
+
       toast.success("All mods uninstalled", {
         description: `${result.filesRemoved} files removed from profile`,
       })
@@ -467,9 +474,10 @@ export function GameDashboard() {
       toast.error("Failed to uninstall mods", {
         description: message,
       })
+    } finally {
+      setIsUninstallingAll(false)
+      setUninstallAllOpen(false)
     }
-    
-    setUninstallAllOpen(false)
   }
 
   const gameProfiles = profiles.map(profile => ({
@@ -498,12 +506,14 @@ export function GameDashboard() {
         onConfirm={handleDeleteProfile}
         disabled={activeProfileId === `${selectedGameId}-default`}
         disabledReason="Cannot delete the default profile"
+        loading={isDeletingProfile}
       />
       <UninstallAllModsDialog
         open={uninstallAllOpen}
         onOpenChange={setUninstallAllOpen}
         modCount={installedModCount}
         onConfirm={handleUninstallAll}
+        loading={isUninstallingAll}
       />
       <InstallBaseDependenciesDialog
         open={installDepsOpen}
@@ -549,7 +559,7 @@ export function GameDashboard() {
               <DropdownMenuLabel className="px-3 py-2">{t("common_all_profiles")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={activeProfileId ?? ""}
-                onValueChange={(profileId) => profileMut.setActiveProfile(selectedGameId, profileId)}
+                onValueChange={(profileId) => profileMut.setActiveProfile.mutate({ gameId: selectedGameId, profileId })}
               >
                 {gameProfiles.map((profile) => (
                   <DropdownMenuRadioItem

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { List, ChevronLeft, FolderOpen } from "lucide-react"
+import { List, ChevronLeft, FolderOpen, Loader2 } from "lucide-react"
 
 import {
   AlertDialog,
@@ -40,6 +40,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const [profileChoice, setProfileChoice] = useState<"default" | "create" | "import">("default")
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
+  const [isAddingGame, setIsAddingGame] = useState(false)
 
   const { addManagedGame, appendRecentManagedGame, setDefaultGameId } = useGameManagementActions()
   const { ensureDefaultProfile, createProfile, setActiveProfile } = useProfileActions()
@@ -49,7 +50,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const filteredGames = ECOSYSTEM_GAMES.filter((game) =>
     game.name.toLowerCase().includes(query.toLowerCase())
   )
-  
+
   const isValidPath = installFolder.trim().length > 0
 
   const handleGameClick = (game: EcosystemGame) => {
@@ -64,58 +65,63 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
     }
   }
   
-  const handleCreateProfile = (profileName: string) => {
+  const handleCreateProfile = async (profileName: string) => {
     if (!pickedGame) return
-    const profile = createProfile(pickedGame.id, profileName)
+    const profile = await createProfile.mutateAsync({ gameId: pickedGame.id, name: profileName })
     setSelectedProfileId(profile.id)
     setProfileChoice("create")
     setCreateProfileOpen(false)
   }
 
-  const handleAddGame = () => {
+  const handleAddGame = async () => {
     if (!pickedGame) return
-    
-    const isValidPath = installFolder.trim().length > 0
+    setIsAddingGame(true)
 
-    // Add to managed games
-    addManagedGame(pickedGame.id)
-    appendRecentManagedGame(pickedGame.id)
+    try {
+      const isValidPath = installFolder.trim().length > 0
 
-    // Set as default game (latest added becomes default)
-    setDefaultGameId(pickedGame.id)
+      // Add to managed games
+      await addManagedGame.mutateAsync(pickedGame.id)
+      await appendRecentManagedGame.mutateAsync(pickedGame.id)
 
-    // Only create profiles if install folder is valid (non-empty)
-    if (isValidPath) {
-      if (installFolder.trim()) {
-        updatePerGameSettings(pickedGame.id, { gameInstallFolder: installFolder })
+      // Set as default game (latest added becomes default)
+      await setDefaultGameId.mutateAsync(pickedGame.id)
+
+      // Only create profiles if install folder is valid (non-empty)
+      if (isValidPath) {
+        if (installFolder.trim()) {
+          await updatePerGameSettings.mutateAsync({ gameId: pickedGame.id, updates: { gameInstallFolder: installFolder } })
+        }
+
+        // Ensure default profile exists
+        const defaultProfileId = await ensureDefaultProfile.mutateAsync(pickedGame.id)
+
+        // Set active profile based on user choice
+        if (profileChoice === "create" && selectedProfileId) {
+          await setActiveProfile.mutateAsync({ gameId: pickedGame.id, profileId: selectedProfileId })
+        } else if (profileChoice === "import") {
+          toast.info(t("add_game_profile_import_toast"))
+          await setActiveProfile.mutateAsync({ gameId: pickedGame.id, profileId: defaultProfileId })
+        } else {
+          await setActiveProfile.mutateAsync({ gameId: pickedGame.id, profileId: defaultProfileId })
+        }
       }
-      
-      // Ensure default profile exists
-      const defaultProfileId = ensureDefaultProfile(pickedGame.id)
-      
-      // Set active profile based on user choice
-      if (profileChoice === "create" && selectedProfileId) {
-        setActiveProfile(pickedGame.id, selectedProfileId)
-      } else if (profileChoice === "import") {
-        toast.info(t("add_game_profile_import_toast"))
-        setActiveProfile(pickedGame.id, defaultProfileId)
-      } else {
-        setActiveProfile(pickedGame.id, defaultProfileId)
-      }
+      // If !isValidPath: don't call ensureDefaultProfile or setActiveProfile
+
+      // Select the game
+      selectGame(pickedGame.id)
+
+      // Close dialog and reset state
+      onOpenChange(false)
+      setStep("select")
+      setPickedGame(null)
+      setInstallFolder("")
+      setQuery("")
+      setProfileChoice("default")
+      setSelectedProfileId(null)
+    } finally {
+      setIsAddingGame(false)
     }
-    // If !isValidPath: don't call ensureDefaultProfile or setActiveProfile
-
-    // Select the game
-    selectGame(pickedGame.id)
-
-    // Close dialog and reset state
-    onOpenChange(false)
-    setStep("select")
-    setPickedGame(null)
-    setInstallFolder("")
-    setQuery("")
-    setProfileChoice("default")
-    setSelectedProfileId(null)
   }
 
   const handleBack = () => {
@@ -364,7 +370,8 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
               <Button variant="ghost" onClick={handleBack}>
                 {t("common_cancel")}
               </Button>
-              <Button onClick={handleAddGame} disabled={!pickedGame}>
+              <Button onClick={handleAddGame} disabled={!pickedGame || isAddingGame}>
+                {isAddingGame && <Loader2 className="size-4 mr-2 animate-spin" />}
                 {t("add_game_add_game_button")}
               </Button>
             </div>

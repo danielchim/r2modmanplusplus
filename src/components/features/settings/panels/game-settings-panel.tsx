@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import { Loader2 } from "lucide-react"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -70,7 +71,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
   }
 
   const handleLaunchParametersChange = (value: string) => {
-    settingsMut.updatePerGame(gameId, { launchParameters: value })
+    settingsMut.updatePerGame.mutate({ gameId, updates: { launchParameters: value } })
   }
 
   const handleBrowseProfileFolder = () => {
@@ -97,10 +98,10 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             profileId: profile.id,
           })
           totalFilesRemoved += result.filesRemoved
-          await modMut.deleteProfileState(profile.id)
+          await modMut.deleteProfileState.mutateAsync(profile.id)
         }
 
-        await profileMut.resetGameProfilesToDefault(gameId)
+        await profileMut.resetGameProfilesToDefault.mutateAsync(gameId)
 
         toast.success(`${game.name} installation reset`, {
           description: `${totalFilesRemoved} files removed, reset to Default profile`,
@@ -131,12 +132,12 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
         const profiles = profilesByGame[gameId] || []
 
         for (const profile of profiles) {
-          await modMut.deleteProfileState(profile.id)
+          await modMut.deleteProfileState.mutateAsync(profile.id)
         }
 
-        await profileMut.removeGameProfiles(gameId)
-        await settingsMut.deletePerGame(gameId)
-        const nextDefaultGameId = await gameMut.removeManagedGame(gameId)
+        await profileMut.removeGameProfiles.mutateAsync(gameId)
+        await settingsMut.deletePerGame.mutateAsync(gameId)
+        const nextDefaultGameId = await gameMut.removeManagedGame.mutateAsync(gameId)
 
         selectGame(nextDefaultGameId)
 
@@ -195,7 +196,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             <FolderPathControl
               value={perGameSettings.gameInstallFolder}
               placeholder={t("settings_game_install_folder_placeholder")}
-              onChangePath={(nextPath) => settingsMut.updatePerGame(gameId, { gameInstallFolder: nextPath })}
+              onChangePath={(nextPath) => settingsMut.updatePerGame.mutate({ gameId, updates: { gameInstallFolder: nextPath } })}
               className="w-full"
             />
           }
@@ -208,7 +209,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             <FolderPathControl
               value={perGameSettings.modDownloadFolder}
               placeholder={t("settings_game_placeholder_global")}
-              onChangePath={(nextPath) => settingsMut.updatePerGame(gameId, { modDownloadFolder: nextPath })}
+              onChangePath={(nextPath) => settingsMut.updatePerGame.mutate({ gameId, updates: { modDownloadFolder: nextPath } })}
               className="w-full"
             />
           }
@@ -221,7 +222,7 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
             <FolderPathControl
               value={perGameSettings.modCacheFolder}
               placeholder={t("settings_game_placeholder_global")}
-              onChangePath={(nextPath) => settingsMut.updatePerGame(gameId, { modCacheFolder: nextPath })}
+              onChangePath={(nextPath) => settingsMut.updatePerGame.mutate({ gameId, updates: { modCacheFolder: nextPath } })}
               className="w-full"
             />
           }
@@ -275,7 +276,9 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
                 variant="destructive"
                 size="sm"
                 onClick={handleCleanupInjected}
+                disabled={cleanupInjectedMutation.isPending}
               >
+                {cleanupInjectedMutation.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
                 {t("settings_game_clean_injected_button")}
               </Button>
             }
@@ -289,7 +292,9 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
                 variant="destructive"
                 size="sm"
                 onClick={handleResetGameInstallation}
+                disabled={resetProfileMutation.isPending || modMut.deleteProfileState.isPending || profileMut.resetGameProfilesToDefault.isPending}
               >
+                {(resetProfileMutation.isPending || modMut.deleteProfileState.isPending || profileMut.resetGameProfilesToDefault.isPending) && <Loader2 className="size-4 mr-2 animate-spin" />}
                 {t("settings_game_reset_button")}
               </Button>
             }
@@ -303,7 +308,9 @@ export function GameSettingsPanel({ gameId }: GameSettingsPanelProps) {
                 variant="destructive"
                 size="sm"
                 onClick={handleRemoveManagement}
+                disabled={unmanageGameMutation.isPending || cleanupInjectedMutation.isPending || gameMut.removeManagedGame.isPending}
               >
+                {(unmanageGameMutation.isPending || cleanupInjectedMutation.isPending || gameMut.removeManagedGame.isPending) && <Loader2 className="size-4 mr-2 animate-spin" />}
                 {t("settings_game_remove_button")}
               </Button>
             }

@@ -49,21 +49,21 @@ export function AppBootstrap() {
 
     // Apply updates if any
     if (Object.keys(updates).length > 0) {
-      updateGlobal(updates)
+      updateGlobal.mutate(updates)
     }
-  }, [defaultPathsQuery.data, globalSettings.dataFolder, globalSettings.steamFolder, updateGlobal])
+  }, [defaultPathsQuery.data, globalSettings.dataFolder, globalSettings.steamFolder, updateGlobal.mutate])
 
   useEffect(() => {
     if (hasInitialized.current || !defaultGameId) return
     hasInitialized.current = true
 
     // Ensure game is managed
-    gameMut.addManagedGame(defaultGameId)
+    gameMut.addManagedGame.mutate(defaultGameId)
 
     // Only ensure profile if game has install folder set
     const installFolder = getPerGame(defaultGameId).gameInstallFolder
     if (installFolder?.trim()) {
-      profileMut.ensureDefaultProfile(defaultGameId)
+      profileMut.ensureDefaultProfile.mutate(defaultGameId)
     }
 
     // Select the game

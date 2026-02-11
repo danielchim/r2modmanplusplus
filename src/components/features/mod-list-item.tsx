@@ -164,7 +164,7 @@ export const ModListItem = memo(function ModListItem({ mod, onOpenDependencyDial
           <span className="text-sm text-muted-foreground">{t("common_enabled")}</span>
           <Switch
             checked={isEnabled}
-            onCheckedChange={() => activeProfileId && toggleMod(activeProfileId, mod.id)}
+            onCheckedChange={() => activeProfileId && toggleMod.mutate({ profileId: activeProfileId, modId: mod.id })}
           />
         </div>
       ) : null}

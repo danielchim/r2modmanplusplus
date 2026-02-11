@@ -13,8 +13,12 @@ export function useModInstaller() {
   const { startDownload } = useDownloadActions()
   const installModMutation = trpc.profiles.installMod.useMutation()
   const uninstallModMutation = trpc.profiles.uninstallMod.useMutation()
-  const { installMod: markInstalled, uninstallMod: markUninstalled } = useModManagementActions()
-  
+  const { installMod: markInstalledMut, uninstallMod: markUninstalledMut } = useModManagementActions()
+
+  // Extract stable references (React Query's .mutate/.mutateAsync are referentially stable)
+  const markInstalledFire = markInstalledMut.mutate
+  const markUninstalledAsync = markUninstalledMut.mutateAsync
+
   /**
    * Installs a downloaded mod to a profile
    * Requires the mod to already be downloaded (extractedPath must exist)
@@ -39,14 +43,14 @@ export function useModInstaller() {
           version: params.version,
           extractedPath: params.extractedPath,
         })
-        
+
         // Mark as installed in state only after successful file copy
-        markInstalled(params.profileId, params.modId, params.version)
-        
+        markInstalledFire({ profileId: params.profileId, modId: params.modId, version: params.version })
+
         toast.success(`${params.name} installed`, {
           description: `${result.filesCopied} files copied to profile`,
         })
-        
+
         return result
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error"
@@ -56,9 +60,9 @@ export function useModInstaller() {
         throw error
       }
     },
-    [installModMutation, markInstalled]
+    [installModMutation, markInstalledFire]
   )
-  
+
   /**
    * Uninstalls a mod from a profile
    * Removes files from profile folder
@@ -79,14 +83,14 @@ export function useModInstaller() {
           author: params.author,
           name: params.name,
         })
-        
+
         // Mark as uninstalled in state only after successful file removal
-        await markUninstalled(params.profileId, params.modId)
-        
+        await markUninstalledAsync({ profileId: params.profileId, modId: params.modId })
+
         toast.success(`${params.name} uninstalled`, {
           description: `${result.filesRemoved} files removed from profile`,
         })
-        
+
         return result
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error"
@@ -96,7 +100,7 @@ export function useModInstaller() {
         throw error
       }
     },
-    [uninstallModMutation, markUninstalled]
+    [uninstallModMutation, markUninstalledAsync]
   )
   
   /**

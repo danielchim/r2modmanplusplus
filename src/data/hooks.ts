@@ -12,8 +12,8 @@
  *   After:  const { profilesByGame } = useProfileData()
  */
 
-import { useEffect, useMemo, useCallback } from "react"
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query"
+import { useEffect, useCallback } from "react"
+import { useSuspenseQuery, useQueryClient, useMutation } from "@tanstack/react-query"
 import { useGameManagementStore } from "@/store/game-management-store"
 import { useSettingsStore } from "@/store/settings-store"
 import { useProfileStore } from "@/store/profile-store"
@@ -121,41 +121,46 @@ export function useGameManagementData(): GameManagementData {
 
 export function useGameManagementActions() {
   const queryClient = useQueryClient()
+  const invalidate = (...keys: (readonly string[])[]) =>
+    isDbMode
+      ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
+      : Promise.resolve()
 
-  return useMemo(
-    () => {
-      const invalidate = (...keys: (readonly string[])[]) =>
-        isDbMode
-          ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
-          : Promise.resolve()
-
-      return {
-        addManagedGame: async (gameId: string) => {
-          await gameService.add(gameId)
-          await invalidate(dataKeys.gameManagement, dataKeys.profiles, dataKeys.settings)
-        },
-        removeManagedGame: async (gameId: string) => {
-          const result = await gameService.remove(gameId)
-          await invalidate(
-            dataKeys.gameManagement,
-            dataKeys.profiles,
-            dataKeys.modManagement,
-            dataKeys.settings,
-          )
-          return result
-        },
-        setDefaultGameId: async (gameId: string | null) => {
-          await gameService.setDefault(gameId)
-          await invalidate(dataKeys.gameManagement)
-        },
-        appendRecentManagedGame: async (gameId: string) => {
-          await gameService.touch(gameId)
-          await invalidate(dataKeys.gameManagement)
-        },
-      }
+  const addManagedGame = useMutation({
+    mutationFn: async (gameId: string) => {
+      await gameService.add(gameId)
+      await invalidate(dataKeys.gameManagement, dataKeys.profiles, dataKeys.settings)
     },
-    [queryClient],
-  )
+  })
+
+  const removeManagedGame = useMutation({
+    mutationFn: async (gameId: string) => {
+      const result = await gameService.remove(gameId)
+      await invalidate(
+        dataKeys.gameManagement,
+        dataKeys.profiles,
+        dataKeys.modManagement,
+        dataKeys.settings,
+      )
+      return result
+    },
+  })
+
+  const setDefaultGameId = useMutation({
+    mutationFn: async (gameId: string | null) => {
+      await gameService.setDefault(gameId)
+      await invalidate(dataKeys.gameManagement)
+    },
+  })
+
+  const appendRecentManagedGame = useMutation({
+    mutationFn: async (gameId: string) => {
+      await gameService.touch(gameId)
+      await invalidate(dataKeys.gameManagement)
+    },
+  })
+
+  return { addManagedGame, removeManagedGame, setDefaultGameId, appendRecentManagedGame }
 }
 
 // ===========================================================================
@@ -232,38 +237,40 @@ export function useSettingsData(): SettingsData {
 
 export function useSettingsActions() {
   const queryClient = useQueryClient()
+  const invalidate = (...keys: (readonly string[])[]) =>
+    isDbMode
+      ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
+      : Promise.resolve()
 
-  return useMemo(
-    () => {
-      const invalidate = (...keys: (readonly string[])[]) =>
-        isDbMode
-          ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
-          : Promise.resolve()
-
-      return {
-        updateGlobal: async (updates: Partial<GlobalSettings>) => {
-          await settingsService.updateGlobal(updates)
-          await invalidate(dataKeys.settings)
-        },
-        updatePerGame: async (
-          gameId: string,
-          updates: Partial<GameSettings>,
-        ) => {
-          await settingsService.updateForGame(gameId, updates)
-          await invalidate(dataKeys.settings)
-        },
-        resetPerGame: async (gameId: string) => {
-          await settingsService.resetForGame(gameId)
-          await invalidate(dataKeys.settings)
-        },
-        deletePerGame: async (gameId: string) => {
-          await settingsService.deleteForGame(gameId)
-          await invalidate(dataKeys.settings)
-        },
-      }
+  const updateGlobal = useMutation({
+    mutationFn: async (updates: Partial<GlobalSettings>) => {
+      await settingsService.updateGlobal(updates)
+      await invalidate(dataKeys.settings)
     },
-    [queryClient],
-  )
+  })
+
+  const updatePerGame = useMutation({
+    mutationFn: async ({ gameId, updates }: { gameId: string; updates: Partial<GameSettings> }) => {
+      await settingsService.updateForGame(gameId, updates)
+      await invalidate(dataKeys.settings)
+    },
+  })
+
+  const resetPerGame = useMutation({
+    mutationFn: async (gameId: string) => {
+      await settingsService.resetForGame(gameId)
+      await invalidate(dataKeys.settings)
+    },
+  })
+
+  const deletePerGame = useMutation({
+    mutationFn: async (gameId: string) => {
+      await settingsService.deleteForGame(gameId)
+      await invalidate(dataKeys.settings)
+    },
+  })
+
+  return { updateGlobal, updatePerGame, resetPerGame, deletePerGame }
 }
 
 // ===========================================================================
@@ -323,55 +330,65 @@ export function useProfileData(): ProfileData {
 
 export function useProfileActions() {
   const queryClient = useQueryClient()
+  const invalidate = (...keys: (readonly string[])[]) =>
+    isDbMode
+      ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
+      : Promise.resolve()
 
-  return useMemo(
-    () => {
-      const invalidate = (...keys: (readonly string[])[]) =>
-        isDbMode
-          ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
-          : Promise.resolve()
-
-      return {
-        ensureDefaultProfile: async (gameId: string) => {
-          const result = await profileService.ensureDefault(gameId)
-          await invalidate(dataKeys.profiles, dataKeys.modManagement)
-          return result
-        },
-        setActiveProfile: async (gameId: string, profileId: string) => {
-          await profileService.setActive(gameId, profileId)
-          await invalidate(dataKeys.profiles)
-        },
-        createProfile: async (gameId: string, name: string) => {
-          const result = await profileService.create(gameId, name)
-          await invalidate(dataKeys.profiles, dataKeys.modManagement)
-          return result
-        },
-        renameProfile: async (
-          gameId: string,
-          profileId: string,
-          newName: string,
-        ) => {
-          await profileService.rename(gameId, profileId, newName)
-          await invalidate(dataKeys.profiles)
-        },
-        deleteProfile: async (gameId: string, profileId: string) => {
-          const result = await profileService.remove(gameId, profileId)
-          await invalidate(dataKeys.profiles, dataKeys.modManagement)
-          return result
-        },
-        resetGameProfilesToDefault: async (gameId: string) => {
-          const result = await profileService.reset(gameId)
-          await invalidate(dataKeys.profiles, dataKeys.modManagement)
-          return result
-        },
-        removeGameProfiles: async (gameId: string) => {
-          await profileService.removeAll(gameId)
-          await invalidate(dataKeys.profiles, dataKeys.modManagement)
-        },
-      }
+  const ensureDefaultProfile = useMutation({
+    mutationFn: async (gameId: string) => {
+      const result = await profileService.ensureDefault(gameId)
+      await invalidate(dataKeys.profiles, dataKeys.modManagement)
+      return result
     },
-    [queryClient],
-  )
+  })
+
+  const setActiveProfile = useMutation({
+    mutationFn: async ({ gameId, profileId }: { gameId: string; profileId: string }) => {
+      await profileService.setActive(gameId, profileId)
+      await invalidate(dataKeys.profiles)
+    },
+  })
+
+  const createProfile = useMutation({
+    mutationFn: async ({ gameId, name }: { gameId: string; name: string }) => {
+      const result = await profileService.create(gameId, name)
+      await invalidate(dataKeys.profiles, dataKeys.modManagement)
+      return result
+    },
+  })
+
+  const renameProfile = useMutation({
+    mutationFn: async ({ gameId, profileId, newName }: { gameId: string; profileId: string; newName: string }) => {
+      await profileService.rename(gameId, profileId, newName)
+      await invalidate(dataKeys.profiles)
+    },
+  })
+
+  const deleteProfile = useMutation({
+    mutationFn: async ({ gameId, profileId }: { gameId: string; profileId: string }) => {
+      const result = await profileService.remove(gameId, profileId)
+      await invalidate(dataKeys.profiles, dataKeys.modManagement)
+      return result
+    },
+  })
+
+  const resetGameProfilesToDefault = useMutation({
+    mutationFn: async (gameId: string) => {
+      const result = await profileService.reset(gameId)
+      await invalidate(dataKeys.profiles, dataKeys.modManagement)
+      return result
+    },
+  })
+
+  const removeGameProfiles = useMutation({
+    mutationFn: async (gameId: string) => {
+      await profileService.removeAll(gameId)
+      await invalidate(dataKeys.profiles, dataKeys.modManagement)
+    },
+  })
+
+  return { ensureDefaultProfile, setActiveProfile, createProfile, renameProfile, deleteProfile, resetGameProfilesToDefault, removeGameProfiles }
 }
 
 // ===========================================================================
@@ -535,64 +552,76 @@ export function useModManagementData(): ModManagementData {
 
 export function useModManagementActions() {
   const queryClient = useQueryClient()
+  const invalidate = (...keys: (readonly string[])[]) =>
+    isDbMode
+      ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
+      : Promise.resolve()
 
-  return useMemo(
-    () => {
-      const invalidate = (...keys: (readonly string[])[]) =>
-        isDbMode
-          ? Promise.all(keys.map((k) => queryClient.invalidateQueries({ queryKey: k })))
-          : Promise.resolve()
-
-      return {
-        installMod: async (
-          profileId: string,
-          modId: string,
-          version: string,
-        ) => {
-          await modService.install(profileId, modId, version)
-          await invalidate(dataKeys.modManagement)
-        },
-        uninstallMod: async (profileId: string, modId: string) => {
-          await modService.uninstall(profileId, modId)
-          await invalidate(dataKeys.modManagement)
-        },
-        uninstallAllMods: async (profileId: string) => {
-          const result = await modService.uninstallAll(profileId)
-          await invalidate(dataKeys.modManagement)
-          return result
-        },
-        enableMod: async (profileId: string, modId: string) => {
-          await modService.enable(profileId, modId)
-          await invalidate(dataKeys.modManagement)
-        },
-        disableMod: async (profileId: string, modId: string) => {
-          await modService.disable(profileId, modId)
-          await invalidate(dataKeys.modManagement)
-        },
-        toggleMod: async (profileId: string, modId: string) => {
-          await modService.toggle(profileId, modId)
-          await invalidate(dataKeys.modManagement)
-        },
-        setDependencyWarnings: async (
-          profileId: string,
-          modId: string,
-          warnings: string[],
-        ) => {
-          await modService.setDependencyWarnings(profileId, modId, warnings)
-          await invalidate(dataKeys.modManagement)
-        },
-        clearDependencyWarnings: async (profileId: string, modId: string) => {
-          await modService.clearDependencyWarnings(profileId, modId)
-          await invalidate(dataKeys.modManagement)
-        },
-        deleteProfileState: async (profileId: string) => {
-          await modService.deleteProfileState(profileId)
-          await invalidate(dataKeys.modManagement)
-        },
-      }
+  const installMod = useMutation({
+    mutationFn: async ({ profileId, modId, version }: { profileId: string; modId: string; version: string }) => {
+      await modService.install(profileId, modId, version)
+      await invalidate(dataKeys.modManagement)
     },
-    [queryClient],
-  )
+  })
+
+  const uninstallMod = useMutation({
+    mutationFn: async ({ profileId, modId }: { profileId: string; modId: string }) => {
+      await modService.uninstall(profileId, modId)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  const uninstallAllMods = useMutation({
+    mutationFn: async (profileId: string) => {
+      const result = await modService.uninstallAll(profileId)
+      await invalidate(dataKeys.modManagement)
+      return result
+    },
+  })
+
+  const enableMod = useMutation({
+    mutationFn: async ({ profileId, modId }: { profileId: string; modId: string }) => {
+      await modService.enable(profileId, modId)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  const disableMod = useMutation({
+    mutationFn: async ({ profileId, modId }: { profileId: string; modId: string }) => {
+      await modService.disable(profileId, modId)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  const toggleMod = useMutation({
+    mutationFn: async ({ profileId, modId }: { profileId: string; modId: string }) => {
+      await modService.toggle(profileId, modId)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  const setDependencyWarnings = useMutation({
+    mutationFn: async ({ profileId, modId, warnings }: { profileId: string; modId: string; warnings: string[] }) => {
+      await modService.setDependencyWarnings(profileId, modId, warnings)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  const clearDependencyWarnings = useMutation({
+    mutationFn: async ({ profileId, modId }: { profileId: string; modId: string }) => {
+      await modService.clearDependencyWarnings(profileId, modId)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  const deleteProfileState = useMutation({
+    mutationFn: async (profileId: string) => {
+      await modService.deleteProfileState(profileId)
+      await invalidate(dataKeys.modManagement)
+    },
+  })
+
+  return { installMod, uninstallMod, uninstallAllMods, enableMod, disableMod, toggleMod, setDependencyWarnings, clearDependencyWarnings, deleteProfileState }
 }
 
 // ===========================================================================
@@ -605,15 +634,21 @@ export function useUnmanageGame() {
   const profileMut = useProfileActions()
   const modMut = useModManagementActions()
 
+  // Extract stable .mutateAsync references (React Query guarantees referential stability)
+  const removeManagedGame = gameMut.removeManagedGame.mutateAsync
+  const deletePerGame = settingsMut.deletePerGame.mutateAsync
+  const removeGameProfiles = profileMut.removeGameProfiles.mutateAsync
+  const deleteProfileState = modMut.deleteProfileState.mutateAsync
+
   return useCallback(
     async (gameId: string) => {
       // Use service to get profiles (works in both Zustand and DB mode)
       const profiles = await profileService.list(gameId)
-      await Promise.all(profiles.map((p) => modMut.deleteProfileState(p.id)))
-      await profileMut.removeGameProfiles(gameId)
-      await settingsMut.deletePerGame(gameId)
-      return gameMut.removeManagedGame(gameId)
+      await Promise.all(profiles.map((p) => deleteProfileState(p.id)))
+      await removeGameProfiles(gameId)
+      await deletePerGame(gameId)
+      return removeManagedGame(gameId)
     },
-    [gameMut, settingsMut, profileMut, modMut],
+    [removeManagedGame, deletePerGame, removeGameProfiles, deleteProfileState],
   )
 }

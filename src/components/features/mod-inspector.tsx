@@ -453,7 +453,7 @@ export function ModInspectorContent({ mod, onBack }: ModInspectorContentProps) {
 
   const handleToggleEnabled = () => {
     if (activeProfileId) {
-      toggleMod(activeProfileId, mod.id)
+      toggleMod.mutate({ profileId: activeProfileId, modId: mod.id })
     }
   }
 
