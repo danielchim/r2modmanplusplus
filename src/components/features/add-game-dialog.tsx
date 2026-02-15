@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { List, ChevronLeft, FolderOpen, Loader2 } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 
 import {
   AlertDialog,
@@ -25,6 +26,7 @@ import {
   useCreateProfile,
   useSetActiveProfile,
   useUpdateGameSettings,
+  queryKeys,
 } from "@/data"
 import { ECOSYSTEM_GAMES, type EcosystemGame } from "@/lib/ecosystem-games"
 import { selectFolder } from "@/lib/desktop"
@@ -50,6 +52,7 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [isAddingGame, setIsAddingGame] = useState(false)
 
+  const queryClient = useQueryClient()
   const addGame = useAddGame()
   const touchGame = useTouchGame()
   const setDefaultGame = useSetDefaultGame()
@@ -123,6 +126,13 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
       // Select the game
       selectGame(pickedGame.id)
 
+      // Wait for cache to update before closing dialog
+      // This prevents the auto-open logic in global-rail from triggering
+      await queryClient.refetchQueries({
+        queryKey: queryKeys.games.root,
+        type: 'active'
+      })
+
       // Close dialog and reset state
       onOpenChange(false)
       setStep("select")
@@ -131,6 +141,12 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
       setQuery("")
       setProfileChoice("default")
       setSelectedProfileId(null)
+    } catch (error) {
+      // Show error toast and keep dialog open
+      toast.error(t("add_game_error_title") || "Failed to add game", {
+        description: error instanceof Error ? error.message : "Unknown error"
+      })
+      return
     } finally {
       setIsAddingGame(false)
     }

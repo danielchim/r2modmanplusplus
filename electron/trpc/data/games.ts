@@ -74,10 +74,10 @@ export const dataGamesRouter = t.router({
     .input(z.object({ gameId: z.string().min(1).nullable() }))
     .mutation(async ({ input }) => {
       const db = getDb()
-      await db.transaction(async (tx) => {
-        await tx.update(game).set({ isDefault: false }).where(eq(game.isDefault, true))
+      db.transaction((tx) => {
+        tx.update(game).set({ isDefault: false }).where(eq(game.isDefault, true)).run()
         if (input.gameId != null) {
-          await tx.update(game).set({ isDefault: true }).where(eq(game.id, input.gameId))
+          tx.update(game).set({ isDefault: true }).where(eq(game.id, input.gameId)).run()
         }
       })
     }),
