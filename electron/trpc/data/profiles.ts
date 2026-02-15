@@ -55,33 +55,35 @@ export const dataProfilesRouter = t.router({
       const db = getDb()
       const defaultId = `${input.gameId}-default`
 
-      return await db.transaction(async (tx) => {
+      return db.transaction((tx) => {
         // Check if default profile exists
-        const existing = await tx
+        const existing = tx
           .select()
           .from(profile)
           .where(eq(profile.id, defaultId))
           .limit(1)
+          .all()
 
         if (!existing[0]) {
-          await tx.insert(profile).values({
+          tx.insert(profile).values({
             id: defaultId,
             gameId: input.gameId,
             name: "Default",
             isDefault: true,
             isActive: false,
-          })
+          }).run()
         }
 
         // If no active profile for this game, set default as active
-        const active = await tx
+        const active = tx
           .select()
           .from(profile)
           .where(and(eq(profile.gameId, input.gameId), eq(profile.isActive, true)))
           .limit(1)
+          .all()
 
         if (!active[0]) {
-          await tx.update(profile).set({ isActive: true }).where(eq(profile.id, defaultId))
+          tx.update(profile).set({ isActive: true }).where(eq(profile.id, defaultId)).run()
         }
 
         return defaultId
@@ -98,23 +100,24 @@ export const dataProfilesRouter = t.router({
       const db = getDb()
       const newId = `${input.gameId}-${randomUUID()}`
 
-      return await db.transaction(async (tx) => {
+      return db.transaction((tx) => {
         // Deactivate current active profile
-        await tx
+        tx
           .update(profile)
           .set({ isActive: false })
           .where(and(eq(profile.gameId, input.gameId), eq(profile.isActive, true)))
+          .run()
 
         // Insert new profile as active
         const now = new Date().toISOString()
-        await tx.insert(profile).values({
+        tx.insert(profile).values({
           id: newId,
           gameId: input.gameId,
           name: input.name,
           isDefault: false,
           isActive: true,
           createdAt: now,
-        })
+        }).run()
 
         return {
           id: newId,
@@ -148,13 +151,14 @@ export const dataProfilesRouter = t.router({
     .mutation(async ({ input }) => {
       const db = getDb()
 
-      return await db.transaction(async (tx) => {
+      return db.transaction((tx) => {
         // Check if it's the default profile
-        const target = await tx
+        const target = tx
           .select()
           .from(profile)
           .where(and(eq(profile.id, input.profileId), eq(profile.gameId, input.gameId)))
           .limit(1)
+          .all()
 
         if (!target[0]) {
           return { deleted: false as boolean, reason: "Profile not found" as string | undefined }
@@ -168,17 +172,18 @@ export const dataProfilesRouter = t.router({
         if (target[0].isActive) {
           const defaultId = `${input.gameId}-default`
           // Try default profile first
-          const defaultProfile = await tx
+          const defaultProfile = tx
             .select()
             .from(profile)
             .where(eq(profile.id, defaultId))
             .limit(1)
+            .all()
 
           if (defaultProfile[0]) {
-            await tx.update(profile).set({ isActive: true }).where(eq(profile.id, defaultId))
+            tx.update(profile).set({ isActive: true }).where(eq(profile.id, defaultId)).run()
           } else {
             // Fall back to any other profile
-            const other = await tx
+            const other = tx
               .select()
               .from(profile)
               .where(and(
@@ -186,14 +191,15 @@ export const dataProfilesRouter = t.router({
                 eq(profile.isActive, false),
               ))
               .limit(1)
+              .all()
             if (other[0]) {
-              await tx.update(profile).set({ isActive: true }).where(eq(profile.id, other[0].id))
+              tx.update(profile).set({ isActive: true }).where(eq(profile.id, other[0].id)).run()
             }
           }
         }
 
         // Delete the profile (cascade deletes profileMod rows)
-        await tx.delete(profile).where(eq(profile.id, input.profileId))
+        tx.delete(profile).where(eq(profile.id, input.profileId)).run()
         return { deleted: true as boolean, reason: undefined as string | undefined }
       })
     }),
@@ -206,17 +212,19 @@ export const dataProfilesRouter = t.router({
     }))
     .mutation(async ({ input }) => {
       const db = getDb()
-      await db.transaction(async (tx) => {
+      db.transaction((tx) => {
         // Deactivate all profiles for this game
-        await tx
+        tx
           .update(profile)
           .set({ isActive: false })
           .where(and(eq(profile.gameId, input.gameId), eq(profile.isActive, true)))
+          .run()
         // Activate target
-        await tx
+        tx
           .update(profile)
           .set({ isActive: true })
           .where(eq(profile.id, input.profileId))
+          .run()
       })
     }),
 
@@ -227,29 +235,31 @@ export const dataProfilesRouter = t.router({
       const db = getDb()
       const defaultId = `${input.gameId}-default`
 
-      return await db.transaction(async (tx) => {
+      return db.transaction((tx) => {
         // Delete all non-default profiles (cascade cleans profileMod)
-        await tx
+        tx
           .delete(profile)
           .where(and(eq(profile.gameId, input.gameId), eq(profile.isDefault, false)))
+          .run()
 
         // Ensure default profile exists
-        const existing = await tx
+        const existing = tx
           .select()
           .from(profile)
           .where(eq(profile.id, defaultId))
           .limit(1)
+          .all()
 
         if (!existing[0]) {
-          await tx.insert(profile).values({
+          tx.insert(profile).values({
             id: defaultId,
             gameId: input.gameId,
             name: "Default",
             isDefault: true,
             isActive: true,
-          })
+          }).run()
         } else {
-          await tx.update(profile).set({ isActive: true }).where(eq(profile.id, defaultId))
+          tx.update(profile).set({ isActive: true }).where(eq(profile.id, defaultId)).run()
         }
 
         return defaultId

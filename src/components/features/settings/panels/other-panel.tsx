@@ -2,7 +2,7 @@ import { useMemo } from "react"
 import { SettingsRow } from "../settings-row"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { useSettingsData, useSettingsActions } from "@/data"
+import { useGlobalSettings, useUpdateGlobalSettings } from "@/data"
 import { useTranslation } from "react-i18next"
 import { logger } from "@/lib/logger"
 import {
@@ -26,8 +26,8 @@ export function OtherPanel(_props: PanelProps) {
   void _props
   const { t, i18n } = useTranslation()
 
-  const { theme, language, cardDisplayType, funkyMode, enforceDependencyVersions } = useSettingsData().global
-  const { updateGlobal } = useSettingsActions()
+  const { theme, language, cardDisplayType, funkyMode, enforceDependencyVersions } = useGlobalSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   const availableLanguages = useMemo(
     () => Object.keys(i18n.options.resources ?? {}) as string[],
@@ -60,7 +60,7 @@ export function OtherPanel(_props: PanelProps) {
                   key={mode}
                   variant={theme === mode ? "default" : "outline"}
                   size="sm"
-                  onClick={() => updateGlobal({ theme: mode })}
+                  onClick={() => updateGlobal.mutate({ theme: mode })}
                   className="capitalize"
                 >
                   {mode}
@@ -77,7 +77,7 @@ export function OtherPanel(_props: PanelProps) {
             <Select
               value={language}
               onValueChange={(value: string | null) => {
-                if (value) updateGlobal({ language: value })
+                if (value) updateGlobal.mutate({ language: value })
               }}
             >
               <SelectTrigger className="w-[140px]">
@@ -101,7 +101,7 @@ export function OtherPanel(_props: PanelProps) {
             <Select
               value={cardDisplayType}
               onValueChange={(value: "collapsed" | "expanded" | null) => {
-                if (value) updateGlobal({ cardDisplayType: value })
+                if (value) updateGlobal.mutate({ cardDisplayType: value })
               }}
             >
               <SelectTrigger className="w-[140px]">
@@ -121,7 +121,7 @@ export function OtherPanel(_props: PanelProps) {
           rightContent={
             <Switch
               checked={funkyMode}
-              onCheckedChange={(checked) => updateGlobal({ funkyMode: checked })}
+              onCheckedChange={(checked) => updateGlobal.mutate({ funkyMode: checked })}
             />
           }
         />
@@ -151,7 +151,7 @@ export function OtherPanel(_props: PanelProps) {
           rightContent={
             <Switch
               checked={enforceDependencyVersions}
-              onCheckedChange={(checked) => updateGlobal({ enforceDependencyVersions: checked })}
+              onCheckedChange={(checked) => updateGlobal.mutate({ enforceDependencyVersions: checked })}
             />
           }
         />

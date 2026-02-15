@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react"
 import { useAppStore } from "@/store/app-store"
 import {
-  useGameManagementData,
-  useGameManagementActions,
-  useProfileActions,
-  useSettingsData,
-  useSettingsActions,
+  useGames,
+  useAddGame,
+  useEnsureDefaultProfile,
+  useAllSettings,
+  useUpdateGlobalSettings,
 } from "@/data"
 import { DownloadBridge } from "@/components/download-bridge"
 import { trpc, hasElectronTRPC } from "@/lib/trpc"
@@ -13,12 +13,12 @@ import { i18n } from "@/lib/i18n"
 
 export function AppBootstrap() {
   const hasInitialized = useRef(false)
-  const { defaultGameId } = useGameManagementData()
-  const gameMut = useGameManagementActions()
-  const profileMut = useProfileActions()
+  const { defaultGameId } = useGames()
+  const addGame = useAddGame()
+  const ensureDefaultProfile = useEnsureDefaultProfile()
   const selectGame = useAppStore((s) => s.selectGame)
-  const { global: globalSettings, getPerGame } = useSettingsData()
-  const { updateGlobal } = useSettingsActions()
+  const { global: globalSettings, getPerGame } = useAllSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   useEffect(() => {
     void i18n.changeLanguage(globalSettings.language)
@@ -49,21 +49,21 @@ export function AppBootstrap() {
 
     // Apply updates if any
     if (Object.keys(updates).length > 0) {
-      updateGlobal(updates)
+      updateGlobal.mutate(updates)
     }
-  }, [defaultPathsQuery.data, globalSettings.dataFolder, globalSettings.steamFolder, updateGlobal])
+  }, [defaultPathsQuery.data, globalSettings.dataFolder, globalSettings.steamFolder, updateGlobal.mutate])
 
   useEffect(() => {
     if (hasInitialized.current || !defaultGameId) return
     hasInitialized.current = true
 
     // Ensure game is managed
-    gameMut.addManagedGame(defaultGameId)
+    addGame.mutate(defaultGameId)
 
     // Only ensure profile if game has install folder set
     const installFolder = getPerGame(defaultGameId).gameInstallFolder
     if (installFolder?.trim()) {
-      profileMut.ensureDefaultProfile(defaultGameId)
+      ensureDefaultProfile.mutate(defaultGameId)
     }
 
     // Select the game

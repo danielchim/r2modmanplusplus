@@ -5,14 +5,17 @@
 import { useCallback } from "react"
 import { toast } from "sonner"
 import { trpc } from "@/lib/trpc"
-import { useModManagementActions } from "@/data"
+import { useMarkModUninstalled } from "@/data"
 import { useAppStore } from "@/store/app-store"
 
 export function useModActions() {
   const uninstallModMutation = trpc.profiles.uninstallMod.useMutation()
-  const { uninstallMod: markUninstalled } = useModManagementActions()
+  const markUninstalled = useMarkModUninstalled()
   const selectedGameId = useAppStore((s) => s.selectedGameId)
-  
+
+  // Extract stable .mutateAsync reference (React Query guarantees referential stability)
+  const markUninstalledAsync = markUninstalled.mutateAsync
+
   /**
    * Uninstalls a mod from a profile
    * Removes files from profile folder AND updates state
@@ -27,13 +30,13 @@ export function useModActions() {
         toast.error("No game selected")
         return
       }
-      
+
       // If we don't have author/name, we can only update state (legacy behavior)
       if (!modMeta) {
-        await markUninstalled(profileId, modId)
+        await markUninstalledAsync({ profileId, modId })
         return
       }
-      
+
       try {
         const result = await uninstallModMutation.mutateAsync({
           gameId: selectedGameId,
@@ -42,14 +45,14 @@ export function useModActions() {
           author: modMeta.author,
           name: modMeta.name,
         })
-        
+
         // Mark as uninstalled in state only after successful file removal
-        await markUninstalled(profileId, modId)
-        
+        await markUninstalledAsync({ profileId, modId })
+
         toast.success(`${modMeta.name} uninstalled`, {
           description: `${result.filesRemoved} files removed from profile`,
         })
-        
+
         return result
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error"
@@ -59,9 +62,9 @@ export function useModActions() {
         throw error
       }
     },
-    [uninstallModMutation, markUninstalled, selectedGameId]
+    [uninstallModMutation, markUninstalledAsync, selectedGameId]
   )
-  
+
   /**
    * Uninstalls all mods from a profile
    */
@@ -71,10 +74,10 @@ export function useModActions() {
         toast.error("No game selected")
         return
       }
-      
+
       let successCount = 0
       let failCount = 0
-      
+
       for (const mod of mods) {
         try {
           await uninstallModMutation.mutateAsync({
@@ -84,26 +87,26 @@ export function useModActions() {
             author: mod.author,
             name: mod.name,
           })
-          
-          await markUninstalled(profileId, mod.id)
+
+          await markUninstalledAsync({ profileId, modId: mod.id })
           successCount++
         } catch (error) {
           console.error(`Failed to uninstall ${mod.name}:`, error)
           failCount++
         }
       }
-      
+
       if (successCount > 0) {
         toast.success(`Uninstalled ${successCount} mods`, {
           description: failCount > 0 ? `${failCount} failed` : undefined,
         })
       }
-      
+
       if (failCount > 0 && successCount === 0) {
         toast.error(`Failed to uninstall ${failCount} mods`)
       }
     },
-    [uninstallModMutation, markUninstalled, selectedGameId]
+    [uninstallModMutation, markUninstalledAsync, selectedGameId]
   )
   
   return {

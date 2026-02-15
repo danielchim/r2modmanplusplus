@@ -5,9 +5,10 @@ import { Link, useRouterState } from "@tanstack/react-router"
 
 import { useAppStore } from "@/store/app-store"
 import {
-  useProfileData,
-  useGameManagementData,
-  useGameManagementActions,
+  useProfiles,
+  useActiveProfileId,
+  useGames,
+  useSetDefaultGame,
 } from "@/data"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { Button } from "@/components/ui/button"
@@ -41,15 +42,14 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
   const setModLibraryTab = useAppStore((s) => s.setModLibraryTab)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
-  const { activeProfileIdByGame, profilesByGame } = useProfileData()
-  const { recentManagedGameIds, defaultGameId, managedGameIds } = useGameManagementData()
-  const { setDefaultGameId } = useGameManagementActions()
-
-  const activeProfileId = selectedGameId ? activeProfileIdByGame[selectedGameId] ?? null : null
+  const profiles = useProfiles(selectedGameId)
+  const activeProfileId = useActiveProfileId(selectedGameId)
+  const { recentManagedGameIds, defaultGameId, managedGameIds } = useGames()
+  const setDefaultGame = useSetDefaultGame()
 
   // Get active profile name
   const activeProfile = selectedGameId && activeProfileId
-    ? profilesByGame[selectedGameId]?.find(p => p.id === activeProfileId)
+    ? profiles.find(p => p.id === activeProfileId)
     : null
   const activeProfileName = activeProfile?.name ?? t("rail_no_profile")
 
@@ -152,7 +152,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                       value={selectedGameId ?? undefined}
                       onValueChange={(nextId) => {
                         selectGame(nextId)
-                        setDefaultGameId(nextId)
+                        setDefaultGame.mutate(nextId)
                         setMenuOpen(false)
                         onNavigate?.()
                       }}
@@ -289,7 +289,7 @@ export function GlobalRailContent({ onNavigate }: GlobalRailContentProps) {
                 key={`recent-${game.id}`}
                 onClick={() => {
                   selectGame(game.id)
-                  setDefaultGameId(game.id)
+                  setDefaultGame.mutate(game.id)
                   onNavigate?.()
                 }}
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

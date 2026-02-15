@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useSettingsData, useSettingsActions } from "@/data"
+import { useGlobalSettings, useUpdateGlobalSettings } from "@/data"
 import { SettingsRow } from "../settings-row"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
@@ -37,8 +37,8 @@ function formatSpeed(bps: number, unit: "Bps" | "bps", t: (key: string) => strin
 
 export function DownloadsPanel(_props: PanelProps) {
   const { t } = useTranslation()
-  const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled, autoInstallMods } = useSettingsData().global
-  const { updateGlobal } = useSettingsActions()
+  const { speedLimitEnabled, speedLimitBps, speedUnit, maxConcurrentDownloads, downloadCacheEnabled, autoInstallMods } = useGlobalSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   // Logarithmic slider mapping (10 KB/s to 200 MB/s)
   const minBps = 10 * 1024 // 10 KB/s
@@ -63,21 +63,21 @@ export function DownloadsPanel(_props: PanelProps) {
   }
 
   const handleSpeedLimitChange = (enabled: boolean) => {
-    updateGlobal({ speedLimitEnabled: enabled })
+    updateGlobal.mutate({ speedLimitEnabled: enabled })
   }
 
   const handleSpeedValueChange = (value: number | number[]) => {
     const numValue = Array.isArray(value) ? value[0] : value
     const bps = sliderToBps(numValue)
-    updateGlobal({ speedLimitBps: bps })
+    updateGlobal.mutate({ speedLimitBps: bps })
   }
 
   const handleUnitChange = (value: string) => {
-    updateGlobal({ speedUnit: value as "Bps" | "bps" })
+    updateGlobal.mutate({ speedUnit: value as "Bps" | "bps" })
   }
 
   const handleConcurrencyChange = (value: string) => {
-    updateGlobal({ maxConcurrentDownloads: parseInt(value, 10) })
+    updateGlobal.mutate({ maxConcurrentDownloads: parseInt(value, 10) })
   }
 
   return (
@@ -158,7 +158,7 @@ export function DownloadsPanel(_props: PanelProps) {
           rightContent={
             <Switch
               checked={downloadCacheEnabled}
-              onCheckedChange={(checked) => updateGlobal({ downloadCacheEnabled: checked })}
+              onCheckedChange={(checked) => updateGlobal.mutate({ downloadCacheEnabled: checked })}
             />
           }
         />
@@ -169,7 +169,7 @@ export function DownloadsPanel(_props: PanelProps) {
           rightContent={
             <Switch
               checked={autoInstallMods}
-              onCheckedChange={(checked) => updateGlobal({ autoInstallMods: checked })}
+              onCheckedChange={(checked) => updateGlobal.mutate({ autoInstallMods: checked })}
             />
           }
         />

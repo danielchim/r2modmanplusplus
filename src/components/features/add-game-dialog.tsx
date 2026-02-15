@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { List, ChevronLeft, FolderOpen } from "lucide-react"
+import { List, ChevronLeft, FolderOpen, Loader2 } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 
 import {
   AlertDialog,
@@ -17,7 +18,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useAppStore } from "@/store/app-store"
-import { useGameManagementActions, useProfileActions, useSettingsActions } from "@/data"
+import {
+  useAddGame,
+  useTouchGame,
+  useSetDefaultGame,
+  useEnsureDefaultProfile,
+  useCreateProfile,
+  useSetActiveProfile,
+  useUpdateGameSettings,
+  queryKeys,
+} from "@/data"
 import { ECOSYSTEM_GAMES, type EcosystemGame } from "@/lib/ecosystem-games"
 import { selectFolder } from "@/lib/desktop"
 import { CreateProfileDialog } from "./create-profile-dialog"
@@ -40,16 +50,22 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
   const [profileChoice, setProfileChoice] = useState<"default" | "create" | "import">("default")
   const [createProfileOpen, setCreateProfileOpen] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
+  const [isAddingGame, setIsAddingGame] = useState(false)
 
-  const { addManagedGame, appendRecentManagedGame, setDefaultGameId } = useGameManagementActions()
-  const { ensureDefaultProfile, createProfile, setActiveProfile } = useProfileActions()
+  const queryClient = useQueryClient()
+  const addGame = useAddGame()
+  const touchGame = useTouchGame()
+  const setDefaultGame = useSetDefaultGame()
+  const ensureDefaultProfile = useEnsureDefaultProfile()
+  const createProfile = useCreateProfile()
+  const setActiveProfile = useSetActiveProfile()
+  const updateGameSettings = useUpdateGameSettings()
   const selectGame = useAppStore((s) => s.selectGame)
-  const { updatePerGame: updatePerGameSettings } = useSettingsActions()
 
   const filteredGames = ECOSYSTEM_GAMES.filter((game) =>
     game.name.toLowerCase().includes(query.toLowerCase())
   )
-  
+
   const isValidPath = installFolder.trim().length > 0
 
   const handleGameClick = (game: EcosystemGame) => {
@@ -64,58 +80,76 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
     }
   }
   
-  const handleCreateProfile = (profileName: string) => {
+  const handleCreateProfile = async (profileName: string) => {
     if (!pickedGame) return
-    const profile = createProfile(pickedGame.id, profileName)
+    const profile = await createProfile.mutateAsync({ gameId: pickedGame.id, name: profileName })
     setSelectedProfileId(profile.id)
     setProfileChoice("create")
     setCreateProfileOpen(false)
   }
 
-  const handleAddGame = () => {
+  const handleAddGame = async () => {
     if (!pickedGame) return
-    
-    const isValidPath = installFolder.trim().length > 0
+    setIsAddingGame(true)
 
-    // Add to managed games
-    addManagedGame(pickedGame.id)
-    appendRecentManagedGame(pickedGame.id)
+    try {
+      const isValidPath = installFolder.trim().length > 0
 
-    // Set as default game (latest added becomes default)
-    setDefaultGameId(pickedGame.id)
+      // Add to managed games
+      await addGame.mutateAsync(pickedGame.id)
+      await touchGame.mutateAsync(pickedGame.id)
 
-    // Only create profiles if install folder is valid (non-empty)
-    if (isValidPath) {
-      if (installFolder.trim()) {
-        updatePerGameSettings(pickedGame.id, { gameInstallFolder: installFolder })
+      // Set as default game (latest added becomes default)
+      await setDefaultGame.mutateAsync(pickedGame.id)
+
+      // Only create profiles if install folder is valid (non-empty)
+      if (isValidPath) {
+        if (installFolder.trim()) {
+          await updateGameSettings.mutateAsync({ gameId: pickedGame.id, updates: { gameInstallFolder: installFolder } })
+        }
+
+        // Ensure default profile exists
+        const defaultProfileId = await ensureDefaultProfile.mutateAsync(pickedGame.id)
+
+        // Set active profile based on user choice
+        if (profileChoice === "create" && selectedProfileId) {
+          await setActiveProfile.mutateAsync({ gameId: pickedGame.id, profileId: selectedProfileId })
+        } else if (profileChoice === "import") {
+          toast.info(t("add_game_profile_import_toast"))
+          await setActiveProfile.mutateAsync({ gameId: pickedGame.id, profileId: defaultProfileId })
+        } else {
+          await setActiveProfile.mutateAsync({ gameId: pickedGame.id, profileId: defaultProfileId })
+        }
       }
-      
-      // Ensure default profile exists
-      const defaultProfileId = ensureDefaultProfile(pickedGame.id)
-      
-      // Set active profile based on user choice
-      if (profileChoice === "create" && selectedProfileId) {
-        setActiveProfile(pickedGame.id, selectedProfileId)
-      } else if (profileChoice === "import") {
-        toast.info(t("add_game_profile_import_toast"))
-        setActiveProfile(pickedGame.id, defaultProfileId)
-      } else {
-        setActiveProfile(pickedGame.id, defaultProfileId)
-      }
+      // If !isValidPath: don't call ensureDefaultProfile or setActiveProfile
+
+      // Select the game
+      selectGame(pickedGame.id)
+
+      // Wait for cache to update before closing dialog
+      // This prevents the auto-open logic in global-rail from triggering
+      await queryClient.refetchQueries({
+        queryKey: queryKeys.games.root,
+        type: 'active'
+      })
+
+      // Close dialog and reset state
+      onOpenChange(false)
+      setStep("select")
+      setPickedGame(null)
+      setInstallFolder("")
+      setQuery("")
+      setProfileChoice("default")
+      setSelectedProfileId(null)
+    } catch (error) {
+      // Show error toast and keep dialog open
+      toast.error(t("add_game_error_title") || "Failed to add game", {
+        description: error instanceof Error ? error.message : "Unknown error"
+      })
+      return
+    } finally {
+      setIsAddingGame(false)
     }
-    // If !isValidPath: don't call ensureDefaultProfile or setActiveProfile
-
-    // Select the game
-    selectGame(pickedGame.id)
-
-    // Close dialog and reset state
-    onOpenChange(false)
-    setStep("select")
-    setPickedGame(null)
-    setInstallFolder("")
-    setQuery("")
-    setProfileChoice("default")
-    setSelectedProfileId(null)
   }
 
   const handleBack = () => {
@@ -364,7 +398,8 @@ export function AddGameDialog({ open, onOpenChange, forceOpen = false }: AddGame
               <Button variant="ghost" onClick={handleBack}>
                 {t("common_cancel")}
               </Button>
-              <Button onClick={handleAddGame} disabled={!pickedGame}>
+              <Button onClick={handleAddGame} disabled={!pickedGame || isAddingGame}>
+                {isAddingGame && <Loader2 className="size-4 mr-2 animate-spin" />}
                 {t("add_game_add_game_button")}
               </Button>
             </div>

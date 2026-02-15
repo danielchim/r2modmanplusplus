@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { useAppStore } from "@/store/app-store"
-import { useGameManagementData } from "@/data"
+import { useGames } from "@/data"
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog"
 import { XIcon, PlusIcon } from "lucide-react"
 import { LocationsPanel } from "./panels/locations-panel"
@@ -44,7 +44,7 @@ export function SettingsDialog() {
   const settingsOpen = useAppStore((s) => s.settingsOpen)
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen)
   const settingsActiveSection = useAppStore((s) => s.settingsActiveSection)
-  const { managedGameIds } = useGameManagementData()
+  const { managedGameIds } = useGames()
   const [activeSection, setActiveSection] = useState(settingsActiveSection || "other")
   const [searchQuery] = useState("")
   const [addGameOpen, setAddGameOpen] = useState(false)

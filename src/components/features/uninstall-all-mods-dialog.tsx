@@ -10,13 +10,14 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 
 type UninstallAllModsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   modCount: number
   onConfirm: () => void
+  loading?: boolean
 }
 
 export function UninstallAllModsDialog({
@@ -24,15 +25,12 @@ export function UninstallAllModsDialog({
   onOpenChange,
   modCount,
   onConfirm,
+  loading = false,
 }: UninstallAllModsDialogProps) {
   const { t } = useTranslation()
-  const handleConfirm = () => {
-    onConfirm()
-    onOpenChange(false)
-  }
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={loading ? undefined : onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogMedia>
@@ -45,8 +43,9 @@ export function UninstallAllModsDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{t("common_cancel")}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={handleConfirm}>
+          <AlertDialogCancel disabled={loading}>{t("common_cancel")}</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm} disabled={loading}>
+            {loading && <Loader2 className="size-4 mr-2 animate-spin" />}
             Uninstall All
           </AlertDialogAction>
         </AlertDialogFooter>

@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { useState, useEffect } from "react"
 import { useDownloadStore, type DownloadTask } from "@/store/download-store"
 import { useDownloadActions } from "@/hooks/use-download-actions"
 import { useModInstaller } from "@/hooks/use-mod-installer"
-import { useModManagementData, useProfileData } from "@/data"
+import { getClient } from "@/data"
 import { ECOSYSTEM_GAMES } from "@/lib/ecosystem-games"
 import { openFolder } from "@/lib/desktop"
 
@@ -66,6 +67,79 @@ const DOWNLOAD_STATUS_KEYS: Record<DownloadTask["status"], string> = {
   cancelled: "downloads_status_cancelled",
 }
 
+/** Install button that async-checks profile/mod status via tRPC client */
+function DownloadInstallButton({
+  task,
+  installDownloadedMod,
+  isInstalling,
+}: {
+  task: DownloadTask
+  installDownloadedMod: (params: {
+    gameId: string
+    profileId: string
+    modId: string
+    author: string
+    name: string
+    version: string
+    extractedPath: string
+  }) => void
+  isInstalling: boolean
+}) {
+  const { t } = useTranslation()
+  const [profileId, setProfileId] = useState<string | null>(null)
+  const [alreadyInstalled, setAlreadyInstalled] = useState(false)
+  const [checked, setChecked] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const client = getClient()
+        const profile = await client.data.profiles.getActive.query({ gameId: task.gameId })
+        if (cancelled) return
+        if (!profile) {
+          setChecked(true)
+          return
+        }
+        setProfileId(profile.id)
+        const mods = await client.data.mods.listInstalled.query({ profileId: profile.id })
+        if (cancelled) return
+        setAlreadyInstalled(mods.some(m => m.modId === task.modId))
+        setChecked(true)
+      } catch {
+        if (!cancelled) setChecked(true)
+      }
+    }
+    check()
+    return () => { cancelled = true }
+  }, [task.gameId, task.modId])
+
+  if (!checked || !profileId || alreadyInstalled) return null
+
+  return (
+    <Button
+      variant="default"
+      size="sm"
+      onClick={() => {
+        installDownloadedMod({
+          gameId: task.gameId,
+          profileId,
+          modId: task.modId,
+          author: task.modAuthor,
+          name: task.modName,
+          version: task.modVersion,
+          extractedPath: task.extractedPath!,
+        })
+      }}
+      disabled={isInstalling}
+      className="h-7 text-xs"
+    >
+      <Download className="size-3 mr-1.5" />
+      {t("downloads_install_to_profile")}
+    </Button>
+  )
+}
+
 export function DownloadsPage() {
   const { t } = useTranslation()
   const tasks = useDownloadStore((s) => s.tasks)
@@ -82,8 +156,6 @@ export function DownloadsPage() {
   } = useDownloadActions()
   
   const { installDownloadedMod, isInstalling } = useModInstaller()
-  const { activeProfileIdByGame } = useProfileData()
-  const { isModInstalled } = useModManagementData()
   
   const allTasks = Object.values(tasks)
   const activeTasks = getAllActiveTasks()
@@ -279,36 +351,13 @@ export function DownloadsPage() {
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   {/* Install button */}
-                                  {task.extractedPath && (() => {
-                                    const profileId = activeProfileIdByGame[task.gameId]
-                                    const alreadyInstalled = profileId && isModInstalled(profileId, task.modId)
-                                    
-                                    if (!alreadyInstalled && profileId) {
-                                      return (
-                                        <Button
-                                          variant="default"
-                                          size="sm"
-                                          onClick={() => {
-                                            installDownloadedMod({
-                                              gameId: task.gameId,
-                                              profileId,
-                                              modId: task.modId,
-                                              author: task.modAuthor,
-                                              name: task.modName,
-                                              version: task.modVersion,
-                                              extractedPath: task.extractedPath!,
-                                            })
-                                          }}
-                                          disabled={isInstalling}
-                                          className="h-7 text-xs"
-                                        >
-                                          <Download className="size-3 mr-1.5" />
-                                          {t("downloads_install_to_profile")}
-                                        </Button>
-                                      )
-                                    }
-                                    return null
-                                  })()}
+                                  {task.extractedPath && (
+                                    <DownloadInstallButton
+                                      task={task}
+                                      installDownloadedMod={installDownloadedMod}
+                                      isInstalling={isInstalling}
+                                    />
+                                  )}
                                   
                                   {/* Show folder buttons */}
                                   {task.archivePath && (

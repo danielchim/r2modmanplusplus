@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useSettingsData, useSettingsActions } from "@/data"
+import { useGlobalSettings, useUpdateGlobalSettings } from "@/data"
 import { SettingsRow } from "../settings-row"
 import { FolderPathControl } from "../folder-path-control"
 
@@ -10,8 +10,8 @@ interface PanelProps {
 export function LocationsPanel(_props: PanelProps) {
   void _props
   const { t } = useTranslation()
-  const { dataFolder, steamFolder, modDownloadFolder, cacheFolder } = useSettingsData().global
-  const { updateGlobal } = useSettingsActions()
+  const { dataFolder, steamFolder, modDownloadFolder, cacheFolder } = useGlobalSettings()
+  const updateGlobal = useUpdateGlobalSettings()
 
   return (
     <div>
@@ -29,7 +29,7 @@ export function LocationsPanel(_props: PanelProps) {
           belowContent={
             <FolderPathControl
               value={dataFolder}
-              onChangePath={(nextPath) => updateGlobal({ dataFolder: nextPath })}
+              onChangePath={(nextPath) => updateGlobal.mutate({ dataFolder: nextPath })}
               className="w-full"
             />
           }
@@ -41,7 +41,7 @@ export function LocationsPanel(_props: PanelProps) {
           belowContent={
             <FolderPathControl
               value={steamFolder}
-              onChangePath={(nextPath) => updateGlobal({ steamFolder: nextPath })}
+              onChangePath={(nextPath) => updateGlobal.mutate({ steamFolder: nextPath })}
               className="w-full"
             />
           }
@@ -54,7 +54,7 @@ export function LocationsPanel(_props: PanelProps) {
             <FolderPathControl
               value={modDownloadFolder}
               placeholder={t("settings_locations_placeholder_not_set_downloads")}
-              onChangePath={(nextPath) => updateGlobal({ modDownloadFolder: nextPath })}
+              onChangePath={(nextPath) => updateGlobal.mutate({ modDownloadFolder: nextPath })}
               className="w-full"
             />
           }
@@ -67,7 +67,7 @@ export function LocationsPanel(_props: PanelProps) {
             <FolderPathControl
               value={cacheFolder}
               placeholder={t("settings_locations_placeholder_not_set_cache")}
-              onChangePath={(nextPath) => updateGlobal({ cacheFolder: nextPath })}
+              onChangePath={(nextPath) => updateGlobal.mutate({ cacheFolder: nextPath })}
               className="w-full"
             />
           }
